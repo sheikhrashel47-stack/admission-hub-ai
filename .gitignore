@@ -1,0 +1,6 @@
+# 🔴 কখনো commit কোরো না
+.env.local
+.env
+data/
+node_modules/
+*.log
