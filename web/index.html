@@ -380,8 +380,8 @@ button{font-family:inherit;cursor:pointer}
 
 <script>
 'use strict';
-/* ========== API base (same-origin / GitHub Pages → Workers) ========== */
-const WORKERS_DEFAULT='https://rashelzayan213.workers.dev/admission-hub-ai';
+/* ========== API base (same-origin / GitHub Pages → Cloudflare Pages) ========== */
+const WORKERS_DEFAULT='https://admission-hub-ai.pages.dev';
 function apiBase(){
   const saved=localStorage.getItem('ahai-api');
   if(saved!==null&&saved!=='')return saved;
