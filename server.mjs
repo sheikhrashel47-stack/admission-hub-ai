@@ -129,12 +129,45 @@ const fileList = () => loadJson('files.json', []);
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   const path = url.pathname;
+  // CORS (GitHub Pages → backend সহ সব ক্রস-অরিজিন)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const json = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(obj)); };
 
   try {
+    // static PWA assets (manifest, sw, icons) — web/ ফোল্ডার
+    const staticPaths = ['/manifest.webmanifest', '/sw.js', '/index.html', '/'];
+    if (req.method === 'GET' && (staticPaths.includes(path) || path.startsWith('/icons/'))) {
+      const p = path === '/' ? '/index.html' : path;
+      const file = join(ROOT, 'web', p);
+      if (!existsSync(file)) return json(404, { error: 'নেই' });
+      const types = { '.html': 'text/html; charset=utf-8', '.webmanifest': 'application/manifest+json', '.js': 'application/javascript; charset=utf-8', '.png': 'image/png' };
+      const ext = file.slice(file.lastIndexOf('.'));
+      res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+      return res.end(readFileSync(file));
+    }
+
     if (req.method === 'GET' && (path === '/' || path === '/index.html')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       return res.end(readFileSync(WEB));
+    }
+
+    if (req.method === 'GET' && path === '/api/health') return json(200, { ok: true, ts: now() });
+
+    if (req.method === 'GET' && path === '/api/system') {
+      const modelCount = FREEMODELS.filter((m) => process.env[KEYMAP[m.pid]]).length;
+      return json(200, {
+        services: [
+          { name: 'AI Providers', status: modelCount ? `${modelCount} সক্রিয়` : 'কোনো key নেই', dot: modelCount ? 'ok' : 'err' },
+          { name: 'API Server', status: 'Operational', dot: 'ok' },
+          { name: 'Web Research', status: process.env.TAVILY_API_KEY ? 'Operational' : 'Setup needed', dot: process.env.TAVILY_API_KEY ? 'ok' : 'warn' },
+          { name: 'Storage', status: 'Operational', dot: 'ok' },
+          { name: 'Agent Engine', status: 'Phase 5-এ আসবে', dot: 'off' },
+        ],
+        deployments: [],
+      });
     }
 
     if (req.method === 'GET' && path === '/api/config') {

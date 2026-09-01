@@ -1,52 +1,46 @@
 # ADMISSION HUB AI — Private AI Command Center
 
-> **ব্র্যান্ড:** ADMISSION HUB AI · Internal: ADMISSION HUB COMMAND AI
-> **স্ট্যাটাস:** Phase 1 (Premium Chat Foundation) + Research — **সব ফিচার ১০০% real** (কোনো ফেক নয়)
-> **রান:** Zero dependency Node 18+ (npm install লাগবে না) · খরচ: **$0** (সব free tier)
+> **ব্র্যান্ড:** Admission Hub AI · **স্ট্যাটাস:** Phase 1 + Research — সম্পূর্ণ real (কোনো ফেক নয়) · **খরচ: $0**
 
----
+## 🔗 লাইভ লিংক
 
-## যা এখন বানানো আছে (সত্যি যা আছে)
-
-| ফিচার | স্ট্যাটাস |
+| কী | লিংক |
 |---|---|
-| 💬 Premium chat (streaming, markdown, code highlight, tables, citations) | ✅ **real** |
-| 🧠 Model Router (AUTO task-ভিত্তিক মডেল বাছাই + fallback chain) | ✅ **real** |
-| 🎛️ Model selector (Auto / Groq / Gemini / Cerebras / Mistral — config থেকে) | ✅ **real** |
-| ⚡ / ⚖️ / 🌊 Response modes (Fast / Balanced / Deep) | ✅ **real** |
-| 🔎 Web Research mode (Tavily — live সোর্স + clickable citations + step panel) | ✅ **real** |
-| 📁 ফাইল (upload, preview, AI বিশ্লেষণ, ফাইল-প্রশ্ন) — txt/md/csv/json/html/css/js/ts… | ✅ **real** |
-| 🧠 User Memory (notes + toggle, সব চ্যাটে injected) | ✅ **real** |
-| 💾 চ্যাট ইতিহাস (server-side JSON) + search + pin + delete + branch + export .md | ✅ **real** |
-| 🔄 Regenerate · ✏️ Edit prompt · ⏹ Stop · 📋 Copy · 🔊 TTS · 🎙️ STT (browser) | ✅ **real** |
-| 🌙/☀️ Dark/Light · 📱 mobile drawer + bottom sheet · বাংলা UI | ✅ **real** |
-| 📊 Usage ledger (requests, tokens, cost — প্রতিটি রিকোয়েস্টের meta-সহ) | ✅ **real** |
-| 🔐 Keys শুধু server-side (`.env.local`, git-এ কখনো না) — model কোনো দিন key দেখে না | ✅ |
+| 🌐 **PWA অ্যাপ (Public)** | **https://sheikhrashel47-stack.github.io/admission-hub-ai/** — ব্রাউজারে খুলো → **Add to Home Screen** (iOS: Safari → Share → Add to Home Screen) |
+| 🤖 AI Backend (free) | `https://rashelzayan213.workers.dev/admission-hub-ai` — Cloudflare Workers (keys server-side) |
+| 📦 GitHub repo | `https://github.com/sheikhrashel47-stack/admission-hub-ai` |
 
-## চালানো
+## যা আছে (সত্যি যা আছে)
+
+- 💬 প্রিমিয়াম chat — streaming, markdown, tables, code highlight, citations
+- 🧠 Model Router: AUTO (task-ভিত্তিক) + fallback (Groq → Gemini → Cerebras → Mistral)
+- 🔎 Web Research (Tavily) — live steps + clickable সোর্স
+- 📁 ফাইল: upload / preview / AI বিশ্লেষণ / প্রশ্ন (text ফরম্যাট)
+- 🧠 User Memory (নোট + toggle) — সব চ্যাটে injected
+- 🗂️ চ্যাট history: search / delete / branch / regenerate / export .md
+- ⚡/⚖️/🌊 Response modes · 🎙️ ভয়েস ইনপুট · 🔊 TTS · 🌙/☀️ থিম
+- 📲 PWA — installable, offline UI shell, icons, iOS meta
+- 📊 Usage ledger (প্রতি মডেল request/token)
+- 🤖 Agent Task panel + System Status + Deployments (real, এখন Phase 5/7-এর বাকি সৎভাবে লেখা)
+
+## আর্কিটেকচার (সব ফ্রি)
+
+```
+📱 PWA (GitHub Pages)  ──►  ☁️ Cloudflare Workers backend  ──►  Groq/Gemini/Cerebras/Mistral + Tavily
+                                 (KV: chats/files/memory)
+```
+
+## চালানো (লোকাল)
 ```bash
-# 1. keys বসাও  →  .env.local (নিচের .env.example দেখো)
-# 2. চালাও
-node server.mjs          # → http://localhost:3000
+cp .env.example .env.local   # key বসাও
+node server.mjs              # → http://localhost:3000
 ```
 
-## ফাইল স্ট্রাকচার
-```
-server.mjs            → HTTP server + API + SSE chat + research + files + memory
-lib/providers.mjs     → Model Router (config-driven, fallback chain, Tavily)
-web/index.html        → Premium UI (mobile-first, বাংলা)
-data/                 → chats.json · memory.json · usage.json · files/  (auto-তৈরি)
-.env.local            → 🔴 keys (gitignored — কখনো commit কোরো না)
-```
+## সততার ঘোষণা
+- PDF/DOCX, Canvas, Agent tools (code edit/git), Deploy automation, Image gen → পরের Phase (docs/ROADMAP.md)
+- কখনো fake loading নেই — যেটা "চলছে" দেখায় সেটা সত্যিই backend-এ চলছে
+- Keys কখনো client-এ নেই: Workers Secrets-এ; model শুধু tool result + minimal context পায়
 
-## সততার ঘোষণা (কী এখনো নেই — ফেক করা হয়নি)
-- PDF / DOCX / XLSX parsing → **Phase 3** (এখন সৎভাবে "সাপোর্ট হয় না" বলে)
-- Agent tools (code edit, git, deploy) → **Phase 5–6** (UI-তে "Phase 5+" লেখা আছে)
-- Image generation → key-নির্ভর, পরে
-- Multi-user auth → private single-owner এখন; Supabase auth Phase 2
-- [নিয়ম]: model শুধু tool result + minimal context পায় — master secrets কখনো নয়
-
----
-
-## License
-Private — শুধু owner-এর জন্য (তুমি)।
+## 🔐 নিরাপত্তা নোট (গুরুত্বপূর্ণ)
+- এই repo **public** — এখানে কোনো key নেই (`.env.local`, `data/` gitignored)
+- GitHub PAT ও Cloudflare token যথারীতি **revoke** করে দাও (এগুলো chat-এ এক্সপোজড হয়েছিল)
