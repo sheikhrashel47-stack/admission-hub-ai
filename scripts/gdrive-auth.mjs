@@ -104,18 +104,29 @@ async function cmdToken(clientId, clientSecret, rawCode) {
   }
 
   console.log(C.d('→ টোকেন চাওয়া হচ্ছে…'));
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: REDIRECT,
-      grant_type: 'authorization_code',
-    }),
-  });
-  const j = await res.json().catch(() => ({}));
+  let res, j;
+  try {
+    res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: REDIRECT,
+        grant_type: 'authorization_code',
+      }),
+    });
+    j = await res.json().catch(() => ({}));
+  } catch (e) {
+    console.error(C.r('\n❌ Google-এ পৌঁছানো যায়নি (নেটওয়ার্ক ব্লকড)'));
+    console.error(C.d('   ' + (e.cause?.code || e.message)));
+    console.error(C.y('\n💡 এই মেশিন থেকে oauth2.googleapis.com এ কানেকশন যাচ্ছে না।'));
+    console.error(C.y('   বিকল্প: ব্রাউজার-টুল ব্যবহার করুন — ফোনেই পুরো কাজ হবে:'));
+    console.error(C.g('   npx --yes serve tools/gdrive-token   # অথবা ফাইলটা সরাসরি খুলুন'));
+    console.error(C.d('   tools/gdrive-token/index.html'));
+    process.exit(1);
+  }
 
   if (!res.ok || !j.refresh_token) {
     console.error(C.r(`\n❌ ব্যর্থ (HTTP ${res.status}): ${j.error || '?'} — ${j.error_description || ''}\n`));
