@@ -23,6 +23,8 @@ const MODELS = [
   { pid: 'openrouter', id: 'or', label: 'OpenRouter · Llama 3.3 Free', model: 'meta-llama/llama-3.3-70b-instruct:free', speed: 3, quality: 4, coding: 4 },
 ];
 const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const NL = '\n';
+const NN = '\n\n';
 const TEXT_EXT = ['txt','md','csv','json','html','htm','css','js','mjs','ts','tsx','jsx','xml','yml','yaml','sh','sql','py','env'];
 
 const cors = {
@@ -161,6 +163,11 @@ async function* streamAnswer(keys, messages, model, mode, emit, signal, images) 
 }
 
 async function searchWeb(key, query, max = 5) {
+  const r = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: key, query, max_results: max }) });
+  if (!r.ok) throw new Error('সার্চ ব্যর্থ');
+  const j = await r.json();
+  return (j.results || []).slice(0, max).map((x, i) => ({ n: i + 1, title: x.title || 'সোর্স ' + (i + 1), url: x.url, content: (x.content || '').slice(0, 1500) }));
+}
 
 const SUM_SYS = `তুমি একটি চ্যাট-সংক্ষেপক। নিচের কথোপকথনের গুরুত্বপূর্ণ তথ্য, সিদ্ধান্ত, ব্যবহারকারীর পছন্দ, নাম/সংখ্যা ও উল্লেখযোগ্য বিষয়গুলো বাংলায় সংক্ষিপ্ত বুলেটে নোট করো (সর্বোচ্চ ~৪০০ শব্দ)। শুধু সারাংশ লিখো — কোনো ভূমিকা, শিরোনাম বা মন্তব্য নয়।`;
 async function summarize(keys, lines, prev) {
@@ -181,7 +188,7 @@ async function summarize(keys, lines, prev) {
   }
   throw new Error('সংক্ষেপণ ব্যর্থ');
 }
-async function ensureSummary(env, c, data) {
+async function ensureSummary(keys, env, c, data) {
   if (!c) return null;
   const msgs = (c.messages || []).filter((m) => m.role !== 'system' && !(m.partial && !m.content));
   if (msgs.length < 48) return c.summary ? c.summary.text : null;
@@ -209,22 +216,15 @@ async function pingProviders(keys) {
     const key = keys[KEYMAP[m.pid]];
     if (!key) continue;
     seen.add(m.pid);
-    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 4000);
     try {
       let r;
-      if (m.pid === 'gemini') r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`, { signal: ac.signal });
-      else if (m.pid === 'openrouter') r = await fetch(`${PING_BASE[m.pid]}/auth/key`, { headers: { Authorization: `Bearer ${key}` }, signal: ac.signal });
-      else r = await fetch(`${PING_BASE[m.pid]}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: ac.signal });
+      if (m.pid === 'gemini') r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`);
+      else if (m.pid === 'openrouter') r = await fetch(`${PING_BASE[m.pid]}/auth/key`, { headers: { Authorization: `Bearer ${key}` } });
+      else r = await fetch(`${PING_BASE[m.pid]}/models`, { headers: { Authorization: `Bearer ${key}` } });
       out.push({ pid: m.pid, label: m.label, ok: !!r.ok });
     } catch { out.push({ pid: m.pid, label: m.label, ok: false }); }
-    finally { clearTimeout(t); }
   }
   return out;
-}
-  const r = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: key, query, max_results: max }) });
-  if (!r.ok) throw new Error('সার্চ ব্যর্থ');
-  const j = await r.json();
-  return (j.results || []).slice(0, max).map((x, i) => ({ n: i + 1, title: x.title || 'সোর্স ' + (i + 1), url: x.url, content: (x.content || '').slice(0, 1500) }));
 }
 
 export default {
@@ -423,7 +423,7 @@ export default {
 
       msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
-      const summary = await ensureSummary(env, c, data);
+      const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '');
       let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
       if (body.media && body.media.length) {
