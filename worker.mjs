@@ -13,7 +13,6 @@ const MODELS = [
   { pid: 'groq', id: 'fast', label: 'Groq · GPT-OSS-120B', model: 'openai/gpt-oss-120b', speed: 3, quality: 4, coding: 5 },
   { pid: 'groq', id: 'lite', label: 'Groq · Qwen 3.8-27B', model: 'qwen/qwen3.8-27b', speed: 4, quality: 3, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
-  { pid: 'cerebras', id: 'c3', label: 'Cerebras · Llama 3.3-70B', model: 'llama-3.3-70b', speed: 5, quality: 3, coding: 4 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
   { pid: 'openrouter', id: 'or', label: 'OpenRouter · Llama 3.3 Free', model: 'meta-llama/llama-3.3-70b-instruct:free', speed: 3, quality: 4, coding: 4 },
 ];
@@ -158,7 +157,7 @@ async function handle(req) {
     // config
     if (method === 'GET' && path === '/api/config') {
       const models = MODELS.filter((m) => keyOf(m.pid)).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
-      return json({ models, features: { research: !!TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: false } });
+      return json({ models, features: { research: !!TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true } });
     }
 
     // system
@@ -196,16 +195,26 @@ async function handle(req) {
     // chats list
     if (method === 'GET' && path === '/api/chats') {
       const data = await kvJson('chats', { chats: [] });
-      const q = (url.searchParams.get('q') || '').toLowerCase();
-      let list = data.chats.map((c) => ({ id: c.id, title: c.title, pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
-      if (q) list = list.filter((c) => (c.title || '').toLowerCase().includes(q));
+      const q = (url.searchParams.get('q') || '').toLowerCase().trim();
+      const dateF = (url.searchParams.get('date') || '').trim();
+      const proj = url.searchParams.get('project') || '';
+      const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+      const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+      let list = data.chats;
+      if (proj) list = list.filter((c) => c.project === proj);
+      if (q) list = list.filter((c) => (c.title || '').toLowerCase().includes(q) || (c.messages || []).some((m) => m.role !== 'system' && String(m.content || '').toLowerCase().includes(q)));
+      if (dateF) {
+        const d0 = new Date(dateF + 'T00:00:00').getTime(); const d1 = d0 + 86400000;
+        if (!isNaN(d0)) list = list.filter((c) => (c.updatedAt >= d0 && c.updatedAt < d1) || (c.createdAt >= d0 && c.createdAt < d1));
+      }
+      list = list.map((c) => ({ id: c.id, title: c.title, project: c.project, pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
       list.sort((a, b) => b.updatedAt - a.updatedAt);
-      return json(list.slice(0, 300));
+      return json(list.slice(offset, offset + limit));
     }
     if (method === 'POST' && path === '/api/chats') {
       const data = await kvJson('chats', { chats: [] });
       const body = await parseBody(req);
-      const c = { id: crypto.randomUUID(), title: (body.title || 'নতুন চ্যাট').slice(0, 60), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+      const c = { id: crypto.randomUUID(), title: (body.title || 'নতুন চ্যাট').slice(0, 60), project: body.project || 'সাধারণ', pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
       data.chats.unshift(c); await kvSet('chats', data);
       return json(c);
     }
@@ -214,7 +223,38 @@ async function handle(req) {
     if (mChat && method === 'GET') {
       const data = await kvJson('chats', { chats: [] });
       const c = data.chats.find((x) => x.id === mChat[1]);
-      return c ? json(c) : json({ error: 'পাওয়া যায়নি' }, 404);
+      if (!c) return json({ error: 'পাওয়া যায়নি' }, 404);
+      const { messages, ...meta } = c;
+      return json({ ...meta, total: (c.messages || []).length });
+    }
+    const mMessages = path.match(/^\/api\/chats\/([\w-]+)\/messages$/);
+    if (mMessages && method === 'GET') {
+      const data = await kvJson('chats', { chats: [] });
+      const c = data.chats.find((x) => x.id === mMessages[1]);
+      if (!c) return json({ error: 'পাওয়া যায়নি' }, 404);
+      const msgs = c.messages || [];
+      const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') || '60', 10) || 60));
+      const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+      return json({ total: msgs.length, messages: msgs.slice(offset, offset + limit) });
+    }
+    const mSearchMsg = path.match(/^\/api\/chats\/([\w-]+)\/search$/);
+    if (mSearchMsg && method === 'GET') {
+      const data = await kvJson('chats', { chats: [] });
+      const c = data.chats.find((x) => x.id === mSearchMsg[1]);
+      if (!c) return json({ error: 'পাওয়া যায়নি' }, 404);
+      const q = (url.searchParams.get('q') || '').toLowerCase().trim();
+      if (!q) return json({ hits: [] });
+      const hits = [];
+      (c.messages || []).forEach((m, i) => {
+        if (m.role === 'system') return;
+        const t = String(m.content || '');
+        const idx = t.toLowerCase().indexOf(q);
+        if (idx >= 0) {
+          const snip = (idx > 30 ? '…' : '') + t.slice(Math.max(0, idx - 30), idx + q.length + 60) + (idx + q.length + 60 < t.length ? '…' : '');
+          hits.push({ i, role: m.role, snip });
+        }
+      });
+      return json({ hits: hits.slice(0, 100) });
     }
     if (mChat && method === 'DELETE') {
       const data = await kvJson('chats', { chats: [] });
@@ -289,10 +329,11 @@ async function handle(req) {
       const chatId = mRe ? mRe[1] : (body.chatId || null);
       let c = data.chats.find((x) => x.id === chatId);
       let msgs;
+      let popped = null;
       if (mRe) {
         if (!c) return json({ error: 'নেই' }, 404);
         msgs = c.messages;
-        while (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
+        while (msgs.length && msgs[msgs.length - 1].role === 'assistant') popped = msgs.pop();
       } else {
         const msg = (body.message || '').trim();
         if (!msg) return json({ error: 'খালি' }, 400);
@@ -305,7 +346,8 @@ async function handle(req) {
       }
 
       const mem = await kvJson('memory', { enabled: true, notes: '' });
-      let finalMsgs = [{ role: 'system', content: SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') }, ...msgs.filter((m) => m.role !== 'system').slice(-24)];
+      msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
+      let finalMsgs = [{ role: 'system', content: SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
 
       const emitQueue = [];
       let res; // হবে SSE Response
@@ -333,7 +375,9 @@ async function handle(req) {
             }
             if (!answer) throw new Error('খালি');
             const meta = { model: attempt?.model, provider: attempt?.pid, mode: body.mode || 'balanced', seconds: Math.round((Date.now() - t0) / 100) / 10, tokens: Math.ceil(answer.length / 4) };
-            c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources });
+            const ph = c.messages[c.messages.length - 1];
+            if (ph && ph.partial) { Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources }); }
+            else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources });
             c.updatedAt = Date.now();
             await kvSet('chats', data);
             const u = await kvJson('usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} });
@@ -344,6 +388,22 @@ async function handle(req) {
             await kvSet('usage', u);
             emit({ done: true, id: c.id, meta, sources });
           } catch (e) {
+            /* partial-stream persistence: যতটুকু এসেছে তা সেভ করো */
+            try {
+              if (answer && answer.trim()) {
+                const ph = c.messages[c.messages.length - 1];
+                if (ph && ph.partial) { ph.content = answer; ph.ts = Date.now(); }
+                else c.messages.push({ role: 'assistant', content: answer, partial: true, ts: Date.now() });
+              } else if (popped) {
+                /* রিজেনারেশন ব্যর্থ → পুরোনো উত্তর ফেরত */
+                const ph = c.messages[c.messages.length - 1];
+                if (ph && ph.partial) { Object.assign(ph, popped); ph.partial = true; }
+                else c.messages.push({ ...popped, partial: true });
+              }
+              /* ব্যর্থ হলেও user বার্তা + placeholder সংরক্ষিত থাকে */
+              c.updatedAt = Date.now();
+              await kvSet('chats', data);
+            } catch {}
             if (req.signal?.aborted) { emit({ abort: true }); }
             else emit({ stopped: true, error: String(e.message || 'সমস্যা').slice(0, 200) });
           } finally { close(); }

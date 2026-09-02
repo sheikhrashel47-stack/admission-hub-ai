@@ -206,17 +206,26 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && path === '/api/config') {
       const models = FREEMODELS.filter((m) => process.env[KEYMAP[m.pid]]).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
-      return json(200, { models, features: { research: !!process.env.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: false } });
+      return json(200, { models, features: { research: !!process.env.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true } });
     }
 
     if (req.method === 'GET' && path === '/api/chats') {
-      const q = (url.searchParams.get('q') || '').toLowerCase();
+      const q = (url.searchParams.get('q') || '').toLowerCase().trim();
+      const dateF = (url.searchParams.get('date') || '').trim();
       const proj = url.searchParams.get('project') || '';
-      let list = store.chats.chats.map((c) => ({ id: c.id, title: c.title, project: c.project, pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
+      const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+      const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+      const raw = store.chats.chats;
+      let list = raw;
       if (proj) list = list.filter((c) => c.project === proj);
-      if (q) list = list.filter((c) => (c.title || '').toLowerCase().includes(q));
+      if (q) list = list.filter((c) => (c.title || '').toLowerCase().includes(q) || (c.messages || []).some((m) => m.role !== 'system' && String(m.content || '').toLowerCase().includes(q)));
+      if (dateF) {
+        const d0 = new Date(dateF + 'T00:00:00').getTime(); const d1 = d0 + 86400000;
+        if (!isNaN(d0)) list = list.filter((c) => (c.updatedAt >= d0 && c.updatedAt < d1) || (c.createdAt >= d0 && c.createdAt < d1));
+      }
+      list = list.map((c) => ({ id: c.id, title: c.title, project: c.project, pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
       list.sort((a, b) => (b.pinned - a.pinned) || (b.updatedAt - a.updatedAt));
-      return json(200, list.slice(0, 300));
+      return json(200, list.slice(offset, offset + limit));
     }
 
     if (req.method === 'POST' && path === '/api/chats') {
@@ -229,7 +238,11 @@ const server = http.createServer(async (req, res) => {
     const mChat = path.match(/^\/api\/chats\/([\w-]+)$/);
     if (mChat) {
       const c = store.chats.chats.find((x) => x.id === mChat[1]);
-      if (req.method === 'GET') return c ? json(200, c) : json(404, { error: 'চ্যাট পাওয়া যায়নি' });
+      if (req.method === 'GET') {
+        if (!c) return json(404, { error: 'চ্যাট পাওয়া যায়নি' });
+        const { messages, ...meta } = c;
+        return json(200, { ...meta, total: (c.messages || []).length });
+      }
       if (req.method === 'DELETE') { store.chats.chats = store.chats.chats.filter((x) => x.id !== mChat[1]); save(); return json(200, { ok: true }); }
       if (req.method === 'PATCH') {
         if (!c) return json(404, { error: 'চ্যাট পাওয়া যায়নি' });
@@ -238,6 +251,35 @@ const server = http.createServer(async (req, res) => {
         c.updatedAt = now(); save();
         return json(200, c);
       }
+    }
+
+    const mMessages = path.match(/^\/api\/chats\/([\w-]+)\/messages$/);
+    if (req.method === 'GET' && mMessages) {
+      const c = store.chats.chats.find((x) => x.id === mMessages[1]);
+      if (!c) return json(404, { error: 'চ্যাট পাওয়া যায়নি' });
+      const msgs = c.messages || [];
+      const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') || '60', 10) || 60));
+      const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+      return json(200, { total: msgs.length, messages: msgs.slice(offset, offset + limit) });
+    }
+
+    const mSearchMsg = path.match(/^\/api\/chats\/([\w-]+)\/search$/);
+    if (req.method === 'GET' && mSearchMsg) {
+      const c = store.chats.chats.find((x) => x.id === mSearchMsg[1]);
+      if (!c) return json(404, { error: 'চ্যাট পাওয়া যায়নি' });
+      const q = (url.searchParams.get('q') || '').toLowerCase().trim();
+      if (!q) return json(200, { hits: [] });
+      const hits = [];
+      (c.messages || []).forEach((m, i) => {
+        if (m.role === 'system') return;
+        const t = String(m.content || '');
+        const idx = t.toLowerCase().indexOf(q);
+        if (idx >= 0) {
+          const snip = (idx > 30 ? '…' : '') + t.slice(Math.max(0, idx - 30), idx + q.length + 60) + (idx + q.length + 60 < t.length ? '…' : '');
+          hits.push({ i, role: m.role, snip });
+        }
+      });
+      return json(200, { hits: hits.slice(0, 100) });
     }
 
     const mBr = path.match(/^\/api\/chats\/([\w-]+)\/branch$/);
@@ -259,14 +301,17 @@ const server = http.createServer(async (req, res) => {
       if (mRe) chatId = mRe[1]; else chatId = body.chatId || null;
       const c = store.chats.chats.find((x) => x.id === chatId);
       let msgs = c ? c.messages : [];
+      let ncOut = null;
+      let popped = null;
       if (mRe) {
         if (!c) return json(404, { error: 'চ্যাট পাওয়া যায়নি' });
-        while (msgs.length && msgs[msgs.length - 1].role === 'assistant') msgs.pop();
+        while (msgs.length && msgs[msgs.length - 1].role === 'assistant') popped = msgs.pop();
         if (!msgs.some((m) => m.role === 'user')) return json(400, { error: 'উত্তর দেওয়ার মতো প্রশ্ন নেই' });
       } else {
         const msg = (body.message || '').trim();
         if (!msg) return json(400, { error: 'খালি বার্তা' });
         let nc = c;
+        ncOut = nc;
         if (!nc) {
           nc = { id: randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), project: body.project || 'সাধারণ', pinned: false, archived: false, createdAt: now(), updatedAt: now(), messages: [] };
           store.chats.chats.unshift(nc);
@@ -274,16 +319,44 @@ const server = http.createServer(async (req, res) => {
         nc.messages.push({ role: 'user', content: msg, ts: now(), media: body.media || null, images: body.images || null });
         msgs = nc.messages;
       }
-      const emit = openSSE(res);
+      /* partial-stream persistence: placeholder আগেই সেভ হয়, সংযোগ কাটলে অংশটুকু রাখা হয় */
+      msgs.push({ role: 'assistant', content: '', partial: true, ts: now() });
+      const ctxMsgs = msgs.filter((m) => !(m.partial && !m.content));
+      const rawEmit = openSSE(res);
+      let acc = '', finalized = false;
+      const emit = (ev) => { if (ev.token) acc += ev.token; rawEmit(ev); };
       const ac = new AbortController();
-      res.on('close', () => ac.abort());
-      const out = await runChat({ messages: msgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null, images: body.images || null });
+      res.on('close', () => {
+        ac.abort();
+        const ch = store.chats.chats.find((x) => x.id === (c ? c.id : (ncOut ? ncOut.id : null)));
+        if (ch && !finalized) {
+          const last = (ch.messages || [])[ch.messages.length - 1];
+          if (acc) {
+            if (last && last.partial) { last.content = acc; last.ts = now(); }
+            else { ch.messages.push({ role: 'assistant', content: acc, partial: true, ts: now() }); }
+          } else if (popped) {
+            /* রিজেনারেশন ব্যর্থ → পুরোনো উত্তর ফেরত (ডেটা ক্ষতি হয় না) */
+            if (last && last.partial) { Object.assign(last, popped); last.partial = true; }
+            else ch.messages.push({ ...popped, partial: true });
+          }
+          ch.updatedAt = now(); save();
+        }
+      });
+      const out = await runChat({ messages: ctxMsgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null, images: body.images || null });
       if (out) {
-        msgs.push({ role: 'assistant', content: out.answer, ts: now(), model: out.meta.provider + ' · ' + out.meta.model, mode: body.mode, meta: out.meta, sources: out.sources || [] });
-        const fc = store.chats.chats.find((x) => x.id === (c ? c.id : msgs[0] && findChatIdFor(msgs)));
-        if (c) { c.updatedAt = now(); }
-        save();
+        const ph = msgs[msgs.length - 1];
+        if (ph && ph.partial) {
+          ph.content = out.answer; ph.partial = false; ph.ts = now();
+          ph.model = out.meta.provider + ' · ' + out.meta.model; ph.mode = body.mode; ph.meta = out.meta; ph.sources = out.sources || [];
+        } else {
+          msgs.push({ role: 'assistant', content: out.answer, ts: now(), model: out.meta.provider + ' · ' + out.meta.model, mode: body.mode, meta: out.meta, sources: out.sources || [] });
+        }
+        finalized = true;
       }
+      /* ব্যর্থ হলেও user বার্তা + placeholder সংরক্ষিত থাকে */
+      const tgt = c || ncOut;
+      if (tgt) tgt.updatedAt = now();
+      save();
       try { res.end(); } catch {}
       return;
     }

@@ -16,7 +16,8 @@
 | 3-dot menu (header ⋮ → conversation menu) | ✅ |
 | Long-press message actions (copy/regen/edit/share/delete…) | ✅ |
 | File upload UI (+ attachment chips) | ✅ |
-| Image UI | ⏳ Phase 2-র Gemini vision-এর সাথে (vision ছাড়া দেখানো §45-নিষিদ্ধ) |
+| Image UI | ✅ (Gemini vision live — local + public worker, লাল→লাল/নীল→নীল verified) |
+| **Chat Engine Stability** (windowed 60/বার্তা + পুরোনো-লোডার, history server-pagination 50/পাতা, title+content+date search, in-chat search (server, debounced), partial-stream crash recovery + retry, regenerate-এ মিস-টার্গেট ফিক্স + ব্যর্থ হলে পুরোনো উত্তর restore, hero ধ্বংস-বাগ ফিক্স, draft autosave, race-safe streaming, H1–H6/italic/checklist/hr মডার্ন md, codeBox কপি) | ✅ LOCALLY TESTED — deploy pending tokens |
 | Voice input UI (mic + Listening wave) | ✅ (ব্রাউজার SpeechRecognition) |
 | Model selector (Auto/Fast/Balanced/Deep + provider list) | ✅ |
 | Agent Mode UI | 🔒 তৈরি, কিন্তু backend agent বন্ধ থাকায় hidden (Phase 4-তে চালু) |
@@ -31,7 +32,7 @@
 
 ## 🧩 Phase 2 — AI Core + Model Router (৮০% → ১০০%)
 
-- ✅ Gemini / Groq / Cerebras / Mistral integration (server-side key)
+- ✅ Gemini / Groq / Mistral integration (server-side key; Cerebras free credit শেষ → বাদ)
 - ✅ Model selection, automatic fallback chain, streaming SSE
 - ✅ Context handling (last-24 messages + memory)
 - ✅ Error handling + retry (provider failover, 4-attempt chain)
