@@ -20,7 +20,7 @@ const MODELS = [
   { pid: 'groq', id: 'lite', label: 'Groq · Qwen 3.8-27B', model: 'qwen/qwen3.8-27b', speed: 4, quality: 3, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
-  { pid: 'openrouter', id: 'or', label: 'OpenRouter · Llama 3.3 Free', model: 'meta-llama/llama-3.3-70b-instruct:free', speed: 3, quality: 4, coding: 4 },
+  { pid: 'openrouter', id: 'or', label: 'OpenRouter · Free Router', model: 'openrouter/free', speed: 3, quality: 4, coding: 4 },
 ];
 const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
 const NL = '\n';
