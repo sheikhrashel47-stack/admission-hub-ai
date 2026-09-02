@@ -571,6 +571,7 @@ const ICO={
   down:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 21h16"/></svg>',
   folder:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>'
 };
+ICO.web=ICO.globe;ICO.voice=ICO.mic;ICO.export=ICO.down;ICO.model=ICO.gauge;ICO.chat=ICO.pen;
 function renderSugs(){
   const box=$('#sugs');if(!box)return;
   const sugs=[
@@ -1182,7 +1183,7 @@ function applyTheme(t){
 }
 (function(){
   const saved=localStorage.getItem('ahai-theme');
-  const t=saved||(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+  const t=saved||'dark';
   applyTheme(t);
 })();
 $('#themeBtn').onclick=()=>{const cur=document.documentElement.getAttribute('data-theme')||'dark';applyTheme(cur==='dark'?'light':'dark');toast(cur==='dark'?'🌞 লাইট থিম':'🌙 ডার্ক থিম')};
