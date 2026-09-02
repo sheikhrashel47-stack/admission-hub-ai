@@ -1,52 +1,119 @@
-# ADMISSION HUB AI — Implementation Roadmap (dependency-ভিত্তিক)
+# Admission Hub AI — Official Master Roadmap (10 Phases)
 
-> নিয়ম: কোনো ফিচার "চলছে" দেখানো হবে না যতক্ষণ না সত্যিই backend-এ কাজ করে।
+> নিয়ম: প্রতিটি ফেজের শেষে `PHASE X COMPLETE — WAITING FOR OWNER APPROVAL` — Owner-এর অনুমোদন ছাড়া পরের ফেজে যাওয়া নিষিদ্ধ।
+> §45: প্রতিটি দৃশ্যমান ফিচার real হতে হবে (ব্যাকএন্ড ছাড়া কিছু দেখানো যাবে না)। §63: বড় কাজ আগে প্ল্যান।
+> আপডেট: ২০২৬-০৯-০২
 
-## Phase 1 — Premium Chat Foundation ✅ (এখন বানানো)
-- Chat + streaming + markdown + code highlight + tables
-- Model Router (AUTO + fallback + config-driven models)
-- Response modes (Fast/Balanced/Deep)
-- User Memory + chat history + manage (rename/pin/search/delete/branch/export)
-- Usage ledger
+---
 
-## Phase 2 — Real Auth + History in DB
-- Supabase Auth (owner-only লগইন) + Postgres-এ chats/files/memory
-- (এখন local JSON — single private user; ডেটা হারানো থেকে বাঁচাতে এটাই প্রথম)
+## ✅ Phase 1 — AI Chat UI  (চলছে → প্রায় শেষ)
 
-## Phase 3 — Files Pro + Projects + Canvas
-- PDF/DOCX/XLSX parsing (serverless parse) → MCQ extraction pipeline
-- Projects workspace (project memory + files + instructions)
-- Canvas (document/code writer panel) — real AI-edit
+| আইটেম | Status |
+|---|---|
+| Premium mobile chatbox (dark iOS + emerald) | ✅ |
+| Clean composer (auto-expand, safe-area keyboard) | ✅ |
+| `+` tools menu (bottom sheet) | ✅ |
+| 3-dot menu (header ⋮ → conversation menu) | ✅ |
+| Long-press message actions (copy/regen/edit/share/delete…) | ✅ |
+| File upload UI (+ attachment chips) | ✅ |
+| Image UI | ⏳ Phase 2-র Gemini vision-এর সাথে (vision ছাড়া দেখানো §45-নিষিদ্ধ) |
+| Voice input UI (mic + Listening wave) | ✅ (ব্রাউজার SpeechRecognition) |
+| Model selector (Auto/Fast/Balanced/Deep + provider list) | ✅ |
+| Agent Mode UI | 🔒 তৈরি, কিন্তু backend agent বন্ধ থাকায় hidden (Phase 4-তে চালু) |
+| **Light/Dark theme toggle** | ✅ **নতুন (২ ফেজ-১ গ্যাপ পূরণ)** |
+| Mobile keyboard behavior (visualViewport) | ✅ |
+| Loading / error / fallback UI | ✅ |
 
-## Phase 4 — Deep Research + Image
-- Deep research agent (plan → multi-source → cross-check → report artifact)
-- Image generation (Gemini image model / provider-key হলে)
+**Phase 1 = 100% সম্পন্ন ঘোষণার আগে বাকি:** Owner-এর ভিজ্যুয়াল রিভিউ (লাইভ: localhost:3000) + পাবলিক ডিপ্লয় (টোকেন লাগবে)।
 
-## Phase 5 — Agent Runtime + Tools (sandboxed)
-- Tools: read/search/create/update file · git status/diff/commit/PR
-- Sandbox: E2B free tier বা GitHub Actions runner — এখানেই কোড চলবে
-- Agent task panel + Plan → Approve → Execute (real)
-- Risk levels: LOW auto · HIGH approval
+---
 
-## Phase 6 — GitHub + Code Workspace
-- GitHub App (scoped, master key কখনো নয়) + Monaco editor + diff viewer
-- Branch → commit → PR workflow
+## 🧩 Phase 2 — AI Core + Model Router (৮০% → ১০০%)
 
-## Phase 7 — Deployment Automation
-- Vercel/Cloudflare preview → health check → owner approval → production → verify → record
-- Rollback + deploy log
+- ✅ Gemini / Groq / Cerebras / Mistral integration (server-side key)
+- ✅ Model selection, automatic fallback chain, streaming SSE
+- ✅ Context handling (last-24 messages + memory)
+- ✅ Error handling + retry (provider failover, 4-attempt chain)
+- 🟡 Provider health check `/api/system` (extend: dynamic live ping)
+- 🟡 OpenRouter integration (key লাগবে — `.env.local` + KV)
+- 🟡 Token/context management (অটো-সংক্ষেপণ: লম্বা চ্যাট → সারাংশ)
+- ⏳ **Gemini Vision (PDF/DOCX/ইমেজ/ছবি-বোঝা)** — Phase 1-এর image UI-এর gate
+- ⏳ Response quality v2 (system prompt, ইনলাইন সাইটেশন, ফলো-আপ সাজেশন)
 
-## Phase 8 — Admission Hub Integrations
-- Supabase scoped tools: question_bank_read/update, vocabulary_read/update, content_sync
-- Project knowledge RAG (pgvector)
+---
 
-## Phase 9 — Automation + Background Tasks
-- Daily health check, nightly reports, notifications, pg-boss queue
+## 🛠️ Phase 3 — Tool System (input → execution → result → error → retry)
 
-## Phase 10 — Multi-Agent
-- Orchestrator → Research/Coding/Testing/Deployment specialists
+- ✅ Web search (Tavily) · File read/write · File analyze/ask · Project search
+- ⏳ Code execution/workspace (E2B / WebContainers — free tier)
+- ⏳ Browser tool (Browser Use Cloud — ~$40/মাস, বাজেট-গেটেড)
+- ⏳ Git operations (GitHub API — repo/commit/branch)
+- ⏳ Database operations (Cloudflare D1/KV ops)
+- ⏳ Image/file processing (Gemini vision pipeline)
+- ⏳ Testing (run tests, capture output)
 
-## Hard limits (সৎ)
-- Agent কখনো payment/financial/user-PII/master secret পাবে না (নকশায় deny)
-- Sandbox ছাড়া code execute হয় না
-- Free tier-এ runtime sessions সীমিত — দীর্ঘ task background queue-তে
+---
+
+## 🤖 Phase 4 — Private Agent Engine
+
+- ⏳ Plan → Tools নির্বাচন → Execute → Verify → Retry → Final Report
+- ⏳ Research Agent (সাব-প্রশ্ন → মাল্টি-সার্চ → সাইটেশন রিপোর্ট)
+- ⏳ File Agent · Code Agent (লিখে/রান করে test) · Project-inspect Agent
+- ⏳ Agent step-cards live (UI রেডি), পারমিশন গেট (§26/§38/§39), টাস্ক লিমিট
+
+---
+
+## 🏗️ Phase 5 — Admission Hub Knowledge + Project Brain
+
+- ⏳ স্থায়ী project knowledge: architecture, PWA, Public App, Question Bank, Vocabulary, UI rules, DB structure, deployment structure, known bugs, decisions, current status, roadmap
+- ⏳ Project Memory: agent এসে "Admission Hub এখন কোথায় আছে?" — উত্তর পাবে নিজে থেকে
+- 🟡 ভিত্তি আছে: memory notes + chat history + এই docs
+
+---
+
+## 🔐 Phase 6 — Owner Security + Secret Management
+
+- 🟡 API keys: server-side only (Cloudflare KV `cfg:*`) — সঠিক প্যাটার্ন
+- ⏳ Owner-only auth (passkey/WebAuthn — GitHub Pages HTTPS-এ সম্ভব; অথবা owner access code)
+- ⏳ Secure session + device/session management + emergency revoke
+- ⏳ Secret vault UI (keys কখনো response-এ না — runtime-only ব্যবহার)
+- ⏳ Audit log + login/activity history + agent permission system
+
+---
+
+## 🔗 Phase 7 — Full Infrastructure Integration
+
+- ✅ Cloudflare Pages (backend) · GitHub Pages (PWA) · AI providers
+- ⏳ GitHub API (repos/commits) · Supabase/Cloudflare D1 (per-user data) · Domain
+- ⏳ প্রতিটি integration-এর test suite
+
+---
+
+## 🚀 Phase 8 — Development + Deploy Automation
+
+- ⏳ Agent: inspect → plan → edit → test → commit → preview → verify → deploy
+- ✅ ম্যানুয়াল pipeline আছে (Cloudflare direct-upload + gh-pages force-push)
+- ⏳ প্রিভিউ/প্রোডাকশন ডিপ্লয়, rollback, build logs, status, health checks
+
+---
+
+## 📜 Phase 9 — Complete History / Continuity System
+
+- ⏳ Timeline: agent task, prompt, plan, files changed, tests, commit, deploy, error, fix, rollback, config change, DB change, agent session
+- 🟡 ভিত্তি: চ্যাট-হিস্টরি + usage log + এই রোডম্যাপ
+- ⏳ নতুন agent এলে state রিকভারি
+
+---
+
+## 🧪 Phase 10 — Full QA + Autonomous Workflow + Production
+
+- ⏳ Full-system QA (AI/Agent/Tools/GitHub/Cloudflare/PWA/DB/Security/UI)
+- ⏳ Real-world command tests → Production Ready
+
+---
+
+## 🔄 Execution Rules
+1. **প্রতি ফেজ-শেষে**: `PHASE X COMPLETE — WAITING FOR OWNER APPROVAL`
+2. Owner approve করলেই পরের ফেজ।
+3. নতুন agent এলে: এই ফাইল + Phase 9 history → তৎক্ষণাৎ state বুঝবে।
+4. $0-প্রথম; কোনো ফিচার ব্যাকএন্ড ছাড়া UI-তে আসবে না (§45)।
