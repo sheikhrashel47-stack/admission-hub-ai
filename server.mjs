@@ -9,6 +9,7 @@ import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { streamAnswer, searchWeb, FREEMODELS, summarizeChat, pingProviderStatus } from './lib/providers.mjs';
+import * as storage from './lib/storage/index.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DATA = join(ROOT, 'data');
@@ -411,22 +412,51 @@ const server = http.createServer(async (req, res) => {
       const content = (body.content || '').slice(0, MAX_UPLOAD);
       if (!allowedFile(name)) return json(400, { error: 'এই ফরম্যাট এখনো সাপোর্ট হয় না — txt/md/csv/json/html/css/js/ts OK। PDF/DOCX Phase 3-এ।' });
       const meta = { id: randomUUID(), name, size: content.length, type: 'text', ts: now() };
+      // ডিস্কে সবসময় (দ্রুত পড়া/বিশ্লেষণের জন্য) …
       writeFileSync(join(DATA, 'files', meta.id + '.txt'), content);
+      // … আর ক্লাউডে ব্যাকআপ (Drive)। ব্যর্থ হলেও আপলোড ব্যর্থ হবে না।
+      if (storage.primary() === 'gdrive') {
+        try {
+          const r = await storage.put(`${meta.id}__${name}`, content, { contentType: 'text/plain' });
+          meta.cloud = { provider: r.provider, account: r.account ?? null };
+        } catch (e) {
+          meta.cloudError = String(e.message).slice(0, 120);
+        }
+      }
       const list = fileList(); list.unshift(meta); saveJson('files.json', list);
       return json(200, meta);
+    }
+
+    // স্টোরেজ স্বাস্থ্য — UI-র সিস্টেম স্ট্যাটাসে দেখানোর জন্য
+    if (req.method === 'GET' && path === '/api/storage') {
+      return json(200, await storage.health());
     }
 
     const mFile = path.match(/^\/api\/files\/([\w-]+)(\/(analyze|ask))?$/);
     if (mFile) {
       const meta = fileList().find((f) => f.id === mFile[1]);
       if (!meta) return json(404, { error: 'ফাইল পাওয়া যায়নি' });
-      const content = readFileSync(join(DATA, 'files', meta.id + '.txt'), 'utf8');
+      // ডিস্কে না পেলে ক্লাউড ব্যাকআপ থেকে পুনরুদ্ধার
+      let content;
+      const diskPath = join(DATA, 'files', meta.id + '.txt');
+      if (existsSync(diskPath)) {
+        content = readFileSync(diskPath, 'utf8');
+      } else {
+        const buf = await storage.get(`${meta.id}__${meta.name}`).catch(() => null);
+        if (!buf) return json(404, { error: 'ফাইলের কনটেন্ট পাওয়া যায়নি (ডিস্ক ও ক্লাউড দুটোতেই নেই)' });
+        content = new TextDecoder().decode(buf);
+        try { writeFileSync(diskPath, content); } catch {} // ক্যাশ করে রাখি
+      }
       if (req.method === 'GET' && !mFile[2]) {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(content);
       }
       if (req.method === 'DELETE' && !mFile[2]) {
         rmSync(join(DATA, 'files', meta.id + '.txt'), { force: true });
+        // ক্লাউড কপিও মুছি — কোথাও অনাথ ফাইল পড়ে থাকবে না
+        if (meta.cloud) {
+          try { await storage.del(`${meta.id}__${meta.name}`); } catch {}
+        }
         saveJson('files.json', fileList().filter((f) => f.id !== meta.id));
         return json(200, { ok: true });
       }
