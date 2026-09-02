@@ -2,7 +2,7 @@
    - App shell (UI/assets): cache-first → instant open + offline UI
    - API calls (chat/research/files): network — কখনো cache হয় না (তাজা ডেটা)
    - Version bump করলেই পুরোনো ক্যাশ বদলাবে */
-const CACHE = 'ahai-v1';
+const CACHE = 'ahai-v2';
 const SHELL = [
   './',
   './index.html',
