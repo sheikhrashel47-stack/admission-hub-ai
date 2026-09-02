@@ -26,6 +26,13 @@ const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CERE
 const NL = '\n';
 const NN = '\n\n';
 const TEXT_EXT = ['txt','md','csv','json','html','htm','css','js','mjs','ts','tsx','jsx','xml','yml','yaml','sh','sql','py','env'];
+// বাইনারি ফাইল — Gemini নিজে পার্স করে (PDF নেটিভ সাপোর্ট)। KV-তে base64 রাখি, vision পার্ট হিসেবে পাঠাই।
+const BIN_EXT = ['pdf'];
+const BIN_MIME = { pdf: 'application/pdf' };
+const MAX_TEXT = 2 * 1024 * 1024;   // টেক্সট: ২MB
+const MAX_B64 = 10 * 1024 * 1024;  // বাইনারি base64: ১০MB (KV value limit ২৫MB-এর মধ্যে)
+// যেকোনো data URL: ছবি (image/*) + PDF (application/pdf) — Gemini inline_data-এ ম্যাপ হয়
+const DATAURL = /^data:([\w.+-]+\/[\w.+-]+);base64,(.+)$/i;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -108,12 +115,18 @@ async function driveFolderId(env, token, force) {
 }
 function driveMime(name) {
   const e = (name.split('.').pop() || '').toLowerCase();
-  return { json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css', csv: 'text/csv', xml: 'application/xml', js: 'text/javascript', mjs: 'text/javascript', md: 'text/markdown' }[e] || 'text/plain';
+  return { json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css', csv: 'text/csv', xml: 'application/xml', js: 'text/javascript', mjs: 'text/javascript', md: 'text/markdown', pdf: 'application/pdf' }[e] || 'text/plain';
 }
+// content: string (text) বা Uint8Array (বাইনারি) — multipart body Blob দিয়ে বানাই যাতে বাইনারি নষ্ট না হয়
 async function driveMultipartUpload(token, folderId, name, content, mime) {
   const boundary = 'ahb' + crypto.randomUUID().replace(/-/g, '');
   const meta = { name, parents: [folderId], description: 'Admission Hub AI ব্যাকআপ' };
-  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
+  const isBin = content instanceof Uint8Array;
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}${isBin ? '' : '; charset=UTF-8'}\r\n\r\n`,
+    content,
+    `\r\n--${boundary}--`,
+  ]);
   const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
     method: 'POST',
     headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
@@ -122,14 +135,15 @@ async function driveMultipartUpload(token, folderId, name, content, mime) {
   if (!r.ok) throw new Error('Drive upload HTTP ' + r.status);
   return r.json();
 }
-async function driveBackup(env, name, content) {
+async function driveBackup(env, name, content, mime) {
   const token = await driveToken(env);
   if (!token) return null;
+  const m = mime || driveMime(name);
   let folder = await driveFolderId(env, token, false);
-  try { return await driveMultipartUpload(token, folder, name, content, driveMime(name)); }
+  try { return await driveMultipartUpload(token, folder, name, content, m); }
   catch { // ক্যাশ করা folder id বাসি হলে (ডিলিট হয়ে গেলে) নতুন করে খুঁজে/বানিয়ে একবার রিট্রাই
     folder = await driveFolderId(env, token, true);
-    return await driveMultipartUpload(token, folder, name, content, driveMime(name));
+    return await driveMultipartUpload(token, folder, name, content, m);
   }
 }
 async function driveDelete(env, fileId) {
@@ -153,7 +167,8 @@ function sseStream(onWrite) {
 
 function parseBody(req) { return req.json().catch(() => ({})); }
 
-function pickChain(keys, model, mode, images) {
+function pickChain(keys, model, mode, multimodal) {
+  // multimodal = ছবি বা PDF (Gemini inline_data)। শুধু Gemini-ই এগুলো নিজে পার্স করে।
   let list = MODELS;
   if (model && model !== 'auto') {
     const m = MODELS.find((x) => x.id === model);
@@ -161,9 +176,9 @@ function pickChain(keys, model, mode, images) {
   } else {
     list = [...MODELS].sort((a, b) => (b.quality * 10 + b.speed) - (a.quality * 10 + a.speed));
     if (mode === 'fast') list.sort((a, b) => b.speed - a.speed || b.quality - a.quality);
-    if (images) list.sort((a, b) => (a.pid === 'gemini') === (b.pid === 'gemini') ? 0 : a.pid === 'gemini' ? -1 : 1);
+    if (multimodal) list.sort((a, b) => (a.pid === 'gemini') === (b.pid === 'gemini') ? 0 : a.pid === 'gemini' ? -1 : 1);
   }
-  if (images) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 1);
+  if (multimodal) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 1);
   return list.filter((m) => keys[KEYMAP[m.pid]]).slice(0, 4);
 }
 
@@ -197,7 +212,7 @@ async function* geminiStream(key, model, messages, signal) {
   const contents = cleanMsgs(messages).filter((m) => m.role !== 'system').map((m) => {
     const parts = Array.isArray(m.content)
       ? m.content.map((p) => (p.type === 'image_url'
-          ? (() => { const mm = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(p.image_url?.url || ''); return mm ? { inline_data: { mime_type: mm[1], data: mm[2] } } : null; })()
+          ? (() => { const mm = DATAURL.exec(p.image_url?.url || ''); return mm ? { inline_data: { mime_type: mm[1], data: mm[2] } } : null; })()
           : { text: p.text || '' }))
       : [{ text: m.content }];
     return { role: m.role === 'assistant' ? 'model' : 'user', parts: parts.filter(Boolean) };
@@ -219,9 +234,9 @@ async function* geminiStream(key, model, messages, signal) {
   }
 }
 
-async function* streamAnswer(keys, messages, model, mode, emit, signal, images) {
+async function* streamAnswer(keys, messages, model, mode, emit, signal, multimodal) {
   let attempt = null;
-  const chain = pickChain(keys, model, mode, images);
+  const chain = pickChain(keys, model, mode, multimodal);
   if (!chain.length) throw new Error('কোনো AI provider key নেই — KV-তে cfg:* চেক করো');
   for (const m of chain) {
     const key = keys[KEYMAP[m.pid]];
@@ -453,11 +468,34 @@ export default {
     if (method === 'POST' && path === '/api/files') {
       const body = await parseBody(req);
       const name = (body.name || 'file.txt').slice(0, 100);
-      const content = (body.content || '').slice(0, 2 * 1024 * 1024);
-      if (!TEXT_EXT.includes((name.split('.').pop() || '').toLowerCase())) return json({ error: 'এই ফরম্যাট এখনো সাপোর্ট নেই' }, 400);
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const isBin = BIN_EXT.includes(ext) || (typeof body.b64 === 'string' && (body.mime || '').startsWith('application/pdf'));
+      if (isBin) {
+        // PDF — Gemini নিজে পার্স করে। base64 KV-তে রাখি, chat/analyze-এ inline_data হিসেবে যায়।
+        const b64 = (body.b64 || '').replace(/\s/g, '');
+        if (!b64) return json({ error: 'ফাইলের কনটেন্ট নেই' }, 400);
+        if (b64.length > MAX_B64) return json({ error: 'PDF সর্বোচ্চ ১০MB' }, 400);
+        const mime = BIN_MIME[ext] || 'application/pdf';
+        const id = crypto.randomUUID();
+        const files = await kvGet(env, 'files', {});
+        const rec = { id, name, size: b64.length, bytes: Math.floor(b64.length * 0.75), mime, type: 'binary', ts: Date.now() };
+        if (await loadDriveCfg(env)) { // Drive ব্যাকআপ — ব্যর্থ হলেও আপলোড আটকায় না
+          try {
+            const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            const d = await driveBackup(env, name, bin, mime);
+            if (d?.id) rec.drive = { fileId: d.id, link: d.webViewLink || null, ts: Date.now() };
+          } catch (e) { rec.driveError = String((e && e.message) || e).slice(0, 120); }
+        }
+        files[id] = rec;
+        await kvSet(env, 'files', files);
+        await env.AH_KV.put('fileb:' + id, b64);
+        return json(rec);
+      }
+      const content = (body.content || '').slice(0, MAX_TEXT);
+      if (!TEXT_EXT.includes(ext)) return json({ error: 'এই ফরম্যাট এখনো সাপোর্ট নেই — PDF, TXT, CSV, JSON বা কোড ফাইল দাও' }, 400);
       const id = crypto.randomUUID();
       const files = await kvGet(env, 'files', {});
-      const rec = { id, name, size: content.length, ts: Date.now() };
+      const rec = { id, name, size: content.length, type: 'text', ts: Date.now() };
       if (await loadDriveCfg(env)) { // Drive ব্যাকআপ — ব্যর্থ হলেও আপলোড আটকায় না
         try {
           const d = await driveBackup(env, name, content);
@@ -507,19 +545,32 @@ export default {
       const files = await kvGet(env, 'files', {});
       const meta = files[mFile[1]];
       if (!meta) return json({ error: 'নেই' }, 404);
-      const content = await env.AH_KV.get('file:' + mFile[1]);
-      if (method === 'GET' && !mFile[2]) return new Response(content || '', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...cors } });
+      const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
+      const b64 = isBin ? await env.AH_KV.get('fileb:' + mFile[1]) : null;
+      const content = isBin ? null : await env.AH_KV.get('file:' + mFile[1]);
+      if (method === 'GET' && !mFile[2]) {
+        if (isBin && b64) {
+          const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          return new Response(bin, { headers: { 'Content-Type': meta.mime || 'application/pdf', ...cors } });
+        }
+        return new Response(content || '', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...cors } });
+      }
       if (method === 'DELETE' && !mFile[2]) {
-        delete files[mFile[1]]; await kvSet(env, 'files', files); await env.AH_KV.delete('file:' + mFile[1]);
+        delete files[mFile[1]]; await kvSet(env, 'files', files);
+        await env.AH_KV.delete('file:' + mFile[1]); await env.AH_KV.delete('fileb:' + mFile[1]);
         if (meta.drive?.fileId) { try { await driveDelete(env, meta.drive.fileId); } catch {} } // Drive কপিও মুছি (best-effort)
         return json({ ok: true });
       }
       if (method === 'POST') {
         const body = await parseBody(req);
         const q = mFile[2] === 'ask' ? (body.question || 'এই ফাইল সম্পর্কে কী জানো?') : 'এই ফাইলের সম্পূর্ণ বিশ্লেষণ দাও: মূল বিষয়, গঠন, গুরুত্বপূর্ণ অংশ, সম্ভাব্য সমস্যা, সারাংশ।';
-        const msgs = [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। ফাইল-এর উপর ভিত্তি করে উত্তর দাও।' }, { role: 'user', content: `ফাইল: ${meta.name}\n\n${(content || '').slice(0, 50000)}\n\nপ্রশ্ন: ${q}` }];
+        const msgs = isBin && b64
+          ? [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। সংযুক্ত ফাইল-এর উপর ভিত্তি করে বাংলায় উত্তর দাও।' },
+             { role: 'user', content: [{ type: 'text', text: `ফাইল: ${meta.name}\nপ্রশ্ন: ${q}` }, { type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }] }]
+          : [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। ফাইল-এর উপর ভিত্তি করে উত্তর দাও।' },
+             { role: 'user', content: `ফাইল: ${meta.name}\n\n${(content || '').slice(0, 50000)}\n\nপ্রশ্ন: ${q}` }];
         let ans = '';
-        for await (const t of streamAnswer(keys, msgs, 'auto', 'balanced', () => {})) ans += t;
+        for await (const t of streamAnswer(keys, msgs, 'auto', 'balanced', () => {}, null, isBin)) ans += t;
         return json({ answer: ans });
       }
     }
@@ -552,39 +603,47 @@ export default {
       const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '');
       let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
+      let hasMulti = !!(body.images && body.images.length);
+      let extraText = '';
+      const binParts = [];
       if (body.media && body.media.length) {
-        const lastU = finalMsgs[finalMsgs.length - 1];
-        if (lastU.role === 'user') {
-          let extra = '';
-          const files = await kvGet(env, 'files', {});
-          for (const m of body.media) {
-            const meta = files[m.id];
-            if (!meta) continue;
+        const files = await kvGet(env, 'files', {});
+        for (const m of body.media) {
+          const meta = files[m.id];
+          if (!meta) continue;
+          const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
+          if (isBin) {
+            const b64 = (await env.AH_KV.get('fileb:' + m.id)) || '';
+            if (b64) { binParts.push({ type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }); hasMulti = true; }
+          } else {
             const txt = ((await env.AH_KV.get('file:' + m.id)) || '').slice(0, 50000);
-            if (!txt) continue;
-            extra += '\n\n[সংযুক্ত ফাইল: ' + meta.name + ']\n' + txt + '\n';
+            if (txt) extraText += '\n\n[সংযুক্ত ফাইল: ' + meta.name + ']\n' + txt + '\n';
           }
-          if (extra) finalMsgs[finalMsgs.length - 1] = { role: 'user', content: lastU.content + extra };
         }
       }
-      if (body.images && body.images.length) {
-        const lastU = finalMsgs[finalMsgs.length - 1];
-        if (lastU && lastU.role === 'user') {
-          const parts = [{ type: 'text', text: typeof lastU.content === 'string' ? lastU.content : '' }];
-          for (const im of body.images) {
-            const mm = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(im || '');
-            if (!mm || mm[2].length > 4 * 1024 * 1024) continue;
-            parts.push({ type: 'image_url', image_url: { url: im, mime_type: mm[1] } });
-          }
-          if (parts.length > 1) finalMsgs[finalMsgs.length - 1] = { role: 'user', content: parts };
+      const lastU = finalMsgs[finalMsgs.length - 1];
+      if (lastU && lastU.role === 'user' && (extraText || binParts.length || (body.images && body.images.length))) {
+        const parts = [];
+        const baseText = (typeof lastU.content === 'string' ? lastU.content : '') + extraText;
+        parts.push({ type: 'text', text: baseText });
+        for (const bp of binParts) parts.push(bp);
+        for (const im of (body.images || [])) {
+          const mm = DATAURL.exec(im || '');
+          if (!mm || mm[2].length > 4 * 1024 * 1024) continue;
+          parts.push({ type: 'image_url', image_url: { url: im, mime_type: mm[1] } });
         }
+        // ছবি/PDF থাকলে multimodal parts; শুধু টেক্সট ফাইল থাকলে স্ট্রিং — text-only মডেলেও চলে
+        finalMsgs[finalMsgs.length - 1] = parts.length > 1
+          ? { role: 'user', content: parts }
+          : { role: 'user', content: baseText };
       }
 
       return sseStream((emit, close) => {
         (async () => {
           try {
             if (body.web) {
-              const q = finalMsgs[finalMsgs.length - 1].content;
+              const lastC = finalMsgs[finalMsgs.length - 1].content;
+              const q = typeof lastC === 'string' ? lastC : lastC.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
               emit({ step: 'SEARCHING' });
               const sources = await searchWeb(keys.TAVILY_API_KEY, q, 5);
               emit({ sources });
@@ -598,7 +657,7 @@ export default {
             req.signal?.addEventListener('abort', () => ac.abort());
             let answer = '', attempt = null;
             const t0 = Date.now();
-            for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal, !!(body.images && body.images.length))) {
+            for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal, hasMulti)) {
               answer += tok; emit({ token: tok });
             }
             if (!answer) throw new Error('খালি');

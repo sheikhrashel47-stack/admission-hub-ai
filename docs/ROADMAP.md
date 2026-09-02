@@ -1,5 +1,7 @@
 # Admission Hub AI — Official Master Roadmap (10 Phases)
 
+> 📖 **সম্পূর্ণ vision ও architecture blueprint:** [`docs/BLUEPRINT.md`](BLUEPRINT.md) — চূড়ান্ত লক্ষ্য + ১০-phase আল্টিমেট রোডম্যাপ + বর্তমান অবস্থা। এই ফাইলটা phase-ভিত্তিক বাস্তবায়ন টিকা।
+
 > নিয়ম: প্রতিটি ফেজের শেষে `PHASE X COMPLETE — WAITING FOR OWNER APPROVAL` — Owner-এর অনুমোদন ছাড়া পরের ফেজে যাওয়া নিষিদ্ধ।
 > §45: প্রতিটি দৃশ্যমান ফিচার real হতে হবে (ব্যাকএন্ড ছাড়া কিছু দেখানো যাবে না)। §63: বড় কাজ আগে প্ল্যান।
 > আপডেট: ২০২৬-০৯-০২

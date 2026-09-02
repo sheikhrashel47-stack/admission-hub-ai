@@ -1,5 +1,7 @@
 # ADMISSION HUB AI — Private AI Command Center
 
+> **🧭 নতুন agent/developer? প্রথমে পড়ো: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md)** — চূড়ান্ত লক্ষ্য, architecture-এর দর্শন, ১০-phase রোডম্যাপ, আর বর্তমান অবস্থা এক জায়গায়। Phase approval rule-ও সেখানে আছে।
+
 > **ব্র্যান্ড:** Admission Hub AI · **স্ট্যাটাস:** Phase 1 + Research — সম্পূর্ণ real (কোনো ফেক নয়) · **খরচ: $0**
 
 ## 🔗 লাইভ লিংক
@@ -15,7 +17,8 @@
 - 💬 প্রিমিয়াম chat — streaming, markdown, tables, code highlight, citations
 - 🧠 Model Router: AUTO (task-ভিত্তিক) + fallback (Groq → Gemini → Cerebras → Mistral)
 - 🔎 Web Research (Tavily) — live steps + clickable সোর্স
-- 📁 ফাইল: upload / preview / AI বিশ্লেষণ / প্রশ্ন (text ফরম্যাট)
+- 📁 ফাইল: upload / preview / AI বিশ্লেষণ / প্রশ্ন — **PDF (Gemini নেটিভ পার্সিং)** + txt/md/csv/json/কোড
+- 🖼️ ছবি বিশ্লেষণ — গ্যালারি বা ক্যামেরা থেকে ছবি (Gemini vision), PWA-তে ক্যামেরা capture
 - 🧠 User Memory (নোট + toggle) — সব চ্যাটে injected
 - 🗂️ চ্যাট history: search / delete / branch / regenerate / export .md
 - ⚡/⚖️/🌊 Response modes · 🎙️ ভয়েস ইনপুট · 🔊 TTS · 🌙/☀️ থিম
@@ -37,7 +40,7 @@ node server.mjs              # → http://localhost:3000
 ```
 
 ## সততার ঘোষণা
-- PDF/DOCX, Canvas, Agent tools (code edit/git), Deploy automation, Image gen → পরের Phase (docs/ROADMAP.md)
+- PDF ও ছবি বিশ্লেষণ ✅ (Gemini native) · DOCX/Office, Canvas, Agent tools (code edit/git), Deploy automation, Image gen → পরের Phase (docs/ROADMAP.md)
 - কখনো fake loading নেই — যেটা "চলছে" দেখায় সেটা সত্যিই backend-এ চলছে
 - Keys কখনো client-এ নেই: Workers Secrets-এ; model শুধু tool result + minimal context পায়
 
