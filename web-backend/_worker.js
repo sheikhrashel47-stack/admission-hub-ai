@@ -12,7 +12,7 @@ const MODELS = [
   { pid: 'groq', id: 'fast', label: 'Groq · GPT-OSS-120B', model: 'openai/gpt-oss-120b', speed: 3, quality: 4, coding: 5 },
   { pid: 'groq', id: 'lite', label: 'Groq · Qwen 3.8-27B', model: 'qwen/qwen3.8-27b', speed: 4, quality: 3, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
-  { pid: 'cerebras', id: 'c3', label: 'Cerebras · Llama 3.3-70B', model: 'llama-3.3-70b', speed: 5, quality: 3, coding: 4 },
+  { pid: 'cerebras', id: 'c3', label: 'Cerebras · GPT-OSS-120B', model: 'gpt-oss-120b', speed: 5, quality: 3, coding: 4 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
   { pid: 'openrouter', id: 'or', label: 'OpenRouter · Llama 3.3 Free', model: 'meta-llama/llama-3.3-70b-instruct:free', speed: 3, quality: 4, coding: 4 },
 ];
@@ -74,11 +74,16 @@ function pickChain(keys, model, mode) {
   return list.filter((m) => keys[KEYMAP[m.pid]]).slice(0, 4);
 }
 
+function cleanMsgs(messages) {
+  return (messages || [])
+    .filter((m) => m && typeof m.content === 'string' && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
+    .map((m) => ({ role: m.role, content: m.content }));
+}
 async function* openaiStream(base, key, model, messages, signal) {
   const r = await fetch(`${base}/chat/completions`, {
     method: 'POST', signal,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model, messages, stream: true, temperature: 0.6, max_tokens: 2048 }),
+    body: JSON.stringify({ model, messages: cleanMsgs(messages), stream: true, temperature: 0.6, max_tokens: 2048 }),
   });
   if (!r.ok || !r.body) throw new Error('provider HTTP ' + r.status);
   const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
@@ -94,7 +99,7 @@ async function* openaiStream(base, key, model, messages, signal) {
   }
 }
 async function* geminiStream(key, model, messages, signal) {
-  const contents = messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  const contents = cleanMsgs(messages).filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 2048, temperature: 0.6 } }),
@@ -190,15 +195,17 @@ export default {
     if (method === 'GET' && path === '/api/chats') {
       const data = await kvGet(env, 'chats', { chats: [] });
       const q = (url.searchParams.get('q') || '').toLowerCase();
-      let list = data.chats.map((c) => ({ id: c.id, title: c.title, pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
+      let list = data.chats.map((c) => ({ id: c.id, title: c.title, project: c.project || 'সাধারণ', pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
       if (q) list = list.filter((c) => (c.title || '').toLowerCase().includes(q));
+      const pj = url.searchParams.get('project');
+      if (pj) list = list.filter((c) => (c.project || 'সাধারণ') === pj);
       list.sort((a, b) => b.updatedAt - a.updatedAt);
       return json(list.slice(0, 300));
     }
     if (method === 'POST' && path === '/api/chats') {
       const data = await kvGet(env, 'chats', { chats: [] });
       const body = await parseBody(req);
-      const c = { id: crypto.randomUUID(), title: (body.title || 'নতুন চ্যাট').slice(0, 60), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+      const c = { id: crypto.randomUUID(), title: (body.title || 'নতুন চ্যাট').slice(0, 60), project: (body.project || 'সাধারণ'), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
       data.chats.unshift(c); await kvSet(env, 'chats', data);
       return json(c);
     }
@@ -219,7 +226,7 @@ export default {
       const c = data.chats.find((x) => x.id === mChat[1]);
       if (!c) return json({ error: 'নেই' }, 404);
       const body = await parseBody(req);
-      for (const k of ['title', 'pinned', 'archived']) if (k in body) c[k] = body[k];
+      for (const k of ['title', 'pinned', 'archived', 'project']) if (k in body) c[k] = body[k];
       c.updatedAt = Date.now(); await kvSet(env, 'chats', data);
       return json(c);
     }
@@ -288,15 +295,30 @@ export default {
         const msg = (body.message || '').trim();
         if (!msg) return json({ error: 'খালি' }, 400);
         if (!c) {
-          c = { id: crypto.randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+          c = { id: crypto.randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), project: (body.project || 'সাধারণ'), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
           data.chats.unshift(c);
         }
-        c.messages.push({ role: 'user', content: msg, ts: Date.now() });
+        c.messages.push({ role: 'user', content: msg, ts: Date.now(), media: body.media || null });
         msgs = c.messages;
       }
 
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
       let finalMsgs = [{ role: 'system', content: SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') }, ...msgs.filter((m) => m.role !== 'system').slice(-24)];
+      if (body.media && body.media.length) {
+        const lastU = finalMsgs[finalMsgs.length - 1];
+        if (lastU.role === 'user') {
+          let extra = '';
+          const files = await kvGet(env, 'files', {});
+          for (const m of body.media) {
+            const meta = files[m.id];
+            if (!meta) continue;
+            const txt = ((await env.AH_KV.get('file:' + m.id)) || '').slice(0, 50000);
+            if (!txt) continue;
+            extra += '\n\n[সংযুক্ত ফাইল: ' + meta.name + ']\n' + txt + '\n';
+          }
+          if (extra) finalMsgs[finalMsgs.length - 1] = { role: 'user', content: lastU.content + extra };
+        }
+      }
 
       return sseStream((emit, close) => {
         (async () => {

@@ -64,9 +64,27 @@ function fmtUser(msgs) {
   return msgs.filter((m) => m.role !== 'system').slice(-24);
 }
 
-async function runChat({ messages, model, mode, web, signal, emit }) {
+async function expandMedia(finalMsgs, media) {
+  if (!media || !media.length) return finalMsgs;
+  const last = finalMsgs[finalMsgs.length - 1];
+  if (!last || last.role !== 'user') return finalMsgs;
+  let extra = '';
+  for (const m of media) {
+    const meta = fileList().find((f) => f.id === m.id);
+    if (!meta) continue;
+    let txt = ''; try { txt = readFileSync(join(DATA, 'files', meta.id + '.txt'), 'utf8'); } catch {}
+    if (!txt) continue;
+    extra += `\n\n[সংযুক্ত ফাইল: ${meta.name}]\n${txt.slice(0, 50000)}\n`;
+  }
+  if (!extra) return finalMsgs;
+  const out = [...finalMsgs];
+  out[out.length - 1] = { role: 'user', content: last.content + extra };
+  return out;
+}
+
+async function runChat({ messages, model, mode, web, signal, emit, media }) {
   // base system + memory
-  let finalMsgs = [{ role: 'system', content: SYSTEM + memoryBlock() }, ...fmtUser(messages)];
+  let finalMsgs = await expandMedia([{ role: 'system', content: SYSTEM + memoryBlock() }, ...fmtUser(messages)], media);
   const meta = { model: null, provider: null, mode, seconds: 0, tokens: 0 };
   const t0 = now();
   try {
@@ -243,7 +261,7 @@ const server = http.createServer(async (req, res) => {
       const emit = openSSE(res);
       const ac = new AbortController();
       res.on('close', () => ac.abort());
-      const out = await runChat({ messages: msgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit });
+      const out = await runChat({ messages: msgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null });
       if (out) {
         msgs.push({ role: 'assistant', content: out.answer, ts: now(), model: out.meta.provider + ' · ' + out.meta.model, mode: body.mode, meta: out.meta, sources: out.sources || [] });
         const fc = store.chats.chats.find((x) => x.id === (c ? c.id : msgs[0] && findChatIdFor(msgs)));
