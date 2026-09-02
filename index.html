@@ -108,6 +108,12 @@ svg{width:20px;height:20px;display:block}
 .meta{display:flex;gap:10px;font-size:10.5px;color:var(--dim2);margin-top:6px}
 .row.user{justify-content:flex-end}
 .bubU{max-width:84%;background:var(--lav);color:var(--lvtxt);padding:11px 14px 8px;border-radius:16px 16px 5px 16px;font-size:14.5px;line-height:1.5;font-weight:500;margin-left:auto;overflow-wrap:break-word;white-space:pre-wrap}
+.bubU .bubMedia{display:flex;flex-direction:column;gap:6px;margin:0 0 7px;white-space:normal}
+.bubU .bubMedia:empty{display:none}
+.bubU .bubImg{width:220px;max-width:72vw;border-radius:12px;display:block;cursor:zoom-in;border:1px solid rgba(60,40,120,.14);object-fit:cover}
+.bubU .bubImg:active{opacity:.9}
+.bubU .bubFile{font-size:12px;font-weight:600;background:rgba(255,255,255,.6);border:1px solid rgba(60,40,120,.16);border-radius:9px;padding:6px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:230px}
+.bubU .bubTxt{white-space:pre-wrap}
 .bubU .uTime{display:block;text-align:right;font-size:10px;color:var(--dim);opacity:.85;margin-top:5px}
 #typing{display:flex;gap:5px;padding:8px 2px}
 #typing i{width:7px;height:7px;border-radius:50%;background:var(--green);animation:tp 1.1s infinite}
@@ -560,10 +566,16 @@ function tset(d,i,state){const els=d.querySelectorAll('.tst');const el=els[i];if
 function tfinish(d){d.querySelectorAll('.tst').forEach(el=>{el.className='tst done'});d.querySelector('#taskLbl').textContent='সম্পন্ন';d.querySelector('#taskFoot').textContent='সর্বশেষ আপডেট: '+fmtTime()}
 
 /* ============ message render ============ */
-function addUserMsg(text,ts){
+function addUserMsg(text,ts,att){
   const r=document.createElement('div');r.className='row user';
-  r.innerHTML='<div class="msgWrap"><div class="bubU"></div><div class="meta"><span>'+fmtTime(ts)+'</span><span class="ticks">✓✓</span></div></div>';
-  r.querySelector('.bubU').textContent=text;
+  r.innerHTML='<div class="msgWrap"><div class="bubU"><div class="bubMedia"></div><div class="bubTxt"></div></div><div class="meta"><span>'+fmtTime(ts)+'</span><span class="ticks">✓✓</span></div></div>';
+  const media=r.querySelector('.bubMedia'),bub=r.querySelector('.bubU'),txt=r.querySelector('.bubTxt');
+  txt.textContent=text||'';
+  if(!text)txt.style.display='none';
+  const imgs=(att&&att.imgs)||[],files=(att&&att.files)||[];
+  files.forEach(f=>{const c=document.createElement('div');c.className='bubFile';c.textContent=(f&&f.name&&/\.pdf($|\?)/i.test(f.name)?'📕 ':'📄 ')+((f&&f.name)||'ফাইল');media.appendChild(c)});
+  imgs.forEach(im=>{if(!im)return;const imEl=document.createElement('img');imEl.className='bubImg';imEl.src=im;imEl.alt='ছবি';imEl.onclick=()=>window.open(im,'_blank');media.appendChild(imEl)});
+  if(media.childElementCount===0)media.style.display='none';
   msgs.appendChild(r);scrollB();return r;
 }
 function addAiShell(){
@@ -626,9 +638,9 @@ async function go(text){
   if(streaming||!text||!text.trim())return;
   hideHero();
   stickScroll=true;
-  addUserMsg(text);
   const sendMedia=attachments.length?attachments.map(a=>({id:a.id,name:a.name})):undefined;
   const sendImages=imgAttachments.length?imgAttachments.slice(0,4):undefined;
+  addUserMsg(text,Date.now(),{imgs:sendImages||[],files:attachments.map(a=>({name:a.name}))});
   if(attachments.length||imgAttachments.length){attachments=[];imgAttachments=[];renderAtts()}
   const shell=addAiShell();
   shell.dataset.mid=ns();
@@ -1297,7 +1309,7 @@ async function openChat(id){
 function mountMsg(m,absIdx){
   let el;
   if(m.role==='user'){
-    el=addUserMsg(m.content,m.ts);
+    el=addUserMsg(typeof m.content==='string'?m.content:'',m.ts,{imgs:(m.images||[]).slice(0,4),files:(m.media||[]).map(x=>({name:x&&x.name}))});
     el.dataset.i=absIdx;
     bindLongPress(el);
     return el;
