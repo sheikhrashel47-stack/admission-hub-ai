@@ -20,7 +20,8 @@
 | Voice input UI (mic + Listening wave) | ✅ (ব্রাউজার SpeechRecognition) |
 | Model selector (Auto/Fast/Balanced/Deep + provider list) | ✅ |
 | Agent Mode UI | 🔒 তৈরি, কিন্তু backend agent বন্ধ থাকায় hidden (Phase 4-তে চালু) |
-| **Light/Dark theme toggle** | ✅ **নতুন (২ ফেজ-১ গ্যাপ পূরণ)** |
+| **Light/Dark theme toggle** | ✅ (ডিফল্ট লাইট — MASTER UI রুল) |
+| **MASTER UI রুল মেনে চলা** (কোনো বটম-নেভ নেই, টুলস শুধু `+`, ⋮ মেনু, হরাইজন্টাল মেসেজ অ্যাকশন) | ✅ **PWA v4** |
 | Mobile keyboard behavior (visualViewport) | ✅ |
 | Loading / error / fallback UI | ✅ |
 
