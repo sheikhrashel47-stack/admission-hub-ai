@@ -12,7 +12,6 @@ const MODELS = [
   { pid: 'groq', id: 'fast', label: 'Groq · GPT-OSS-120B', model: 'openai/gpt-oss-120b', speed: 3, quality: 4, coding: 5 },
   { pid: 'groq', id: 'lite', label: 'Groq · Qwen 3.8-27B', model: 'qwen/qwen3.8-27b', speed: 4, quality: 3, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
-  { pid: 'cerebras', id: 'c3', label: 'Cerebras · GPT-OSS-120B', model: 'gpt-oss-120b', speed: 5, quality: 3, coding: 4 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
   { pid: 'openrouter', id: 'or', label: 'OpenRouter · Llama 3.3 Free', model: 'meta-llama/llama-3.3-70b-instruct:free', speed: 3, quality: 4, coding: 4 },
 ];
@@ -72,13 +71,16 @@ function pickChain(keys, model, mode, images) {
     if (mode === 'fast') list.sort((a, b) => b.speed - a.speed || b.quality - a.quality);
     if (images) list.sort((a, b) => (a.pid === 'gemini') === (b.pid === 'gemini') ? 0 : a.pid === 'gemini' ? -1 : 1);
   }
+  if (images) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 1);
   return list.filter((m) => keys[KEYMAP[m.pid]]).slice(0, 4);
 }
 
 function cleanMsgs(messages) {
   return (messages || [])
-    .filter((m) => m && typeof m.content === 'string' && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
-    .map((m) => ({ role: m.role, content: m.content }));
+    .filter((m) => m && (typeof m.content === 'string' || Array.isArray(m.content)) && (m.role === 'user' || m.role === 'assistant' || m.role === 'system'))
+    .map((m) => Array.isArray(m.content)
+      ? { role: m.role, content: m.content.filter((p) => p && (p.type === 'text' || p.type === 'image_url')) }
+      : { role: m.role, content: m.content });
 }
 async function* openaiStream(base, key, model, messages, signal) {
   const r = await fetch(`${base}/chat/completions`, {
@@ -100,7 +102,14 @@ async function* openaiStream(base, key, model, messages, signal) {
   }
 }
 async function* geminiStream(key, model, messages, signal) {
-  const contents = cleanMsgs(messages).filter((m) => m.role !== 'system').map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  const contents = cleanMsgs(messages).filter((m) => m.role !== 'system').map((m) => {
+    const parts = Array.isArray(m.content)
+      ? m.content.map((p) => (p.type === 'image_url'
+          ? (() => { const mm = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(p.image_url?.url || ''); return mm ? { inline_data: { mime_type: mm[1], data: mm[2] } } : null; })()
+          : { text: p.text || '' }))
+      : [{ text: m.content }];
+    return { role: m.role === 'assistant' ? 'model' : 'user', parts: parts.filter(Boolean) };
+  });
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 2048, temperature: 0.6 } }),
