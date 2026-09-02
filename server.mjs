@@ -29,7 +29,10 @@ loadEnv(join(ROOT, '.env.local'));
 
 const PORT = process.env.PORT || 3000;
 const MAX_UPLOAD = 2 * 1024 * 1024;
+const MAX_B64 = 10 * 1024 * 1024;
 const TEXT_EXT = ['txt', 'md', 'csv', 'json', 'html', 'htm', 'css', 'js', 'mjs', 'ts', 'tsx', 'jsx', 'xml', 'yml', 'yaml', 'sh', 'sql', 'py', 'env'];
+const BIN_EXT = ['pdf'];
+const BIN_MIME = { pdf: 'application/pdf' };
 
 function loadJson(file, fallback) { try { return JSON.parse(readFileSync(join(DATA, file), 'utf8')); } catch { return fallback; } }
 function saveJson(file, obj) { try { writeFileSync(join(DATA, file), JSON.stringify(obj)); } catch {} }
@@ -72,21 +75,38 @@ function fmtUser(msgs) {
   return msgs.filter((m) => m.role !== 'system').slice(-24);
 }
 
+const DATAURL = /^data:([\w.+-]+\/[\w.+-]+);base64,(.+)$/i;
+
+/* ফাইল সংযুক্তি: টেক্সট ফাইল inline টেক্সট হিসেবে; বাইনারি (PDF) base64 → inline_data (Gemini) */
 async function expandMedia(finalMsgs, media) {
   if (!media || !media.length) return finalMsgs;
   const last = finalMsgs[finalMsgs.length - 1];
   if (!last || last.role !== 'user') return finalMsgs;
   let extra = '';
+  const binParts = [];
   for (const m of media) {
     const meta = fileList().find((f) => f.id === m.id);
     if (!meta) continue;
+    const isBin = meta.type === 'binary' || (meta.name.split('.').pop() || '').toLowerCase() === 'pdf';
+    if (isBin) {
+      let b64 = '';
+      try { b64 = readFileSync(join(DATA, 'files', meta.id + '.b64'), 'utf8'); } catch {}
+      if (!b64) { try { const buf = await storage.get(`${meta.id}__${meta.name}`).catch(() => null); if (buf) { b64 = Buffer.from(buf).toString('base64'); try { writeFileSync(join(DATA, 'files', meta.id + '.b64'), b64); } catch {} } } catch {} }
+      if (b64) binParts.push({ type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } });
+      continue;
+    }
     let txt = ''; try { txt = readFileSync(join(DATA, 'files', meta.id + '.txt'), 'utf8'); } catch {}
-    if (!txt) continue;
-    extra += `\n\n[সংযুক্ত ফাইল: ${meta.name}]\n${txt.slice(0, 50000)}\n`;
+    if (!txt) { try { const buf = await storage.get(`${meta.id}__${meta.name}`).catch(() => null); if (buf) { txt = new TextDecoder().decode(buf); try { writeFileSync(join(DATA, 'files', meta.id + '.txt'), txt); } catch {} } } catch {} }
+    if (txt) extra += `\n\n[সংযুক্ত ফাইল: ${meta.name}]\n${txt.slice(0, 50000)}\n`;
   }
-  if (!extra) return finalMsgs;
+  if (!extra && !binParts.length) return finalMsgs;
   const out = [...finalMsgs];
-  out[out.length - 1] = { role: 'user', content: last.content + extra };
+  if (binParts.length) {
+    const parts = [{ type: 'text', text: (typeof last.content === 'string' ? last.content : '') + extra }, ...binParts];
+    out[out.length - 1] = { role: 'user', content: parts };
+  } else {
+    out[out.length - 1] = { role: 'user', content: last.content + extra };
+  }
   return out;
 }
 
@@ -94,9 +114,14 @@ function expandImages(finalMsgs, images) {
   if (!images || !images.length) return finalMsgs;
   const last = finalMsgs[finalMsgs.length - 1];
   if (!last || last.role !== 'user') return finalMsgs;
-  const parts = [{ type: 'text', text: last.content }];
+  const base = typeof last.content === 'string'
+    ? last.content
+    : last.content.filter((p) => p.type === 'text').map((p) => p.text).join('\n');
+  const parts = [{ type: 'text', text: base }];
+  // expandMedia ইতিমধ্যে বাইনারি পার্ট যোগ করে থাকলে সেগুলো রাখি
+  if (Array.isArray(last.content)) for (const p of last.content) if (p.type === 'image_url') parts.push(p);
   for (const im of images) {
-    const m = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(im || '');
+    const m = DATAURL.exec(im || '');
     if (!m || m[2].length > 4 * 1024 * 1024) continue;
     parts.push({ type: 'image_url', image_url: { url: im, mime_type: m[1] } });
   }
@@ -409,9 +434,30 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && path === '/api/files') {
       let body = {}; try { body = JSON.parse(await readBody(req)); } catch {}
       const name = (body.name || 'file.txt').slice(0, 100);
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const isBin = BIN_EXT.includes(ext) || (typeof body.b64 === 'string' && (body.mime || '').startsWith('application/pdf'));
+      const meta = { id: randomUUID(), name, ts: now() };
+      if (isBin) {
+        // PDF — Gemini নিজে পার্স করে; base64 ডিস্কে রাখি (chat/analyze-এ inline_data)
+        const b64 = (body.b64 || '').replace(/\s/g, '');
+        if (!b64) return json(400, { error: 'ফাইলের কনটেন্ট নেই' });
+        if (b64.length > MAX_B64) return json(400, { error: 'PDF সর্বোচ্চ ১০MB' });
+        const mime = BIN_MIME[ext] || 'application/pdf';
+        Object.assign(meta, { size: b64.length, bytes: Math.floor(b64.length * 0.75), mime, type: 'binary' });
+        writeFileSync(join(DATA, 'files', meta.id + '.b64'), b64);
+        if (storage.primary() === 'gdrive') {
+          try {
+            const bin = Buffer.from(b64, 'base64');
+            const r = await storage.put(`${meta.id}__${name}`, bin, { contentType: mime });
+            meta.cloud = { provider: r.provider, account: r.account ?? null };
+          } catch (e) { meta.cloudError = String(e.message).slice(0, 120); }
+        }
+        const list = fileList(); list.unshift(meta); saveJson('files.json', list);
+        return json(200, meta);
+      }
       const content = (body.content || '').slice(0, MAX_UPLOAD);
-      if (!allowedFile(name)) return json(400, { error: 'এই ফরম্যাট এখনো সাপোর্ট হয় না — txt/md/csv/json/html/css/js/ts OK। PDF/DOCX Phase 3-এ।' });
-      const meta = { id: randomUUID(), name, size: content.length, type: 'text', ts: now() };
+      if (!allowedFile(name)) return json(400, { error: 'এই ফরম্যাট এখনো সাপোর্ট হয় না — PDF, txt/md/csv/json/html/css/js/ts OK।' });
+      Object.assign(meta, { size: content.length, type: 'text' });
       // ডিস্কে সবসময় (দ্রুত পড়া/বিশ্লেষণের জন্য) …
       writeFileSync(join(DATA, 'files', meta.id + '.txt'), content);
       // … আর ক্লাউডে ব্যাকআপ (Drive)। ব্যর্থ হলেও আপলোড ব্যর্থ হবে না।
@@ -436,23 +482,40 @@ const server = http.createServer(async (req, res) => {
     if (mFile) {
       const meta = fileList().find((f) => f.id === mFile[1]);
       if (!meta) return json(404, { error: 'ফাইল পাওয়া যায়নি' });
+      const isBin = meta.type === 'binary' || (meta.name.split('.').pop() || '').toLowerCase() === 'pdf';
       // ডিস্কে না পেলে ক্লাউড ব্যাকআপ থেকে পুনরুদ্ধার
-      let content;
-      const diskPath = join(DATA, 'files', meta.id + '.txt');
-      if (existsSync(diskPath)) {
-        content = readFileSync(diskPath, 'utf8');
+      let content = null, b64 = null;
+      if (isBin) {
+        const b64Path = join(DATA, 'files', meta.id + '.b64');
+        if (existsSync(b64Path)) b64 = readFileSync(b64Path, 'utf8');
+        else {
+          const buf = await storage.get(`${meta.id}__${meta.name}`).catch(() => null);
+          if (!buf) return json(404, { error: 'ফাইলের কনটেন্ট পাওয়া যায়নি (ডিস্ক ও ক্লাউড দুটোতেই নেই)' });
+          b64 = Buffer.from(buf).toString('base64');
+          try { writeFileSync(b64Path, b64); } catch {}
+        }
       } else {
-        const buf = await storage.get(`${meta.id}__${meta.name}`).catch(() => null);
-        if (!buf) return json(404, { error: 'ফাইলের কনটেন্ট পাওয়া যায়নি (ডিস্ক ও ক্লাউড দুটোতেই নেই)' });
-        content = new TextDecoder().decode(buf);
-        try { writeFileSync(diskPath, content); } catch {} // ক্যাশ করে রাখি
+        const diskPath = join(DATA, 'files', meta.id + '.txt');
+        if (existsSync(diskPath)) {
+          content = readFileSync(diskPath, 'utf8');
+        } else {
+          const buf = await storage.get(`${meta.id}__${meta.name}`).catch(() => null);
+          if (!buf) return json(404, { error: 'ফাইলের কনটেন্ট পাওয়া যায়নি (ডিস্ক ও ক্লাউড দুটোতেই নেই)' });
+          content = new TextDecoder().decode(buf);
+          try { writeFileSync(diskPath, content); } catch {} // ক্যাশ করে রাখি
+        }
       }
       if (req.method === 'GET' && !mFile[2]) {
+        if (isBin) {
+          res.writeHead(200, { 'Content-Type': meta.mime || 'application/pdf' });
+          return res.end(Buffer.from(b64, 'base64'));
+        }
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(content);
       }
       if (req.method === 'DELETE' && !mFile[2]) {
         rmSync(join(DATA, 'files', meta.id + '.txt'), { force: true });
+        rmSync(join(DATA, 'files', meta.id + '.b64'), { force: true });
         // ক্লাউড কপিও মুছি — কোথাও অনাথ ফাইল পড়ে থাকবে না
         if (meta.cloud) {
           try { await storage.del(`${meta.id}__${meta.name}`); } catch {}
@@ -463,10 +526,13 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST') {
         let body = {}; try { body = JSON.parse(await readBody(req)); } catch {}
         const q = mFile[2] === 'ask' ? (body.question || 'এই ফাইল সম্পর্কে কী জানো?') : 'এই ফাইলের সম্পূর্ণ বিশ্লেষণ দাও: মূল বিষয়, গঠন, গুরুত্বপূর্ণ অংশ, সম্ভাব্য সমস্যা, সংক্ষিপ্ত সারাংশ।';
-        const msgs = [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। নিচের ফাইলের উপর ভিত্তি করে প্রশ্নের উত্তর দাও, সংক্ষিপ্ত ও নির্ভুল।' },
-        { role: 'user', content: `ফাইল: ${meta.name}\n\n${content.slice(0, 50000)}\n\nপ্রশ্ন: ${q}` }];
+        const msgs = isBin
+          ? [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। সংযুক্ত ফাইলের উপর ভিত্তি করে প্রশ্নের উত্তর দাও, সংক্ষিপ্ত ও নির্ভুল।' },
+             { role: 'user', content: [{ type: 'text', text: `ফাইল: ${meta.name}\nপ্রশ্ন: ${q}` }, { type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }] }]
+          : [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। নিচের ফাইলের উপর ভিত্তি করে প্রশ্নের উত্তর দাও, সংক্ষিপ্ত ও নির্ভুল।' },
+             { role: 'user', content: `ফাইল: ${meta.name}\n\n${content.slice(0, 50000)}\n\nপ্রশ্ন: ${q}` }];
         let ans = '';
-        for await (const tok of streamAnswer(msgs, { model: 'auto', mode: 'balanced' })) ans += tok;
+        for await (const tok of streamAnswer(msgs, { model: 'auto', mode: 'balanced', images: isBin })) ans += tok;
         logUsage('File Analyze', ans);
         return json(200, { answer: ans });
       }

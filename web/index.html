@@ -387,7 +387,7 @@ svg{width:20px;height:20px;display:block}
     <div class="hd"><div><span class="ttl">কী করতে চান?</span></div><button class="x" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="bd">
       <div id="toolGrid">
-        <button id="tUpload" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span><span><span class="tgt">ফাইল আপলোড</span><span class="tgs" style="display:block">PDF, DOCX, TXT, CSV, কোড</span></span></button>
+        <button id="tUpload" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span><span><span class="tgt">ফাইল আপলোড</span><span class="tgs" style="display:block">PDF, TXT, CSV, JSON, কোড</span></span></button>
         <button id="tWeb" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span><span><span class="tgt">ওয়েব সার্চ</span><span class="tgs" style="display:block">সর্বশেষ তথ্য খুঁজুন</span></span></button>
         <button id="tResearch" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span><span class="tgt">গভীর গবেষণা</span><span class="tgs" style="display:block">বিস্তারিত + সাইটেশন</span></span></button>
         <button id="tVoice" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></svg></span><span><span class="tgt">ভয়েস ইনপুট</span><span class="tgs" style="display:block">কথা বলে লিখুন</span></span></button>
@@ -439,7 +439,7 @@ svg{width:20px;height:20px;display:block}
     <div class="bd">
       <p style="font-size:13.5px;line-height:1.65;color:var(--txt)"><b>Admission Hub AI</b> — Admission Hub-এর প্রাইভেট AI অ্যাসিস্ট্যান্ট। সব উত্তর বাংলায়, বাংলাদেশি প্রেক্ষাপটে।</p>
       <div class="secLbl">কী করতে পারে</div>
-      <p style="font-size:13px;line-height:1.7;color:var(--dim)">✦ চ্যাট (streaming) · 🌐 ওয়েব সার্চ (সাইটেশনসহ) · 📎 ফাইল বিশ্লেষণ (txt/md/csv/json/কোড) · 🖼️ ছবি বোঝা · 🎙️ ভয়েস ইনপুট · 🧠 স্মৃতি · 📥 .md এক্সপোর্ট · 💾 চ্যাট হিস্টরি/প্রজেক্ট।</p>
+      <p style="font-size:13px;line-height:1.7;color:var(--dim)">✦ চ্যাট (streaming) · 🌐 ওয়েব সার্চ (সাইটেশনসহ) · 📎 ফাইল বিশ্লেষণ (PDF, txt/md/csv/json/কোড) · 🖼️ ছবি বোঝা (গ্যালারি/ক্যামেরা) · 🎙️ ভয়েস ইনপুট · 🧠 স্মৃতি · 📥 .md এক্সপোর্ট · 💾 চ্যাট হিস্টরি/প্রজেক্ট।</p>
       <div class="secLbl">গোপনীয়তা</div>
       <p style="font-size:12.5px;line-height:1.6;color:var(--dim)">API key-গুলো কখনো ব্রাউজারে আসে না — সব backend-এ (Cloudflare Workers + KV)। এই অ্যাপটি পাবলিক ডোমেইনে; শুধু নিজের ব্যবহারের জন্য।</p>
       <div class="secLbl">রোডম্যাপ</div>
@@ -488,7 +488,6 @@ svg{width:20px;height:20px;display:block}
   </div>
 
   <div id="chatSearchWrap"><input id="chatSearch" type="search" placeholder="এই চ্যাটে খোঁজো…"></div>
-  <input type="file" id="fileInput" hidden style="display:none" accept=".txt,.md,.csv,.json,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.xml,.yml,.yaml,.sh,.sql,.py">
   <div id="toast"></div>
 </div>
 <script>
@@ -628,6 +627,8 @@ async function go(text){
   hideHero();
   stickScroll=true;
   addUserMsg(text);
+  const sendMedia=attachments.length?attachments.map(a=>({id:a.id,name:a.name})):undefined;
+  const sendImages=imgAttachments.length?imgAttachments.slice(0,4):undefined;
   if(attachments.length||imgAttachments.length){attachments=[];imgAttachments=[];renderAtts()}
   const shell=addAiShell();
   shell.dataset.mid=ns();
@@ -642,7 +643,7 @@ async function go(text){
   abort=new AbortController();let acc='';const sTarget=curId;
   try{
     const r=await fetch(API+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:abort.signal,
-      body:JSON.stringify({chatId:curId,message:text,model,mode,web,project:currentProject||undefined,media:attachments.length?attachments.map(a=>({id:a.id,name:a.name})):undefined,images:imgAttachments.length?imgAttachments.slice(0,4):undefined})});
+      body:JSON.stringify({chatId:curId,message:text,model,mode,web,project:currentProject||undefined,media:sendMedia,images:sendImages})});
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
     if(!r.ok||!r.body){let j={};try{j=await r.json()}catch{};throw new Error(j.error||'সংযোগ সমস্যা')}
     let stepsShown=false;
@@ -1057,31 +1058,85 @@ function send(){const q=inp.value.trim();if(!q)return;inp.value='';autoGrow();sa
 sendBtn.onclick=send;
 stopBtn.onclick=()=>{if(abort)abort.abort();toast('⏸ থামানো হয়েছে')};
 
-/* attach */
+/* attach — ফাইল (txt/কোড/CSV + PDF) ও ছবি (গ্যালারি/ক্যামেরা) */
 let attachments=[];
 let imgAttachments=[];
-const _ab=$('#attachBtn');if(_ab)_ab.onclick=()=>fileInput.click();
-const fileInput=document.createElement('input');fileInput.type='file';fileInput.accept='.txt,.md,.csv,.json,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.xml,.yml,.yaml,.sh,.sql,.py';fileInput.style.display='none';document.body.appendChild(fileInput);
+const TEXT_EXT=['txt','md','csv','json','html','htm','css','js','mjs','ts','tsx','jsx','xml','yml','yaml','sh','sql','py','env'];
+const BIN_EXT=['pdf'];
+const MAX_TEXT=2*1024*1024;   // টেক্সট ফাইল: ২MB
+const MAX_BIN=10*1024*1024;   // PDF: ১০MB
+const MAX_IMG_B64=4*1024*1024; // ছবি base64: ৪MB (ব্যাকএন্ড লিমিট)
+function readAsDataURL(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('ফাইল পড়া যায়নি'));r.readAsDataURL(file)})}
+/* বড় ছবি ক্যানভাসে ছোট করি (PWA-তে ক্যামেরা ছবি ৫-১০MB হয় — Gemini-তে পাঠানোর আগে) */
+function downscaleImage(file,maxDim=1280){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxDim||h>maxDim){const s=maxDim/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s)}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      const out=file.type==='image/png'?cv.toDataURL('image/png'):cv.toDataURL('image/jpeg',0.82);
+      resolve(out);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('ছবি পড়া যায়নি'))};
+    img.src=url;
+  });
+}
+/* ডকুমেন্ট পিকার — টেক্সট + PDF (ক্যামেরা capture নয়) */
+const fileInput=document.createElement('input');fileInput.type='file';
+fileInput.accept='.txt,.md,.csv,.json,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.xml,.yml,.yaml,.sh,.sql,.py,.env,.pdf,text/plain,application/pdf';
+fileInput.style.display='none';document.body.appendChild(fileInput);
 fileInput.onchange=async e=>{
-  const f=e.target.files[0];if(!f)return;
-  const txt=await f.text();
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const ext=(f.name.split('.').pop()||'').toLowerCase();
   try{
-    const meta=await api('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,content:txt})});
-    attachments.push(meta);
-    renderAtts();
+    let meta;
+    if(BIN_EXT.includes(ext)||f.type==='application/pdf'){
+      if(f.size>MAX_BIN)throw new Error('PDF সর্বোচ্চ ১০MB — এটি '+Math.round(f.size/1048576)+'MB');
+      const dataUrl=await readAsDataURL(f);
+      const comma=dataUrl.indexOf(',');
+      const mime=(dataUrl.slice(5,dataUrl.indexOf(';'))||'application/pdf');
+      meta=await api('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,b64:dataUrl.slice(comma+1),mime})});
+    }else if(TEXT_EXT.includes(ext)){
+      const txt=await f.text();
+      if(txt.length>MAX_TEXT)throw new Error('টেক্সট ফাইল সর্বোচ্চ ২MB');
+      meta=await api('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,content:txt})});
+    }else{
+      throw new Error('এই ফরম্যাট সাপোর্ট নেই — PDF, TXT, CSV, JSON বা কোড ফাইল দাও');
+    }
+    attachments.push(meta);renderAtts();
     toast('📎 "'+f.name+'" সংযুক্ত হয়েছে');
+  }catch(err){toast('⚠️ '+err.message)}
+};
+/* ছবি পিকার — সিস্টেম চুজার নিজেই গ্যালারি + ক্যামেরা দুটোই দেয় (capture ফোর্স করলে Android-এ শুধু ক্যামেরা খুলত) */
+const imgInput=document.createElement('input');imgInput.type='file';
+imgInput.accept='image/*';
+imgInput.style.display='none';document.body.appendChild(imgInput);
+imgInput.onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!/^image\//.test(f.type)){toast('⚠️ এটি ছবি নয়');return}
+  try{
+    toast('🖼️ ছবি প্রস্তুত হচ্ছে…');
+    const dataUrl=await downscaleImage(f);
+    if(dataUrl.length>MAX_IMG_B64)throw new Error('ছবিটি অনেক বড় — ছোট করে আবার চেষ্টা করো');
+    imgAttachments.push(dataUrl);renderAtts();
+    toast('🖼️ ছবি সংযুক্ত হয়েছে');
   }catch(err){toast('⚠️ '+err.message)}
 };
 function renderAtts(){
   const box=$('#attachRow');box.innerHTML='';
   attachments.forEach((a,i)=>{
     const d=document.createElement('div');d.className='att';
-    d.innerHTML='<span>📄 '+esc(a.name)+'</span><button>✕</button>';
+    const ic=(a.type==='binary'||a.mime==='application/pdf')?'📕':'📄';
+    d.innerHTML='<span>'+ic+' '+esc(a.name)+'</span><button>✕</button>';
     d.querySelector('button').onclick=()=>{attachments.splice(i,1);renderAtts()};
     box.appendChild(d)});
   imgAttachments.forEach((im,i)=>{
     const d=document.createElement('div');d.className='att img';
-    d.innerHTML='<img src="'+im.slice(0,400)+'"><span>ছবি</span><button>✕</button>';
+    d.innerHTML='<img src="'+im+'" alt="ছবি"><span>ছবি</span><button>✕</button>';
     d.querySelector('button').onclick=()=>{imgAttachments.splice(i,1);renderAtts()};
     box.appendChild(d)});
 }

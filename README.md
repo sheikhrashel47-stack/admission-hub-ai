@@ -15,7 +15,8 @@
 - 💬 প্রিমিয়াম chat — streaming, markdown, tables, code highlight, citations
 - 🧠 Model Router: AUTO (task-ভিত্তিক) + fallback (Groq → Gemini → Cerebras → Mistral)
 - 🔎 Web Research (Tavily) — live steps + clickable সোর্স
-- 📁 ফাইল: upload / preview / AI বিশ্লেষণ / প্রশ্ন (text ফরম্যাট)
+- 📁 ফাইল: upload / preview / AI বিশ্লেষণ / প্রশ্ন — **PDF (Gemini নেটিভ পার্সিং)** + txt/md/csv/json/কোড
+- 🖼️ ছবি বিশ্লেষণ — গ্যালারি বা ক্যামেরা থেকে ছবি (Gemini vision), PWA-তে ক্যামেরা capture
 - 🧠 User Memory (নোট + toggle) — সব চ্যাটে injected
 - 🗂️ চ্যাট history: search / delete / branch / regenerate / export .md
 - ⚡/⚖️/🌊 Response modes · 🎙️ ভয়েস ইনপুট · 🔊 TTS · 🌙/☀️ থিম
@@ -37,7 +38,7 @@ node server.mjs              # → http://localhost:3000
 ```
 
 ## সততার ঘোষণা
-- PDF/DOCX, Canvas, Agent tools (code edit/git), Deploy automation, Image gen → পরের Phase (docs/ROADMAP.md)
+- PDF ও ছবি বিশ্লেষণ ✅ (Gemini native) · DOCX/Office, Canvas, Agent tools (code edit/git), Deploy automation, Image gen → পরের Phase (docs/ROADMAP.md)
 - কখনো fake loading নেই — যেটা "চলছে" দেখায় সেটা সত্যিই backend-এ চলছে
 - Keys কখনো client-এ নেই: Workers Secrets-এ; model শুধু tool result + minimal context পায়
 

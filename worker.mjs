@@ -25,6 +25,12 @@ const MODELS = [
 ];
 const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
 const TEXT_EXT = ['txt','md','csv','json','html','htm','css','js','mjs','ts','tsx','jsx','xml','yml','yaml','sh','sql','py','env'];
+// বাইনারি ফাইল (PDF) — Gemini নিজে পার্স করে; base64 KV-তে, inline_data হিসেবে পাঠাই
+const BIN_EXT = ['pdf'];
+const BIN_MIME = { pdf: 'application/pdf' };
+const MAX_TEXT = 2 * 1024 * 1024;
+const MAX_B64 = 10 * 1024 * 1024;
+const DATAURL = /^data:([\w.+-]+\/[\w.+-]+);base64,(.+)$/i;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -132,7 +138,8 @@ async function pingProviders() {
   return out;
 }
 
-function pickChain(model, mode) {
+function pickChain(model, mode, multimodal) {
+  // multimodal = ছবি/PDF — শুধু Gemini inline_data পার্স করে
   let list = MODELS;
   if (model && model !== 'auto') {
     const m = MODELS.find((x) => x.id === model);
@@ -140,7 +147,9 @@ function pickChain(model, mode) {
   } else {
     list = [...MODELS].sort((a, b) => (b.quality * 10 + b.speed) - (a.quality * 10 + a.speed));
     if ((mode || '') === 'fast') list.sort((a, b) => b.speed - a.speed || b.quality - a.quality);
+    if (multimodal) list.sort((a, b) => (a.pid === 'gemini') === (b.pid === 'gemini') ? 0 : a.pid === 'gemini' ? -1 : 1);
   }
+  if (multimodal) return list.filter((m) => m.pid === 'gemini' && keyOf(m.pid)).slice(0, 1);
   return list.filter((m) => keyOf(m.pid)).slice(0, 4);
 }
 
@@ -164,7 +173,14 @@ async function* openaiStream(base, key, model, messages, signal) {
   }
 }
 async function* geminiStream(key, model, messages, signal) {
-  const contents = messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+  const contents = messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => {
+    const parts = Array.isArray(m.content)
+      ? m.content.map((p) => (p.type === 'image_url'
+          ? (() => { const mm = DATAURL.exec(p.image_url?.url || ''); return mm ? { inline_data: { mime_type: mm[1], data: mm[2] } } : null; })()
+          : { text: p.text || '' })).filter(Boolean)
+      : [{ text: String(m.content) }];
+    return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+  });
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${key}`, {
     method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 2048, temperature: 0.6 } }),
@@ -182,9 +198,9 @@ async function* geminiStream(key, model, messages, signal) {
   }
 }
 
-async function* streamAnswer(messages, model, mode, emit, signal) {
+async function* streamAnswer(messages, model, mode, emit, signal, multimodal) {
   let attempt = null;
-  const chain = pickChain(model, mode);
+  const chain = pickChain(model, mode, multimodal);
   if (!chain.length) throw new Error('কোনো AI provider key নেই — Cloudflare Secrets চেক করো');
   for (const m of chain) {
     const key = keyOf(m.pid);
@@ -365,11 +381,23 @@ async function handle(req) {
     if (method === 'POST' && path === '/api/files') {
       const body = await parseBody(req);
       const name = (body.name || 'file.txt').slice(0, 100);
-      const content = (body.content || '').slice(0, 2 * 1024 * 1024);
-      if (!TEXT_EXT.includes((name.split('.').pop() || '').toLowerCase())) return json({ error: 'এই ফরম্যাট এখনো সাপোর্ট নেই' }, 400);
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const isBin = BIN_EXT.includes(ext) || (typeof body.b64 === 'string' && (body.mime || '').startsWith('application/pdf'));
       const id = crypto.randomUUID();
       const files = await kvJson('files', {});
-      files[id] = { id, name, size: content.length, ts: Date.now() };
+      if (isBin) {
+        const b64 = (body.b64 || '').replace(/\s/g, '');
+        if (!b64) return json({ error: 'ফাইলের কনটেন্ট নেই' }, 400);
+        if (b64.length > MAX_B64) return json({ error: 'PDF সর্বোচ্চ ১০MB' }, 400);
+        const mime = BIN_MIME[ext] || 'application/pdf';
+        files[id] = { id, name, size: b64.length, bytes: Math.floor(b64.length * 0.75), mime, type: 'binary', ts: Date.now() };
+        await kvSet('files', files);
+        await AH_KV.put('fileb:' + id, b64);
+        return json(files[id]);
+      }
+      const content = (body.content || '').slice(0, MAX_TEXT);
+      if (!TEXT_EXT.includes(ext)) return json({ error: 'এই ফরম্যাট এখনো সাপোর্ট নেই — PDF, TXT, CSV, JSON বা কোড ফাইল দাও' }, 400);
+      files[id] = { id, name, size: content.length, type: 'text', ts: Date.now() };
       await kvSet('files', files);
       await AH_KV.put('file:' + id, content);
       return json(files[id]);
@@ -379,18 +407,31 @@ async function handle(req) {
       const files = await kvJson('files', {});
       const meta = files[mFile[1]];
       if (!meta) return json({ error: 'নেই' }, 404);
-      const content = await AH_KV.get('file:' + mFile[1]);
-      if (method === 'GET' && !mFile[2]) return new Response(content || '', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...cors } });
+      const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
+      const b64 = isBin ? await AH_KV.get('fileb:' + mFile[1]) : null;
+      const content = isBin ? null : await AH_KV.get('file:' + mFile[1]);
+      if (method === 'GET' && !mFile[2]) {
+        if (isBin && b64) {
+          const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+          return new Response(bin, { headers: { 'Content-Type': meta.mime || 'application/pdf', ...cors } });
+        }
+        return new Response(content || '', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...cors } });
+      }
       if (method === 'DELETE' && !mFile[2]) {
-        delete files[mFile[1]]; await kvSet('files', files); await AH_KV.delete('file:' + mFile[1]);
+        delete files[mFile[1]]; await kvSet('files', files);
+        await AH_KV.delete('file:' + mFile[1]); await AH_KV.delete('fileb:' + mFile[1]);
         return json({ ok: true });
       }
       if (method === 'POST') {
         const body = await parseBody(req);
         const q = mFile[2] === 'ask' ? (body.question || 'এই ফাইল সম্পর্কে কী জানো?') : 'এই ফাইলের সম্পূর্ণ বিশ্লেষণ দাও: মূল বিষয়, গঠন, গুরুত্বপূর্ণ অংশ, সম্ভাব্য সমস্যা, সারাংশ।';
-        const msgs = [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। ফাইল-এর উপর ভিত্তি করে উত্তর দাও।' }, { role: 'user', content: `ফাইল: ${meta.name}\n\n${(content || '').slice(0, 50000)}\n\nপ্রশ্ন: ${q}` }];
+        const msgs = isBin && b64
+          ? [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। সংযুক্ত ফাইল-এর উপর ভিত্তি করে বাংলায় উত্তর দাও।' },
+             { role: 'user', content: [{ type: 'text', text: `ফাইল: ${meta.name}\nপ্রশ্ন: ${q}` }, { type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }] }]
+          : [{ role: 'system', content: 'তুমি একটি ফাইল বিশ্লেষক। ফাইল-এর উপর ভিত্তি করে উত্তর দাও।' },
+             { role: 'user', content: `ফাইল: ${meta.name}\n\n${(content || '').slice(0, 50000)}\n\nপ্রশ্ন: ${q}` }];
         let ans = '';
-        for await (const t of streamAnswer(msgs, 'auto', 'balanced', () => {})) ans += t;
+        for await (const t of streamAnswer(msgs, 'auto', 'balanced', () => {}, null, isBin)) ans += t;
         return json({ answer: ans });
       }
     }
@@ -415,7 +456,7 @@ async function handle(req) {
           c = { id: crypto.randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
           data.chats.unshift(c);
         }
-        c.messages.push({ role: 'user', content: msg, ts: Date.now() });
+        c.messages.push({ role: 'user', content: msg, ts: Date.now(), media: body.media || null, images: body.images || null });
         msgs = c.messages;
       }
 
@@ -424,6 +465,39 @@ async function handle(req) {
       const summary = await ensureSummary(c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '');
       let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
+
+      // ফাইল (txt inline / PDF inline_data) + ছবি — শেষ user মেসেজে যুক্ত
+      let hasMulti = !!(body.images && body.images.length);
+      let extraText = '';
+      const binParts = [];
+      if (body.media && body.media.length) {
+        const files = await kvJson('files', {});
+        for (const m of body.media) {
+          const meta = files[m.id];
+          if (!meta) continue;
+          const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
+          if (isBin) {
+            const b64 = (await AH_KV.get('fileb:' + m.id)) || '';
+            if (b64) { binParts.push({ type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }); hasMulti = true; }
+          } else {
+            const txt = ((await AH_KV.get('file:' + m.id)) || '').slice(0, 50000);
+            if (txt) extraText += '\n\n[সংযুক্ত ফাইল: ' + meta.name + ']\n' + txt + '\n';
+          }
+        }
+      }
+      const lU = finalMsgs[finalMsgs.length - 1];
+      if (lU && lU.role === 'user' && (extraText || binParts.length || (body.images && body.images.length))) {
+        const parts = [{ type: 'text', text: (typeof lU.content === 'string' ? lU.content : '') + extraText }];
+        for (const bp of binParts) parts.push(bp);
+        for (const im of (body.images || [])) {
+          const mm = DATAURL.exec(im || '');
+          if (!mm || mm[2].length > 4 * 1024 * 1024) continue;
+          parts.push({ type: 'image_url', image_url: { url: im, mime_type: mm[1] } });
+        }
+        finalMsgs[finalMsgs.length - 1] = parts.length > 1
+          ? { role: 'user', content: parts }
+          : { role: 'user', content: parts[0].text };
+      }
 
       const emitQueue = [];
       let res; // হবে SSE Response
@@ -434,7 +508,8 @@ async function handle(req) {
         (async () => {
           try {
             if (body.web) {
-              const q = finalMsgs[finalMsgs.length - 1].content;
+              const lastC = finalMsgs[finalMsgs.length - 1].content;
+              const q = typeof lastC === 'string' ? lastC : lastC.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
               emit({ step: 'SEARCHING' });
               sources = await searchWeb(TAVILY_API_KEY, q, 5);
               emit({ sources });
@@ -446,7 +521,7 @@ async function handle(req) {
             }
             const ac = new AbortController();
             req.signal?.addEventListener('abort', () => ac.abort());
-            for await (const tok of streamAnswer(finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal)) {
+            for await (const tok of streamAnswer(finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal, hasMulti)) {
               answer += tok; emit({ token: tok });
             }
             if (!answer) throw new Error('খালি');
