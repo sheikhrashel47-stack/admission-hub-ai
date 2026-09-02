@@ -55,6 +55,89 @@ async function loadKeys(env) {
 function kvGet(env, key, fallback) { return env.AH_KV.get(key, 'json').then((v) => v ?? fallback); }
 function kvSet(env, key, val) { return env.AH_KV.put(key, JSON.stringify(val)); }
 
+/* ---------- Google Drive backup (loadKeys প্যাটার্ন: env binding → KV cfg:GOOGLE_DRIVE_*_1) ---------- */
+const DRIVE_FOLDER_NAME = 'ADMISSION-HUB-AI-Backups';
+let _driveCfgCache = null;
+async function loadDriveCfg(env) {
+  if (_driveCfgCache !== null) return _driveCfgCache;
+  const names = ['GOOGLE_DRIVE_CLIENT_ID_1', 'GOOGLE_DRIVE_CLIENT_SECRET_1', 'GOOGLE_DRIVE_REFRESH_TOKEN_1'];
+  const c = {};
+  for (const n of names) {
+    let v;
+    try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
+    if (!v) { try { v = await env.AH_KV.get('cfg:' + n); } catch {} }
+    if (v) c[n] = String(v).trim();
+  }
+  _driveCfgCache = (c.GOOGLE_DRIVE_CLIENT_ID_1 && c.GOOGLE_DRIVE_CLIENT_SECRET_1 && c.GOOGLE_DRIVE_REFRESH_TOKEN_1)
+    ? { clientId: c.GOOGLE_DRIVE_CLIENT_ID_1, clientSecret: c.GOOGLE_DRIVE_CLIENT_SECRET_1, refreshToken: c.GOOGLE_DRIVE_REFRESH_TOKEN_1 }
+    : false;
+  return _driveCfgCache;
+}
+let _driveTok = null; // { token, exp } — isolate-লেভেল ক্যাশ
+async function driveToken(env) {
+  const cfg = await loadDriveCfg(env);
+  if (!cfg) return null;
+  if (_driveTok && _driveTok.exp > Date.now() + 60000) return _driveTok.token;
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: cfg.refreshToken, grant_type: 'refresh_token' }),
+  });
+  if (!r.ok) throw new Error('Drive token HTTP ' + r.status);
+  const j = await r.json();
+  if (!j.access_token) throw new Error('Drive token নেই');
+  _driveTok = { token: j.access_token, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  return _driveTok.token;
+}
+async function driveFolderId(env, token, force) {
+  if (!force) { try { const cached = await env.AH_KV.get('drive:folder_1'); if (cached) return cached; } catch {} }
+  const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  let id = null;
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, { headers: { Authorization: 'Bearer ' + token } });
+  if (r.ok) { const j = await r.json(); id = j.files?.[0]?.id || null; }
+  if (!id) {
+    const c = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
+    });
+    if (!c.ok) throw new Error('Drive folder HTTP ' + c.status);
+    id = (await c.json()).id;
+  }
+  try { await env.AH_KV.put('drive:folder_1', id); } catch {}
+  return id;
+}
+function driveMime(name) {
+  const e = (name.split('.').pop() || '').toLowerCase();
+  return { json: 'application/json', html: 'text/html', htm: 'text/html', css: 'text/css', csv: 'text/csv', xml: 'application/xml', js: 'text/javascript', mjs: 'text/javascript', md: 'text/markdown' }[e] || 'text/plain';
+}
+async function driveMultipartUpload(token, folderId, name, content, mime) {
+  const boundary = 'ahb' + crypto.randomUUID().replace(/-/g, '');
+  const meta = { name, parents: [folderId], description: 'Admission Hub AI ব্যাকআপ' };
+  const body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: ${mime}; charset=UTF-8\r\n\r\n${content}\r\n--${boundary}--`;
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  if (!r.ok) throw new Error('Drive upload HTTP ' + r.status);
+  return r.json();
+}
+async function driveBackup(env, name, content) {
+  const token = await driveToken(env);
+  if (!token) return null;
+  let folder = await driveFolderId(env, token, false);
+  try { return await driveMultipartUpload(token, folder, name, content, driveMime(name)); }
+  catch { // ক্যাশ করা folder id বাসি হলে (ডিলিট হয়ে গেলে) নতুন করে খুঁজে/বানিয়ে একবার রিট্রাই
+    folder = await driveFolderId(env, token, true);
+    return await driveMultipartUpload(token, folder, name, content, driveMime(name));
+  }
+}
+async function driveDelete(env, fileId) {
+  const token = await driveToken(env);
+  if (!token || !fileId) return;
+  await fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId), { method: 'DELETE', headers: { Authorization: 'Bearer ' + token } }).catch(() => {});
+}
+
 function sseStream(onWrite) {
   const enc = new TextEncoder();
   const stream = new ReadableStream({
@@ -240,12 +323,13 @@ export default {
 
     if (method === 'GET' && path === '/api/config') {
       const models = MODELS.filter((m) => keys[KEYMAP[m.pid]]).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
-      return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true } });
+      return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true, driveBackup: !!(await loadDriveCfg(env)) } });
     }
 
     if (method === 'GET' && path === '/api/system') {
       const n = MODELS.filter((m) => keys[KEYMAP[m.pid]]).length;
       const providers = await pingProviders(keys).catch(() => []);
+      const drv = await loadDriveCfg(env);
       return json({
         providers,
         services: [
@@ -253,6 +337,7 @@ export default {
           { name: 'API Server', status: 'Operational', dot: 'ok' },
           { name: 'Web Research', status: keys.TAVILY_API_KEY ? 'Operational' : 'Setup needed', dot: keys.TAVILY_API_KEY ? 'ok' : 'warn' },
           { name: 'Storage (KV)', status: 'Operational', dot: 'ok' },
+          { name: 'Drive Backup', status: drv ? 'Operational' : 'Setup needed', dot: drv ? 'ok' : 'warn' },
           { name: 'Agent Engine', status: 'Phase 5-এ আসবে', dot: 'off' },
         ],
         deployments: [],
@@ -372,11 +457,51 @@ export default {
       if (!TEXT_EXT.includes((name.split('.').pop() || '').toLowerCase())) return json({ error: 'এই ফরম্যাট এখনো সাপোর্ট নেই' }, 400);
       const id = crypto.randomUUID();
       const files = await kvGet(env, 'files', {});
-      files[id] = { id, name, size: content.length, ts: Date.now() };
+      const rec = { id, name, size: content.length, ts: Date.now() };
+      if (await loadDriveCfg(env)) { // Drive ব্যাকআপ — ব্যর্থ হলেও আপলোড আটকায় না
+        try {
+          const d = await driveBackup(env, name, content);
+          if (d?.id) rec.drive = { fileId: d.id, link: d.webViewLink || null, ts: Date.now() };
+        } catch (e) { rec.driveError = String((e && e.message) || e).slice(0, 120); }
+      }
+      files[id] = rec;
       await kvSet(env, 'files', files);
       await env.AH_KV.put('file:' + id, content);
-      return json(files[id]);
+      return json(rec);
     }
+    if (method === 'GET' && path === '/api/storage') {
+      const files = await kvGet(env, 'files', {});
+      const list = Object.values(files);
+      const kv = {
+        files: list.length,
+        bytes: list.reduce((s, f) => s + (Number(f.size) || 0), 0),
+        backedUp: list.filter((f) => f.drive && f.drive.fileId).length,
+      };
+      const cfg = await loadDriveCfg(env);
+      const drive = { configured: !!cfg, connected: false };
+      if (cfg) {
+        try {
+          const token = await driveToken(env);
+          const r = await fetch('https://www.googleapis.com/drive/v3/about?fields=storageQuota,user(emailAddress)', { headers: { Authorization: 'Bearer ' + token } });
+          if (!r.ok) throw new Error('Drive about HTTP ' + r.status);
+          const j = await r.json();
+          const sq = j.storageQuota || {};
+          drive.connected = true;
+          drive.account = j.user?.emailAddress || null;
+          drive.quota = { limit: Number(sq.limit) || null, usage: Number(sq.usage) || 0, usageInDrive: Number(sq.usageInDrive) || 0 };
+          if (drive.quota.limit) drive.quota.percent = Math.round((drive.quota.usage / drive.quota.limit) * 1000) / 10;
+          try {
+            const folderId = await driveFolderId(env, token, false);
+            drive.folder = { id: folderId, name: DRIVE_FOLDER_NAME };
+            const q = encodeURIComponent(`'${folderId}' in parents and trashed=false`);
+            const fr = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1000`, { headers: { Authorization: 'Bearer ' + token } });
+            if (fr.ok) drive.backups = ((await fr.json()).files || []).length;
+          } catch {}
+        } catch (e) { drive.error = String((e && e.message) || e).slice(0, 160); }
+      }
+      return json({ kv, drive });
+    }
+
     const mFile = path.match(/^\/api\/files\/([\w-]+)(\/(analyze|ask))?$/);
     if (mFile) {
       const files = await kvGet(env, 'files', {});
@@ -386,6 +511,7 @@ export default {
       if (method === 'GET' && !mFile[2]) return new Response(content || '', { headers: { 'Content-Type': 'text/plain; charset=utf-8', ...cors } });
       if (method === 'DELETE' && !mFile[2]) {
         delete files[mFile[1]]; await kvSet(env, 'files', files); await env.AH_KV.delete('file:' + mFile[1]);
+        if (meta.drive?.fileId) { try { await driveDelete(env, meta.drive.fileId); } catch {} } // Drive কপিও মুছি (best-effort)
         return json({ ok: true });
       }
       if (method === 'POST') {
@@ -523,3 +649,6 @@ export default {
     return json({ error: 'পাওয়া যায়নি' }, 404);
   },
 };
+
+
+
