@@ -1177,12 +1177,12 @@ const SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-wid
 const MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></svg>';
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
-  localStorage.setItem('ahai-theme',t);
+  localStorage.setItem('ahai-theme-v2',t);
   const mq=document.querySelector('meta[name="theme-color"]');if(mq)mq.setAttribute('content',t==='light'?'#F5F7FB':'#0A0E13');
   const b=$('#themeBtn');if(b)b.innerHTML=t==='light'?MOON:SUN;
 }
 (function(){
-  const saved=localStorage.getItem('ahai-theme');
+  const saved=localStorage.getItem('ahai-theme-v2');
   const t=saved||'dark';
   applyTheme(t);
 })();
