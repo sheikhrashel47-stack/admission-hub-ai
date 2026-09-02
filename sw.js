@@ -1,8 +1,9 @@
-/* Admission Hub AI — Service Worker
-   - App shell (UI/assets): cache-first → instant open + offline UI
-   - API calls (chat/research/files): network — কখনো cache হয় না (তাজা ডেটা)
-   - Version bump করলেই পুরোনো ক্যাশ বদলাবে */
-const CACHE = 'ahai-v5';
+/* Admission Hub AI — Service Worker v6
+   - HTML (./, ./index.html): NETWORK-FIRST → সবসময় তাজা ভার্সন (পুরোনো ক্যাশ আর আটকাবে না)
+   - Assets (icons/manifest): cache-first → দ্রুত খোলে
+   - API (chat/research/files): network only — কখনো cache হয় না
+   - Offline: পুরোনো ক্যাশ থেকে শেল দেখায় */
+const CACHE = 'ahai-v6';
 const SHELL = [
   './',
   './index.html',
@@ -13,25 +14,41 @@ const SHELL = [
   './icons/apple-touch-icon.png',
   './icons/favicon-32.png',
 ];
+const NETWORK_FIRST = ['./', './index.html'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
-
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
-
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // API → network only (SSE চ্যাট, research, files)
   if (url.pathname.startsWith('/api/') || e.request.method !== 'GET') return;
   if (!['https:', 'http:'].includes(url.protocol)) return;
-  // cross-origin (workers.dev backend) → network
   if (url.origin !== self.location.origin) return;
 
+  const isHtml = NETWORK_FIRST.some((p) => url.pathname === p || (url.pathname.endsWith('/') && p === './'));
+  if (isHtml) {
+    // network-first: online হলে সবসময় তাজা
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request).then((hit) => hit || caches.match('./')))
+    );
+    return;
+  }
+  // cache-first for static assets
   e.respondWith(
     caches.match(e.request).then((hit) => {
       const fetchP = fetch(e.request)
