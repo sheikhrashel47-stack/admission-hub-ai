@@ -1,5 +1,7 @@
 # ADMISSION HUB AI — Private AI Command Center
 
+> **🧭 নতুন agent/developer? প্রথমে পড়ো: [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md)** — চূড়ান্ত লক্ষ্য, architecture-এর দর্শন, ১০-phase রোডম্যাপ, আর বর্তমান অবস্থা এক জায়গায়। Phase approval rule-ও সেখানে আছে।
+
 > **ব্র্যান্ড:** Admission Hub AI · **স্ট্যাটাস:** Phase 1 + Research — সম্পূর্ণ real (কোনো ফেক নয়) · **খরচ: $0**
 
 ## 🔗 লাইভ লিংক
