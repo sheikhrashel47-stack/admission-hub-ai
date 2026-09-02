@@ -513,6 +513,13 @@ export default {
       });
     }
 
+    if (method === 'GET' && path === '/oauth/callback') {
+      const sc = (url.searchParams.get('code') || '').replace(/[<>&"']/g, '');
+      const err = url.searchParams.get('error') || '';
+      const html = '<!doctype html><html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Drive সংযোগ — Admission Hub AI</title></head><body style="font-family:system-ui,sans-serif;background:#f6faf8;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="background:#fff;border:1px solid #d9ede4;border-radius:16px;padding:28px;max-width:540px;width:92%;box-shadow:0 6px 24px rgba(0,0,0,.06)"><h2 style="color:' + (err ? '#b3541e' : '#0b7a53') + ';margin:0 0 10px">' + (err ? '⚠️ অনুমতি দেওয়া হয়নি' : '✅ Google Drive সংযোগ প্রস্তুত') + '</h2>' + (err ? '<p style="color:#555">অ্যাকাউন্টে Allow না করায় কোড আসেনি। আবার লিংকে ক্লিক করে <b>Allow</b> করুন।</p>' : '<p style="color:#555">নিচের কোডটি <b>নির্বাচন করে কপি</b> করুন এবং চ্যাটে আমায় পাঠিয়ে দিন:</p><div style="background:#eef7f3;border:1px dashed #0b7a53;border-radius:10px;padding:14px;margin:14px 0"><code style="font-size:15px;word-break:break-all;color:#0b4a33">' + (sc || '') + '</code></div><p style="font-size:13px;color:#888">কোডটি একবার-ব্যবহারযোগ্য — ১০ মিনিটের মধ্যে শেষ করতে হবে। এই ট্যাব বন্ধ করে দিতে পারেন।</p>') + '</div></body></html>';
+      return new Response(html, { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', ...cors } });
+    }
+
     return json({ error: 'পাওয়া যায়নি' }, 404);
   },
 };
