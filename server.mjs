@@ -82,9 +82,25 @@ async function expandMedia(finalMsgs, media) {
   return out;
 }
 
-async function runChat({ messages, model, mode, web, signal, emit, media }) {
+function expandImages(finalMsgs, images) {
+  if (!images || !images.length) return finalMsgs;
+  const last = finalMsgs[finalMsgs.length - 1];
+  if (!last || last.role !== 'user') return finalMsgs;
+  const parts = [{ type: 'text', text: last.content }];
+  for (const im of images) {
+    const m = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(im || '');
+    if (!m || m[2].length > 4 * 1024 * 1024) continue;
+    parts.push({ type: 'image_url', image_url: { url: im, mime_type: m[1] } });
+  }
+  if (parts.length < 2) return finalMsgs;
+  const out = [...finalMsgs];
+  out[out.length - 1] = { role: 'user', content: parts };
+  return out;
+}
+
+async function runChat({ messages, model, mode, web, signal, emit, media, images }) {
   // base system + memory
-  let finalMsgs = await expandMedia([{ role: 'system', content: SYSTEM + memoryBlock() }, ...fmtUser(messages)], media);
+  let finalMsgs = await expandImages(await expandMedia([{ role: 'system', content: SYSTEM + memoryBlock() }, ...fmtUser(messages)], media), images);
   const meta = { model: null, provider: null, mode, seconds: 0, tokens: 0 };
   const t0 = now();
   try {
@@ -255,13 +271,13 @@ const server = http.createServer(async (req, res) => {
           nc = { id: randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), project: body.project || 'সাধারণ', pinned: false, archived: false, createdAt: now(), updatedAt: now(), messages: [] };
           store.chats.chats.unshift(nc);
         }
-        nc.messages.push({ role: 'user', content: msg, ts: now(), media: body.media || null });
+        nc.messages.push({ role: 'user', content: msg, ts: now(), media: body.media || null, images: body.images || null });
         msgs = nc.messages;
       }
       const emit = openSSE(res);
       const ac = new AbortController();
       res.on('close', () => ac.abort());
-      const out = await runChat({ messages: msgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null });
+      const out = await runChat({ messages: msgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null, images: body.images || null });
       if (out) {
         msgs.push({ role: 'assistant', content: out.answer, ts: now(), model: out.meta.provider + ' · ' + out.meta.model, mode: body.mode, meta: out.meta, sources: out.sources || [] });
         const fc = store.chats.chats.find((x) => x.id === (c ? c.id : msgs[0] && findChatIdFor(msgs)));

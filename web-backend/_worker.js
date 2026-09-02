@@ -62,7 +62,7 @@ function sseStream(onWrite) {
 
 function parseBody(req) { return req.json().catch(() => ({})); }
 
-function pickChain(keys, model, mode) {
+function pickChain(keys, model, mode, images) {
   let list = MODELS;
   if (model && model !== 'auto') {
     const m = MODELS.find((x) => x.id === model);
@@ -70,6 +70,7 @@ function pickChain(keys, model, mode) {
   } else {
     list = [...MODELS].sort((a, b) => (b.quality * 10 + b.speed) - (a.quality * 10 + a.speed));
     if (mode === 'fast') list.sort((a, b) => b.speed - a.speed || b.quality - a.quality);
+    if (images) list.sort((a, b) => (a.pid === 'gemini') === (b.pid === 'gemini') ? 0 : a.pid === 'gemini' ? -1 : 1);
   }
   return list.filter((m) => keys[KEYMAP[m.pid]]).slice(0, 4);
 }
@@ -117,9 +118,9 @@ async function* geminiStream(key, model, messages, signal) {
   }
 }
 
-async function* streamAnswer(keys, messages, model, mode, emit, signal) {
+async function* streamAnswer(keys, messages, model, mode, emit, signal, images) {
   let attempt = null;
-  const chain = pickChain(keys, model, mode);
+  const chain = pickChain(keys, model, mode, images);
   if (!chain.length) throw new Error('কোনো AI provider key নেই — KV-তে cfg:* চেক করো');
   for (const m of chain) {
     const key = keys[KEYMAP[m.pid]];
@@ -298,7 +299,7 @@ export default {
           c = { id: crypto.randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), project: (body.project || 'সাধারণ'), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
           data.chats.unshift(c);
         }
-        c.messages.push({ role: 'user', content: msg, ts: Date.now(), media: body.media || null });
+        c.messages.push({ role: 'user', content: msg, ts: Date.now(), media: body.media || null, images: body.images || null });
         msgs = c.messages;
       }
 
@@ -317,6 +318,18 @@ export default {
             extra += '\n\n[সংযুক্ত ফাইল: ' + meta.name + ']\n' + txt + '\n';
           }
           if (extra) finalMsgs[finalMsgs.length - 1] = { role: 'user', content: lastU.content + extra };
+        }
+      }
+      if (body.images && body.images.length) {
+        const lastU = finalMsgs[finalMsgs.length - 1];
+        if (lastU && lastU.role === 'user') {
+          const parts = [{ type: 'text', text: typeof lastU.content === 'string' ? lastU.content : '' }];
+          for (const im of body.images) {
+            const mm = /^data:(image\/[a-z+]+);base64,(.+)$/i.exec(im || '');
+            if (!mm || mm[2].length > 4 * 1024 * 1024) continue;
+            parts.push({ type: 'image_url', image_url: { url: im, mime_type: mm[1] } });
+          }
+          if (parts.length > 1) finalMsgs[finalMsgs.length - 1] = { role: 'user', content: parts };
         }
       }
 
@@ -338,7 +351,7 @@ export default {
             req.signal?.addEventListener('abort', () => ac.abort());
             let answer = '', attempt = null;
             const t0 = Date.now();
-            for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal)) {
+            for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal, !!(body.images && body.images.length))) {
               answer += tok; emit({ token: tok });
             }
             if (!answer) throw new Error('খালি');
