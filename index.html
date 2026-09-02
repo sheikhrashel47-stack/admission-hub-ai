@@ -265,6 +265,10 @@ svg{width:20px;height:20px;display:block}
 #histSearchBox{width:100%;background:var(--panel);border:1px solid var(--line2);border-radius:12px;color:var(--txt);font-size:13px;padding:9px 12px;outline:0}
 #histSearchBox:focus{border-color:var(--green)}
 .partialChip{display:inline-flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;font-weight:700;color:var(--green-d);background:var(--green-t);border:1px solid rgba(22,163,74,.35);padding:6px 12px;border-radius:9px}
+.sugWrap{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.sug{font-size:12px;font-weight:600;color:var(--green-d);background:var(--green-t);border:1px solid rgba(22,163,74,.32);border-radius:999px;padding:6px 12px;cursor:pointer}
+.cite{color:var(--blue);font-weight:700}
+.errdot{color:#DC2626}
 ::selection{background:rgba(22,163,74,.2)}
 </style>
 </head>
@@ -675,6 +679,7 @@ async function go(text){
             c.onclick=()=>{openSources(curSources)};
             body.appendChild(c);
           }
+          if(ev.suggestions&&ev.suggestions.length)renderFollowUps(body,ev.suggestions);
           const foot=document.createElement('div');foot.className='meta';
           foot.innerHTML=(meta.provider?'<span>⚡ '+esc(meta.provider)+'</span>':'')+(meta.seconds?'<span>⏱ '+meta.seconds+'s</span>':'');
           body.appendChild(foot);
@@ -737,6 +742,16 @@ async function regenerate(msg){
   }
   finally{streaming=false;sendBtn.disabled=false;sendBtn.style.display='flex';stopBtn.style.display='none'}
 }
+function renderFollowUps(body, list){
+  if(!list||!list.length)return;
+  const w=document.createElement('div');w.className='sugWrap';
+  list.slice(0,3).forEach(q=>{
+    const b=document.createElement('button');b.className='sug';b.textContent=q;
+    b.onclick=()=>{if(streaming)return;go(q)};
+    w.appendChild(b)});
+  body.appendChild(w);
+}
+
 /* tap avatar / timestamp → message menu (native selection চলতে দেয়) */
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('✅ কপি হয়েছে')}catch{toast('⚠️ কপি হয়নি')}}
 msgs.addEventListener('click',(e)=>{
@@ -899,7 +914,12 @@ async function openSys(){
     const s=await api('/api/system');
     const u=await api('/api/usage').catch(()=>null);
     const b=$('#sysBody');
-    let h='<div class="secLbl">সেবাসমূহ</div>';
+    let h='';
+    if(s.providers&&s.providers.length){
+      h+='<div class="secLbl">AI মডেল (লাইভ)</div>';
+      s.providers.forEach(p=>{h+='<div class="dRow"><span class="k">'+esc(p.label)+'</span><span class="v '+(p.ok?'okdot':'errdot')+'">'+(p.ok?'🟢 লাইভ':'🔴 সমস্যা')+'</span></div>'});
+    }
+    h+='<div class="secLbl">সেবাসমূহ</div>';
     (s.services||[]).forEach(x=>{h+='<div class="dRow"><span class="k">'+esc(x.name)+'</span><span class="v okdot">'+esc(x.status)+'</span></div>'});
     if(u&&u.total){h+='<div class="secLbl">ব্যবহার</div>';
       h+='<div class="dRow"><span class="k">মোট রিকোয়েস্ট</span><span class="v">'+(u.total.requests||0)+'</span></div>';
@@ -960,7 +980,8 @@ $('#cDetails').onclick=()=>{
   const c=storeLast;
   const body=$('#detailsBody');
   const modelHist=(c?.messages||[]).filter(m=>m.model).map(m=>m.model).pop()||'—';
-  body.innerHTML='<div class="dRow"><span class="k">নাম</span><span class="v">'+esc(c?.title||'নতুন চ্যাট')+'</span></div>'+
+  const summaryRow=(c&&c.summary&&c.summary.text)?'<div class="dRow"><span class="k">🧠 সারাংশ</span><span class="v">'+esc((c.summary.upTo||0)+'টি পুরোনো বার্তা সংক্ষেপিত')+'</span></div>':'';
+  body.innerHTML=summaryRow+'<div class="dRow"><span class="k">নাম</span><span class="v">'+esc(c?.title||'নতুন চ্যাট')+'</span></div>'+
     '<div class="dRow"><span class="k">তৈরি</span><span class="v">'+(c?new Date(c.createdAt).toLocaleString('bn-BD'):'—')+'</span></div>'+
     '<div class="dRow"><span class="k">সর্বশেষ আপডেট</span><span class="v">'+(c?relDate(c.updatedAt):'—')+'</span></div>'+
     '<div class="dRow"><span class="k">মডেল</span><span class="v">'+esc(modelHist)+'</span></div>'+
@@ -1233,6 +1254,7 @@ function mountMsg(m,absIdx){
   const srcs=m.sources||[];
   if(srcs.length){const bt=document.createElement('button');bt.className='srcChip';bt.textContent='🔗 '+srcs.length+'টি সোর্স';bt.onclick=()=>openSources(srcs);body.appendChild(bt)}
   if(m.model){const f=document.createElement('div');f.className='meta';f.innerHTML='<span>⚡ '+esc(m.model)+'</span>';body.appendChild(f)}
+  if(m.suggestions&&m.suggestions.length)renderFollowUps(body,m.suggestions);
   if(m.partial){
     if((m.content||'').trim())body.innerHTML+='<div class="meta" style="margin-top:6px">⏸ স্ট্রিম অসম্পূর্ণ — আংশিক উত্তর সংরক্ষিত</div>';
     const chip=document.createElement('button');chip.className='partialChip';
