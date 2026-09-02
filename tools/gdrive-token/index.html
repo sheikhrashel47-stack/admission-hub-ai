@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Google Drive টোকেন টুল</title>
+<style>
+  :root{--bg:#0b0f14;--card:#141b23;--b:#243040;--fg:#e6edf3;--mut:#8b98a5;--acc:#10b981;--warn:#f59e0b;--err:#ef4444}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--fg);
+    font:15px/1.6 system-ui,-apple-system,"Noto Sans Bengali",sans-serif;
+    padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:16px}
+  .card{background:var(--card);border:1px solid var(--b);border-radius:14px;padding:16px;margin-bottom:14px}
+  .step{display:flex;align-items:center;gap:8px;font-weight:600;margin-bottom:12px}
+  .n{width:24px;height:24px;border-radius:50%;background:var(--acc);color:#04120c;
+     display:grid;place-items:center;font-size:13px;font-weight:700;flex:none}
+  label{display:block;font-size:12px;color:var(--mut);margin:10px 0 5px}
+  input,textarea{width:100%;padding:11px 12px;background:#0b1117;border:1px solid var(--b);
+    border-radius:9px;color:var(--fg);font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;
+    word-break:break-all}
+  textarea{min-height:74px;resize:vertical}
+  input:focus,textarea:focus{outline:none;border-color:var(--acc)}
+  button{width:100%;padding:13px;border:0;border-radius:10px;background:var(--acc);color:#04120c;
+    font:600 15px/1 system-ui,"Noto Sans Bengali",sans-serif;margin-top:12px;cursor:pointer}
+  button:disabled{opacity:.5}
+  button.sec{background:#1f2b38;color:var(--fg)}
+  a.link{display:block;padding:12px;background:#0b1117;border:1px solid var(--acc);border-radius:9px;
+    color:var(--acc);text-decoration:none;text-align:center;margin-top:12px;font-weight:600}
+  .out{margin-top:12px;padding:12px;border-radius:9px;font:12px/1.7 ui-monospace,Menlo,monospace;
+    white-space:pre-wrap;word-break:break-all;display:none}
+  .ok{background:#052e20;border:1px solid var(--acc);color:#7ff0c4}
+  .bad{background:#3b0d0d;border:1px solid var(--err);color:#ffb4b4}
+  .info{background:#3b2c05;border:1px solid var(--warn);color:#ffd88a;font-size:12.5px;
+    padding:11px;border-radius:9px;line-height:1.65;margin-top:10px}
+  .note{color:var(--mut);font-size:12px;margin-top:8px}
+  code{background:#0b1117;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>🔑 Google Drive টোকেন টুল</h1>
+<div class="sub">Desktop-app OAuth · সব হিসাব আপনার ব্রাউজারেই হয় — কোনো ডেটা সার্ভারে যায় না</div>
+
+<div class="card">
+  <div class="step"><span class="n">1</span> ক্লায়েন্ট তথ্য</div>
+  <label>Client ID</label>
+  <input id="cid" placeholder="…apps.googleusercontent.com" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <label>Client Secret</label>
+  <input id="csec" placeholder="GOCSPX-…" autocapitalize="off" autocorrect="off" spellcheck="false">
+  <div class="note">🔒 এগুলো শুধু এই ফোনে থাকে (localStorage) — কোথাও পাঠানো হয় না।</div>
+</div>
+
+<div class="card">
+  <div class="step"><span class="n">2</span> লগইন করে কোড আনুন</div>
+  <button class="sec" onclick="mkLink()">লগইন লিংক বানাও</button>
+  <a id="authlink" class="link" style="display:none" target="_blank" rel="noopener">🔗 Google-এ লগইন করুন (নতুন ট্যাব)</a>
+  <div class="info">
+    লগইনের পর <b>Advanced → Go to … (unsafe) → Continue → Allow</b><br>
+    তারপর <code>localhost</code> পেজে <b>"This site can't be reached"</b> আসবে —
+    <b>এটাই সঠিক</b> ✅<br>
+    অ্যাড্রেস বারে ট্যাপ → <b>Select all → Copy</b> → নিচে পেস্ট করুন।<br>
+    ⏱️ কোড <b>১০ মিনিটে</b> expire হয় — দ্রুত করুন।
+  </div>
+</div>
+
+<div class="card">
+  <div class="step"><span class="n">3</span> কোড → refresh token</div>
+  <label>কপি করা localhost URL (বা শুধু code)</label>
+  <textarea id="code" placeholder="localhost/?iss=…&code=4/0AT…&scope=…" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+  <button id="go" onclick="exchange()">টোকেন নাও</button>
+  <div id="out" class="out"></div>
+</div>
+
+<script>
+const $ = (i) => document.getElementById(i);
+const REDIRECT = 'http://localhost';
+const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+// ফোনে টাইপ কমাতে — শুধু এই ডিভাইসে সেভ থাকে
+for (const k of ['cid','csec']) {
+  $(k).value = localStorage.getItem('gd_'+k) || '';
+  $(k).addEventListener('input', () => localStorage.setItem('gd_'+k, $(k).value.trim()));
+}
+
+function show(cls, txt){ const o=$('out'); o.className='out '+cls; o.textContent=txt; o.style.display='block'; }
+
+function mkLink(){
+  const cid = $('cid').value.trim();
+  if (!cid.includes('apps.googleusercontent.com')) return show('bad','❌ সঠিক Client ID দিন (…apps.googleusercontent.com)');
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+    client_id: cid, redirect_uri: REDIRECT, response_type:'code', scope: SCOPE,
+    access_type:'offline', prompt:'consent', include_granted_scopes:'true',
+  });
+  const a = $('authlink'); a.href = url; a.style.display='block';
+  show('ok','✅ লিংক তৈরি — উপরের সবুজ বাটনে ট্যাপ করুন।');
+}
+
+function extractCode(raw){
+  let s = (raw||'').trim().replace(/^["']|["']$/g,'').replace(/&amp;/g,'&');
+  const m = s.match(/[?&#]code=([^&\s]+)/);
+  if (m) return decodeURIComponent(m[1]);
+  if (/^4\/[\w\-./]+$/.test(s)) return s;
+  return '';
+}
+
+async function exchange(){
+  const cid = $('cid').value.trim(), csec = $('csec').value.trim();
+  const code = extractCode($('code').value);
+  if (!cid || !csec) return show('bad','❌ Client ID ও Secret দুটোই দিন (ধাপ ১)');
+  if (!code) return show('bad','❌ URL-এ code পাওয়া যায়নি। পুরো localhost URL পেস্ট করুন।');
+
+  $('go').disabled = true; show('ok','⏳ Google-এ পাঠানো হচ্ছে…');
+  try{
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method:'POST', headers:{'content-type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({ code, client_id:cid, client_secret:csec,
+        redirect_uri:REDIRECT, grant_type:'authorization_code' }),
+    });
+    const j = await r.json();
+
+    if (!r.ok || !j.refresh_token){
+      const hint = {
+        invalid_grant:'কোড expire বা আগেই ব্যবহৃত → ধাপ ২ থেকে নতুন কোড নিন।',
+        invalid_client:'Client ID/Secret মিলছে না, অথবা ক্লায়েন্টটি Desktop app নয়।',
+        redirect_uri_mismatch:'ক্লায়েন্টটি Web application → Console-এ Desktop app ক্লায়েন্ট বানান।',
+      }[j.error];
+      return show('bad', `❌ ${j.error||('HTTP '+r.status)}\n${j.error_description||''}` + (hint?`\n\n💡 ${hint}`:''));
+    }
+
+    // অ্যাকাউন্ট যাচাই
+    let who = '';
+    try{
+      const ab = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress),storageQuota(limit,usage)',
+        { headers:{ authorization:'Bearer '+j.access_token } }).then(x=>x.json());
+      const gb = v => v ? (Number(v)/1073741824).toFixed(2)+' GB' : '—';
+      who = `\n\n👤 ${ab.user?.emailAddress||'?'}\n💾 ${gb(ab.storageQuota?.usage)} / ${gb(ab.storageQuota?.limit)}`;
+    }catch(e){}
+
+    const slot = 1;
+    const block =
+`GOOGLE_DRIVE_CLIENT_ID_${slot}=${cid}
+GOOGLE_DRIVE_CLIENT_SECRET_${slot}=${csec}
+GOOGLE_DRIVE_REFRESH_TOKEN_${slot}=${j.refresh_token}`;
+
+    show('ok', '✅ সফল! নিচের ৩ লাইন .env.local-এ রাখুন:\n\n' + block + who +
+      '\n\n⚠️ এই টোকেন কখনো চ্যাটে/গিটে দেবেন না।');
+
+    const b = document.createElement('button');
+    b.textContent = '📋 ৩ লাইন কপি করুন';
+    b.onclick = async () => { await navigator.clipboard.writeText(block); b.textContent='✅ কপি হয়েছে'; };
+    $('out').after(b);
+  }catch(e){
+    show('bad','❌ নেটওয়ার্ক ত্রুটি: '+e.message+'\n\n💡 ইন্টারনেট চেক করে আবার চেষ্টা করুন।');
+  }finally{ $('go').disabled = false; }
+}
+</script>
+</body>
+</html>
