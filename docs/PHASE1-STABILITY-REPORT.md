@@ -2,7 +2,7 @@
 
 > তারিখ: ২০২৬-০৯-০২ · Scope: Phase 1-এর চ্যাট ইঞ্জিন প্রোডাকশন-লেভেল স্ট্যাবিলাইজেশন
 > Testing: লোকাল (`localhost:3000`, server.mjs) — API টেস্ট T1–T19 + হেডলেস Chromium E2E (মোবাইল ভিউপোর্ট 390×844, টাচ) + markdown ইউনিট ব্যাটারি।
-> **Deploy status: কোড সম্পূর্ণ প্রস্তুত (PWA v6) — GitHub PAT + Cloudflare টোকেন ছাড়া push/redeploy হয়নি। পাবলিক ভার্সন এখনো v5।**
+> **Deploy status: ✅ PUBLIC LIVE — main `504e954` → `1b55637`→`504e954`, gh-pages `f87aa7c` (PWA v6), Cloudflare worker deploy `b37d499a` (v2)। পাবলিক E2E ১০/১০ PASS।**
 
 ---
 
@@ -132,8 +132,12 @@
 
 ---
 
+## 🌐 পাবলিক ভেরিফিকেশন (deploy-এর পর)
+- PWA `https://sheikhrashel47-stack.github.io/admission-hub-ai/` — **v6 লাইভ**: index-এ codeBox/histSearchBox/partialChip ✔, sw.js `ahai-v6` network-first ✔
+- Backend `https://admission-hub-ai.pages.dev` — **worker v2 লাইভ** (deploy `b37d499a`): `features.image:true` ✔, `/api/chats?limit&offset` ✔, chat meta `total` + `messages` windowed ✔, in-chat search (হিট+snippet) ✔, content-search ৩ চ্যাট ✔
+- Public E2E (headless Chromium, real keys): P1 hero ✔ · P3 real stream ✔ · P4 codeBox+copy ✔ · P5 table ✔ · P6 history+search box ✔ (২৮ আইটেম) · P6b content-search ✔ (২৮→১০) · P7 windowed open ✔ (22 rows) · P8 reload ✔ · P9 SW v6 ✔ — **০ runtime error**
+
 ## ⚠️ বাকি সমস্যা / Known Limitations (সৎ তালিকা)
-1. **পাবলিক ডিপ্লয় বিহীন** — সব ফিক্স local-only; public PWA এখনো v5 + পুরোনো worker। GitHub PAT + Cloudflare টোকেন লাগবে (আগের টোকেন রিভোক করার পরামর্শ দেওয়া হয়েছিল — নতুন দিলে সাথে সাথে deploy হবে: sw v6 + index v6 + worker + image:true)।
 2. **ভার্চুয়ালাইজড DOM নয়** — >৬০ মেসেজ windowed, কিন্তু user যদি "আরো পুরোনো" বারবার চাপে তাহলে DOM বাড়ে; ১০০০-মেসেজ চ্যাট একবারে লোড করলে ভারী (সীমা ৬০/ব্যাচ)।
 3. **সেম্যান্টিক কমপ্যাকশন নেই** — কনটেক্সট = শেষ ~২৪ মেসেজ ট্রিম (বড় রিকোয়েস্ট হয় না), কিন্তু summary/important-context extract এখনো নেই (সৎ: Phase 2-এর প্রার্থী)।
 4. সার্চ-জাম্প শুধু **লোড হওয়া** উইন্ডোর ভেতরে; আরও পুরোনো hit-এ নির্দেশনা-টোস্ট।
@@ -142,7 +146,7 @@
 7. iOS real-device কীবোর্ড ভেরিফিকেশন — CSS+computed যাচাই হয়েছে; ডিভাইসে একবার চোখে দেখে নেওয়া ভালো।
 
 ## 🚀 Next Phase Readiness
-**READY (engineering)**, কিন্তু গেটিং নিয়ম মেনে: owner অনুমোদন + ডিপ্লয় টোকেন ছাড়া Phase 2 শুরু হবে না। ডিপ্লয় হলে পাবলিক ভেরিফিকেশন (grep codeBox/ahai-v6) + আপনার Test A–O চালানো হবে।
+**READY** — পাবলিক-ভেরিফাইড (PWA v6 + worker v2 + public E2E ১০/১০)। গেটিং নিয়ম মেনে: owner-এর অনুমোদনের পরই Phase 2 (সেম্যান্টিক কমপ্যাকশন/সামারি, KaTeX/Mermaid, virtualized DOM ইত্যাদি) শুরু হবে।
 
 ---
-*সংরক্ষিত ফাইল: `web/index.html` (v6, 96 KB), `web/sw.js` (v6, network-first HTML), `server.mjs` + `worker.mjs` (pagination/search/messages/partial-recovery), `docs/ROADMAP.md`। সবকিছু uncommitted — deploy-এর সময় commit+push।*
+*সংরক্ষিত ফাইল: `web/index.html` (v6), `web/sw.js` (v6 network-first), `server.mjs` + `worker.mjs` + `web-backend/_worker.js` (pagination/search/messages/partial-recovery), `docs/ROADMAP.md` — সব main-এ committed (`504e954`), PWA gh-pages-এ (`f87aa7c`), worker deployed (`b37d499a`)।*
