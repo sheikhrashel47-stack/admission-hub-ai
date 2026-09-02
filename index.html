@@ -1069,7 +1069,7 @@ function renderAtts(){
 $('#micBtn').onclick=()=>{
   try{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){toast('⚠️ ভয়েস — Chrome/Safari ব্যবহার করো');return}
+    if(!SR){toast('⚠️ ভয়েস শুধু Chrome/Edge/Android-এ আছে — এই ব্রাউজারে নেই');return}
     const rec=new SR();rec.lang='bn-BD';rec.interimResults=true;
     rec.onstart=()=>toast('🎙️ শুনছি… (বন্ধ করতে আবার ট্যাপ)');
     rec.onresult=e=>{const t=e.results[e.results.length-1][0].transcript;inp.value=t;autoGrow()};
@@ -1352,6 +1352,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
     if(!cfg.features.research){['#tWeb','#tResearch'].forEach(s=>{const e=$(s);if(e)e.style.display='none'})}
     if(!cfg.features.agent){['#agentPill','#agentMini','#tAgent','#mAgent'].forEach(s=>{const e=$(s);if(e)e.style.display='none'})}
     if(!cfg.features.image){const ti=$('#tImage');if(ti)ti.style.display='none'}
+    if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){const tv=$('#tVoice');if(tv)tv.style.display='none'}
     const sa=$('#setApi');if(sa)sa.textContent=API.replace(/^https?:\/\//,'');
     await loadHistory();await loadMemory();await updStatus();
     restoreDraft();
