@@ -30,17 +30,17 @@
 
 ---
 
-## 🧩 Phase 2 — AI Core + Model Router (৮০% → ১০০%)
+## ✅ Phase 2 — AI Core + Model Router (সম্পন্ন — ২০২৬-০৯-০২)
 
 - ✅ Gemini / Groq / Mistral integration (server-side key; Cerebras free credit শেষ → বাদ)
 - ✅ Model selection, automatic fallback chain, streaming SSE
 - ✅ Context handling (last-24 messages + memory)
 - ✅ Error handling + retry (provider failover, 4-attempt chain)
-- 🟡 Provider health check `/api/system` (extend: dynamic live ping)
-- 🟡 OpenRouter integration (key লাগবে — `.env.local` + KV)
-- 🟡 Token/context management (অটো-সংক্ষেপণ: লম্বা চ্যাট → সারাংশ)
-- ⏳ **Gemini Vision (PDF/DOCX/ইমেজ/ছবি-বোঝা)** — Phase 1-এর image UI-এর gate
-- ⏳ Response quality v2 (system prompt, ইনলাইন সাইটেশন, ফলো-আপ সাজেশন)
+- ✅ **Provider health check** — `/api/system` live ping (GET models/auth-key, 4s timeout, 60s cache; UI: সিস্টেম স্ট্যাটাস sheet-এ "AI মডেল (লাইভ)" 🟢/🔴)
+- ✅ OpenRouter integration কোড-রেডি (FREEMODELS + PROVIDERS + ping) — **key নেই** (OPENROUTER_API_KEY) → config-এ দেখায় না; key দিলেই চালু
+- ✅ **Token/context management (অটো-সংক্ষেপণ)** — ৪৮+ বার্তার চ্যাটে পুরোনো অংশ flash/fast দিয়ে সারাংশ (summary{text,upTo} chat-এ সেভ), কনটেক্সট = সারাংশ + শেষ ২৪ বার্তা; recompile শুধু needUpTo-8 দূরত্বে; বিফলে fallback (চ্যাট কখনো ভাঙে না); details sheet-এ "🧠 সারাংশ" রো
+- ✅ **Gemini Vision** (লাল→লাল/নীল→নীল verified; `features.image:true` live)
+- ✅ **Response quality v2** — উত্তর-শৈলী prompt (সরাসরি বাংলা, বোল্ড/টেবিল) + `[SUGGEST]` মার্কার পার্স → ২–৩টি ফলো-আপ চিপ (ক্লিকে পাঠানো যায়; message-এ persist)
 
 ---
 

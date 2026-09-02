@@ -8,7 +8,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { streamAnswer, searchWeb, FREEMODELS } from './lib/providers.mjs';
+import { streamAnswer, searchWeb, FREEMODELS, summarizeChat, pingProviderStatus } from './lib/providers.mjs';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const DATA = join(ROOT, 'data');
@@ -53,7 +53,14 @@ function logUsage(label, chars) {
 const SYSTEM = `তুমি "ADMISSION HUB AI" — Admission Hub-এর জন্য বানানো একটি প্রিমিয়াম প্রাইভেট AI Assistant।
 ভাষা: সহজ বাংলা (প্রয়োজনে ইংরেজি)। সবসময় সংক্ষিপ্ত, পরিষ্কার, গঠনমূলক উত্তর — দরকার হলে বুলেট/টেবিল/কোড ব্লক।
 শুধু সত্য তথ্য দেবে; যা জানো না সেটা সৎভাবে বলবে। সাইটেশন [1] ফরম্যাটে দিলে সেগুলো সোর্স তালিকায় মিলবে।
-তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy, code sandbox এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।`;
+তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy, code sandbox এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।
+
+উত্তর-শৈলী (সবসময়): প্রচলিত সহজ বাংলায় সরাসরি উত্তর — অপ্রয়োজনীয় ভূমিকা/ভণিতা নয়; দরকার হলে **বোল্ড** টার্ম, টেবিল, বুলেট; সংখ্যা/তারিখ স্পষ্ট; যা নিশ্চিত নও তা সততার সাথে বলো।
+যদি উপযুক্ত হয়, উত্তরের একদম শেষে ২–৩টি ফলো-আপ প্রশ্ন দিতে পারো — ঠিক এই ফরম্যাটে, এর বাইরে আর কিছু নয়:
+
+[SUGGEST]
+- প্রশ্ন ১
+- প্রশ্ন ২`;
 
 function memoryBlock() {
   if (!store.memory.enabled) return '';
@@ -98,9 +105,32 @@ function expandImages(finalMsgs, images) {
   return out;
 }
 
-async function runChat({ messages, model, mode, web, signal, emit, media, images }) {
+const CTX_TAIL = 24, CTX_TRIGGER = 48;
+async function ensureSummary(c) {
+  /* লম্বা চ্যাট → পুরোনো অংশ সারাংশে ডেকে কনটেক্সট ছোট রাখা (Phase 2) */
+  if (!c) return null;
+  const msgs = (c.messages || []).filter((m) => m.role !== 'system' && !(m.partial && !m.content));
+  if (msgs.length < CTX_TRIGGER) return c.summary ? c.summary.text : null;
+  const needUpTo = msgs.length - CTX_TAIL;
+  if (c.summary && c.summary.upTo && c.summary.upTo >= needUpTo - 8) return c.summary.text;
+  const from = (c.summary && c.summary.upTo) || 0;
+  const lines = msgs.slice(Math.max(0, from), needUpTo).map((m) => (m.role === 'user' ? 'প্রশ্ন: ' : 'উত্তর: ') + (typeof m.content === 'string' ? m.content : ''));
+  try {
+    const txt = await summarizeChat(lines.slice(-60), c.summary ? c.summary.text : null);
+    if (txt) { c.summary = { text: txt, upTo: needUpTo, ts: now() }; save(); if (process.env.DBG) console.log('[ctx] summary built upTo=', needUpTo); return txt; }
+  } catch (e) { if (process.env.DBG) console.log('[ctx] summary ব্যর্থ:', e.message); }
+  return c.summary ? c.summary.text : null;
+}
+function parseSuggestions(ans) {
+  const m = /(?:\n|^)\[SUGGEST\]\s*\n((?:[-*] .*\n?)+)\s*$/.exec(ans);
+  if (!m) return { text: ans, list: null };
+  const list = m[1].split('\n').map((x) => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 3);
+  return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
+}
+
+async function runChat({ messages, model, mode, web, signal, emit, media, images, summary }) {
   // base system + memory
-  let finalMsgs = await expandImages(await expandMedia([{ role: 'system', content: SYSTEM + memoryBlock() }, ...fmtUser(messages)], media), images);
+  let finalMsgs = await expandImages(await expandMedia([{ role: 'system', content: SYSTEM + memoryBlock() + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') }, ...fmtUser(messages)], media), images);
   const meta = { model: null, provider: null, mode, seconds: 0, tokens: 0 };
   const t0 = now();
   try {
@@ -128,13 +158,15 @@ async function runChat({ messages, model, mode, web, signal, emit, media, images
       emit({ token: tok });
     }
     if (!answer) throw new Error('AI থেকে খালি উত্তর এসেছে');
+    const parsed = parseSuggestions(answer);
+    answer = parsed.text;
     meta.model = attempt?.model || model;
     meta.provider = attempt?.provider || '';
     meta.seconds = Math.round((now() - t0) / 100) / 10;
     meta.tokens = rateTokens(answer) + rateTokens(finalMsgs.map((m) => m.content).join(''));
     if (attempt) logUsage(attempt.label, answer);
-    emit({ done: true, meta, sources });
-    return { answer, meta, sources };
+    emit({ done: true, meta, sources, suggestions: parsed.list });
+    return { answer, meta, sources, suggestions: parsed.list };
   } catch (e) {
     if (signal.aborted) { emit({ abort: true }); return null; }
     emit({ stopped: true, error: String(e.message || 'অজানা সমস্যা').slice(0, 250) });
@@ -192,7 +224,9 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && path === '/api/system') {
       const modelCount = FREEMODELS.filter((m) => process.env[KEYMAP[m.pid]]).length;
+      const providers = await pingProviderStatus().catch(() => []);
       return json(200, {
+        providers,
         services: [
           { name: 'AI Providers', status: modelCount ? `${modelCount} সক্রিয়` : 'কোনো key নেই', dot: modelCount ? 'ok' : 'err' },
           { name: 'API Server', status: 'Operational', dot: 'ok' },
@@ -342,14 +376,15 @@ const server = http.createServer(async (req, res) => {
           ch.updatedAt = now(); save();
         }
       });
-      const out = await runChat({ messages: ctxMsgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null, images: body.images || null });
+      const summary = await ensureSummary(c || ncOut);
+      const out = await runChat({ messages: ctxMsgs, model: body.model || 'auto', mode: body.mode || 'balanced', web: !!body.web, signal: ac.signal, emit, media: body.media || null, images: body.images || null, summary });
       if (out) {
         const ph = msgs[msgs.length - 1];
         if (ph && ph.partial) {
           ph.content = out.answer; ph.partial = false; ph.ts = now();
-          ph.model = out.meta.provider + ' · ' + out.meta.model; ph.mode = body.mode; ph.meta = out.meta; ph.sources = out.sources || [];
+          ph.model = out.meta.provider + ' · ' + out.meta.model; ph.mode = body.mode; ph.meta = out.meta; ph.sources = out.sources || []; ph.suggestions = out.suggestions || null;
         } else {
-          msgs.push({ role: 'assistant', content: out.answer, ts: now(), model: out.meta.provider + ' · ' + out.meta.model, mode: body.mode, meta: out.meta, sources: out.sources || [] });
+          msgs.push({ role: 'assistant', content: out.answer, ts: now(), model: out.meta.provider + ' · ' + out.meta.model, mode: body.mode, meta: out.meta, sources: out.sources || [], suggestions: out.suggestions || null });
         }
         finalized = true;
       }

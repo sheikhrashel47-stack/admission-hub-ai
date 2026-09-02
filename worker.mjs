@@ -7,7 +7,14 @@ const ACCOUNT = 'abb783e456e51a5d338419de93d5e576';
 const SYSTEM = `তুমি "ADMISSION HUB AI" — Admission Hub-এর জন্য বানানো একটি প্রিমিয়াম প্রাইভেট AI Assistant।
 ভাষা: সহজ বাংলা (প্রয়োজনে ইংরেজি)। সবসময় সংক্ষিপ্ত, পরিষ্কার, গঠনমূলক উত্তর — দরকার হলে বুলেট/টেবিল/কোড ব্লক।
 শুধু সত্য তথ্য দেবে; যা জানো না সেটা সৎভাবে বলবে। সাইটেশন [1] ফরম্যাটে দিলে সেগুলো সোর্স তালিকায় মিলবে।
-তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।`;
+তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।
+
+উত্তর-শৈলী (সবসময়): প্রচলিত সহজ বাংলায় সরাসরি উত্তর — অপ্রয়োজনীয় ভূমিকা/ভণিতা নয়; দরকার হলে **বোল্ড** টার্ম, টেবিল, বুলেট; সংখ্যা/তারিখ স্পষ্ট; যা নিশ্চিত নও তা সততার সাথে বলো।
+যদি উপযুক্ত হয়, উত্তরের একদম শেষে ২–৩টি ফলো-আপ প্রশ্ন দিতে পারো — ঠিক এই ফরম্যাটে, এর বাইরে আর কিছু নয়:
+
+[SUGGEST]
+- প্রশ্ন ১
+- প্রশ্ন ২`;
 
 const MODELS = [
   { pid: 'groq', id: 'fast', label: 'Groq · GPT-OSS-120B', model: 'openai/gpt-oss-120b', speed: 3, quality: 4, coding: 5 },
@@ -58,6 +65,72 @@ function keyOf(pid) {
 }
 
 function parseBody(req) { return req.json().catch(() => ({})); }
+
+// ================= Phase 2: summarization + suggestions + provider ping =================
+const SUM_SYS = `তুমি একটি চ্যাট-সংক্ষেপক। নিচের কথোপকথনের গুরুত্বপূর্ণ তথ্য, সিদ্ধান্ত, ব্যবহারকারীর পছন্দ, নাম/সংখ্যা ও উল্লেখযোগ্য বিষয়গুলো বাংলায় সংক্ষিপ্ত বুলেটে নোট করো (সর্বোচ্চ ~৪০০ শব্দ)। শুধু সারাংশ লিখো — কোনো ভূমিকা, শিরোনাম বা মন্তব্য নয়।`;
+async function summarize(lines, prev) {
+  const inp = (prev ? 'পুরোনো সারাংশ:\n' + prev + '\n\n' : '') + lines.join('\n');
+  if (!inp.trim()) return null;
+  const finalMsgs = [{ role: 'system', content: SUM_SYS }, { role: 'user', content: inp.slice(0, 30000) }];
+  for (const mid of ['flash', 'fast', 'm2']) {
+    const ac = new AbortController();
+    let out = '';
+    try {
+      for await (const tok of streamAnswer(finalMsgs, mid, 'balanced', () => {}, ac.signal)) {
+        out += tok;
+        if (out.length > 1500) { ac.abort(); break; }
+      }
+      out = out.trim();
+      if (out) return out.slice(0, 2000);
+    } catch (e) { if (ac.signal.aborted && out) return out.slice(0, 2000); }
+  }
+  throw new Error('সংক্ষেপণ ব্যর্থ');
+}
+async function ensureSummary(c, data) {
+  if (!c) return null;
+  const msgs = (c.messages || []).filter((m) => m.role !== 'system' && !(m.partial && !m.content));
+  if (msgs.length < 48) return c.summary ? c.summary.text : null;
+  const needUpTo = msgs.length - 24;
+  if (c.summary && c.summary.upTo && c.summary.upTo >= needUpTo - 8) return c.summary.text;
+  const from = (c.summary && c.summary.upTo) || 0;
+  const lines = msgs.slice(Math.max(0, from), needUpTo).map((m) => (m.role === 'user' ? 'প্রশ্ন: ' : 'উত্তর: ') + (typeof m.content === 'string' ? m.content : ''));
+  try {
+    const txt = await summarize(lines.slice(-60), c.summary ? c.summary.text : null);
+    if (txt) { c.summary = { text: txt, upTo: needUpTo, ts: Date.now() }; await kvSet('chats', data); return txt; }
+  } catch {}
+  return c.summary ? c.summary.text : null;
+}
+function parseSuggestions(ans) {
+  const m = /(?:\n|^)\[SUGGEST\]\s*\n((?:[-*] .*\n?)+)\s*$/.exec(ans);
+  if (!m) return { text: ans, list: null };
+  const list = m[1].split('\n').map((x) => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 3);
+  return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
+}
+const PING_BASE = { groq: 'https://api.groq.com/openai/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1' };
+async function pingOne(pid) {
+  const key = keyOf(pid); const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 4000);
+  const label = (MODELS.find((m) => m.pid === pid) || {}).label || pid;
+  try {
+    let r;
+    if (pid === 'gemini') r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`, { signal: ac.signal });
+    else if (pid === 'openrouter') r = await fetch(`${PING_BASE[pid]}/auth/key`, { headers: { Authorization: `Bearer ${key}` }, signal: ac.signal });
+    else r = await fetch(`${PING_BASE[pid]}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: ac.signal });
+    return { pid, label, ok: !!r.ok };
+  } catch { return { pid, label, ok: false }; }
+  finally { clearTimeout(t); }
+}
+async function pingProviders() {
+  const out = []; const seen = new Set();
+  for (const m of MODELS) {
+    if (seen.has(m.pid)) continue;
+    const key = keyOf(m.pid);
+    if (!key) continue;
+    seen.add(m.pid);
+    out.push(await pingOne(m.pid));
+  }
+  return out;
+}
 
 function pickChain(model, mode) {
   let list = MODELS;
@@ -163,7 +236,8 @@ async function handle(req) {
     // system
     if (method === 'GET' && path === '/api/system') {
       const n = MODELS.filter((m) => keyOf(m.pid)).length;
-      return json({ services: [
+      const providers = await pingProviders().catch(() => []);
+      return json({ providers, services: [
         { name: 'AI Providers', status: n ? n + ' সক্রিয়' : 'কোনো key নেই', dot: n ? 'ok' : 'err' },
         { name: 'API Server', status: 'Operational', dot: 'ok' },
         { name: 'Web Research', status: TAVILY_API_KEY ? 'Operational' : 'Setup needed', dot: TAVILY_API_KEY ? 'ok' : 'warn' },
@@ -347,7 +421,9 @@ async function handle(req) {
 
       const mem = await kvJson('memory', { enabled: true, notes: '' });
       msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
-      let finalMsgs = [{ role: 'system', content: SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
+      const summary = await ensureSummary(c, data);
+      const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '');
+      let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
 
       const emitQueue = [];
       let res; // হবে SSE Response
@@ -374,10 +450,12 @@ async function handle(req) {
               answer += tok; emit({ token: tok });
             }
             if (!answer) throw new Error('খালি');
+            const parsed = parseSuggestions(answer);
+            answer = parsed.text;
             const meta = { model: attempt?.model, provider: attempt?.pid, mode: body.mode || 'balanced', seconds: Math.round((Date.now() - t0) / 100) / 10, tokens: Math.ceil(answer.length / 4) };
             const ph = c.messages[c.messages.length - 1];
-            if (ph && ph.partial) { Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources }); }
-            else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources });
+            if (ph && ph.partial) { Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources, suggestions: parsed.list }); }
+            else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources, suggestions: parsed.list });
             c.updatedAt = Date.now();
             await kvSet('chats', data);
             const u = await kvJson('usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} });
@@ -386,7 +464,7 @@ async function handle(req) {
             u.byModel[k] = u.byModel[k] || { requests: 0, tokens: 0 };
             u.byModel[k].requests += 1; u.byModel[k].tokens += meta.tokens;
             await kvSet('usage', u);
-            emit({ done: true, id: c.id, meta, sources });
+            emit({ done: true, id: c.id, meta, sources, suggestions: parsed.list });
           } catch (e) {
             /* partial-stream persistence: যতটুকু এসেছে তা সেভ করো */
             try {

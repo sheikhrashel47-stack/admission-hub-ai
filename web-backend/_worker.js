@@ -6,7 +6,14 @@
 const SYSTEM = `তুমি "ADMISSION HUB AI" — Admission Hub-এর জন্য বানানো একটি প্রিমিয়াম প্রাইভেট AI Assistant।
 ভাষা: সহজ বাংলা (প্রয়োজনে ইংরেজি)। সবসময় সংক্ষিপ্ত, পরিষ্কার, গঠনমূলক উত্তর — দরকার হলে বুলেট/টেবিল/কোড ব্লক।
 শুধু সত্য তথ্য দেবে; যা জানো না সেটা সৎভাবে বলবে। সাইটেশন [1] ফরম্যাটে দিলে সেগুলো সোর্স তালিকায় মিলবে।
-তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।`;
+তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।
+
+উত্তর-শৈলী (সবসময়): প্রচলিত সহজ বাংলায় সরাসরি উত্তর — অপ্রয়োজনীয় ভূমিকা/ভণিতা নয়; দরকার হলে **বোল্ড** টার্ম, টেবিল, বুলেট; সংখ্যা/তারিখ স্পষ্ট; যা নিশ্চিত নও তা সততার সাথে বলো।
+যদি উপযুক্ত হয়, উত্তরের একদম শেষে ২–৩টি ফলো-আপ প্রশ্ন দিতে পারো — ঠিক এই ফরম্যাটে, এর বাইরে আর কিছু নয়:
+
+[SUGGEST]
+- প্রশ্ন ১
+- প্রশ্ন ২`;
 
 const MODELS = [
   { pid: 'groq', id: 'fast', label: 'Groq · GPT-OSS-120B', model: 'openai/gpt-oss-120b', speed: 3, quality: 4, coding: 5 },
@@ -154,6 +161,66 @@ async function* streamAnswer(keys, messages, model, mode, emit, signal, images) 
 }
 
 async function searchWeb(key, query, max = 5) {
+
+const SUM_SYS = `তুমি একটি চ্যাট-সংক্ষেপক। নিচের কথোপকথনের গুরুত্বপূর্ণ তথ্য, সিদ্ধান্ত, ব্যবহারকারীর পছন্দ, নাম/সংখ্যা ও উল্লেখযোগ্য বিষয়গুলো বাংলায় সংক্ষিপ্ত বুলেটে নোট করো (সর্বোচ্চ ~৪০০ শব্দ)। শুধু সারাংশ লিখো — কোনো ভূমিকা, শিরোনাম বা মন্তব্য নয়।`;
+async function summarize(keys, lines, prev) {
+  const inp = (prev ? 'পুরোনো সারাংশ:' + NN + prev + NN : '') + lines.join(NL);
+  if (!inp.trim()) return null;
+  const finalMsgs = [{ role: 'system', content: SUM_SYS }, { role: 'user', content: inp.slice(0, 30000) }];
+  for (const mid of ['flash', 'fast', 'm2']) {
+    const ac = new AbortController();
+    let out = '';
+    try {
+      for await (const tok of streamAnswer(keys, finalMsgs, mid, 'balanced', () => {}, ac.signal, false)) {
+        out += tok;
+        if (out.length > 1500) { ac.abort(); break; }
+      }
+      out = out.trim();
+      if (out) return out.slice(0, 2000);
+    } catch (e) { if (ac.signal.aborted && out) return out.slice(0, 2000); }
+  }
+  throw new Error('সংক্ষেপণ ব্যর্থ');
+}
+async function ensureSummary(env, c, data) {
+  if (!c) return null;
+  const msgs = (c.messages || []).filter((m) => m.role !== 'system' && !(m.partial && !m.content));
+  if (msgs.length < 48) return c.summary ? c.summary.text : null;
+  const needUpTo = msgs.length - 24;
+  if (c.summary && c.summary.upTo && c.summary.upTo >= needUpTo - 8) return c.summary.text;
+  const from = (c.summary && c.summary.upTo) || 0;
+  const lines = msgs.slice(Math.max(0, from), needUpTo).map((m) => (m.role === 'user' ? 'প্রশ্ন: ' : 'উত্তর: ') + (typeof m.content === 'string' ? m.content : ''));
+  try {
+    const txt = await summarize(keys, lines.slice(-60), c.summary ? c.summary.text : null);
+    if (txt) { c.summary = { text: txt, upTo: needUpTo, ts: Date.now() }; await kvSet(env, 'chats', data); return txt; }
+  } catch {}
+  return c.summary ? c.summary.text : null;
+}
+function parseSuggestions(ans) {
+  const m = /(?:\n|^)\[SUGGEST\]\s*\n((?:[-*] .*\n?)+)\s*$/.exec(ans);
+  if (!m) return { text: ans, list: null };
+  const list = m[1].split(NL).map((x) => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 3);
+  return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
+}
+const PING_BASE = { groq: 'https://api.groq.com/openai/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1' };
+async function pingProviders(keys) {
+  const out = []; const seen = new Set();
+  for (const m of MODELS) {
+    if (seen.has(m.pid)) continue;
+    const key = keys[KEYMAP[m.pid]];
+    if (!key) continue;
+    seen.add(m.pid);
+    const ac = new AbortController(); const t = setTimeout(() => ac.abort(), 4000);
+    try {
+      let r;
+      if (m.pid === 'gemini') r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`, { signal: ac.signal });
+      else if (m.pid === 'openrouter') r = await fetch(`${PING_BASE[m.pid]}/auth/key`, { headers: { Authorization: `Bearer ${key}` }, signal: ac.signal });
+      else r = await fetch(`${PING_BASE[m.pid]}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: ac.signal });
+      out.push({ pid: m.pid, label: m.label, ok: !!r.ok });
+    } catch { out.push({ pid: m.pid, label: m.label, ok: false }); }
+    finally { clearTimeout(t); }
+  }
+  return out;
+}
   const r = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: key, query, max_results: max }) });
   if (!r.ok) throw new Error('সার্চ ব্যর্থ');
   const j = await r.json();
@@ -178,7 +245,9 @@ export default {
 
     if (method === 'GET' && path === '/api/system') {
       const n = MODELS.filter((m) => keys[KEYMAP[m.pid]]).length;
+      const providers = await pingProviders(keys).catch(() => []);
       return json({
+        providers,
         services: [
           { name: 'AI Providers', status: n ? n + ' সক্রিয়' : 'কোনো key নেই', dot: n ? 'ok' : 'err' },
           { name: 'API Server', status: 'Operational', dot: 'ok' },
@@ -354,7 +423,9 @@ export default {
 
       msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
-      let finalMsgs = [{ role: 'system', content: SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
+      const summary = await ensureSummary(env, c, data);
+      const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '');
+      let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
       if (body.media && body.media.length) {
         const lastU = finalMsgs[finalMsgs.length - 1];
         if (lastU.role === 'user') {
@@ -405,10 +476,13 @@ export default {
               answer += tok; emit({ token: tok });
             }
             if (!answer) throw new Error('খালি');
+            const parsed = parseSuggestions(answer);
+            answer = parsed.text;
             const meta = { model: attempt?.model, provider: attempt?.pid, mode: body.mode || 'balanced', seconds: Math.round((Date.now() - t0) / 100) / 10, tokens: Math.ceil(answer.length / 4) };
+            const srcs2 = body.web ? (await kvGet(env, 'lastSources', [])) : [];
             const ph = c.messages[c.messages.length - 1];
-            if (ph && ph.partial) Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: body.web ? (await kvGet(env, 'lastSources', [])) : [] });
-            else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: body.web ? (await kvGet(env, 'lastSources', [])) : [] });
+            if (ph && ph.partial) Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: srcs2, suggestions: parsed.list });
+            else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: srcs2, suggestions: parsed.list });
             c.updatedAt = Date.now();
             await kvSet(env, 'chats', data);
             const u = await kvGet(env, 'usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} });
@@ -417,7 +491,7 @@ export default {
             u.byModel[kk] = u.byModel[kk] || { requests: 0, tokens: 0 };
             u.byModel[kk].requests += 1; u.byModel[kk].tokens += meta.tokens;
             await kvSet(env, 'usage', u);
-            emit({ done: true, id: c.id, meta });
+            emit({ done: true, id: c.id, meta, sources: body.web ? (await kvGet(env, 'lastSources', [])) : [], suggestions: parsed.list });
           } catch (e) {
             try {
               if (answer && answer.trim()) {
