@@ -156,6 +156,9 @@ svg{width:20px;height:20px;display:block}
 .att span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .att button{color:var(--green-d);font-size:12px;padding:0 2px}
 .att.img img{width:26px;height:26px;border-radius:6px;object-fit:cover}
+.att.pending{background:var(--green-t);border-color:rgba(22,163,74,.4);color:var(--green-d)}
+.spn{width:14px;height:14px;flex:none;animation:spn .8s linear infinite}
+@keyframes spn{to{transform:rotate(360deg)}}
 #inp{width:100%;background:none;border:0;outline:0;color:var(--txt);font-size:15.5px;line-height:1.45;resize:none;max-height:120px;min-height:24px;padding:7px 8px}
 #inp::placeholder{color:var(--dim2)}
 .send{width:38px;height:38px;border-radius:50%;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(22,163,74,.35);flex:none}
@@ -1066,13 +1069,14 @@ function saveDraft(){clearTimeout(draftT);draftT=setTimeout(()=>{try{localStorag
 function restoreDraft(){try{const v=localStorage.getItem('ahai-draft:'+(curId||'new'))||'';if(v){inp.value=v;autoGrow()}}catch{}}
 function clearDraft(){try{localStorage.removeItem('ahai-draft:'+(curId||'new')||'new')}catch{}}
 inp.addEventListener('input',saveDraft);
-function send(){const q=inp.value.trim();if(!q)return;inp.value='';autoGrow();saveDraft();clearDraft();go(q)}
+function send(){if(attPending){toast('⏳ ফাইল/ছবি আপলোড শেষ হচ্ছে — একটু পরে পাঠাও');return}const q=inp.value.trim();if(!q)return;inp.value='';autoGrow();saveDraft();clearDraft();go(q)}
 sendBtn.onclick=send;
 stopBtn.onclick=()=>{if(abort)abort.abort();toast('⏸ থামানো হয়েছে')};
 
 /* attach — ফাইল (txt/কোড/CSV + PDF) ও ছবি (গ্যালারি/ক্যামেরা) */
 let attachments=[];
 let imgAttachments=[];
+let attPending=null; // আপলোড চলাকালীন স্পিনার চিপের লেখা
 const TEXT_EXT=['txt','md','csv','json','html','htm','css','js','mjs','ts','tsx','jsx','xml','yml','yaml','sh','sql','py','env'];
 const BIN_EXT=['pdf'];
 const MAX_TEXT=2*1024*1024;   // টেক্সট ফাইল: ২MB
@@ -1103,18 +1107,23 @@ fileInput.accept='.txt,.md,.csv,.json,.html,.htm,.css,.js,.mjs,.ts,.tsx,.jsx,.xm
 fileInput.style.display='none';document.body.appendChild(fileInput);
 fileInput.onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(attPending)return;
   const ext=(f.name.split('.').pop()||'').toLowerCase();
+  const isPdf=BIN_EXT.includes(ext)||f.type==='application/pdf';
+  attPending=(isPdf?'PDF প্রস্তুত হচ্ছে… '+f.name.slice(0,16):'ফাইল আপলোড হচ্ছে… '+f.name.slice(0,16));renderAtts();
   try{
     let meta;
-    if(BIN_EXT.includes(ext)||f.type==='application/pdf'){
+    if(isPdf){
       if(f.size>MAX_BIN)throw new Error('PDF সর্বোচ্চ ১০MB — এটি '+Math.round(f.size/1048576)+'MB');
       const dataUrl=await readAsDataURL(f);
       const comma=dataUrl.indexOf(',');
       const mime=(dataUrl.slice(5,dataUrl.indexOf(';'))||'application/pdf');
+      attPending='PDF সার্ভারে পাঠানো হচ্ছে…';renderAtts();
       meta=await api('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,b64:dataUrl.slice(comma+1),mime})});
     }else if(TEXT_EXT.includes(ext)){
       const txt=await f.text();
       if(txt.length>MAX_TEXT)throw new Error('টেক্সট ফাইল সর্বোচ্চ ২MB');
+      attPending='ফাইল সার্ভারে পাঠানো হচ্ছে…';renderAtts();
       meta=await api('/api/files',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:f.name,content:txt})});
     }else{
       throw new Error('এই ফরম্যাট সাপোর্ট নেই — PDF, TXT, CSV, JSON বা কোড ফাইল দাও');
@@ -1122,6 +1131,7 @@ fileInput.onchange=async e=>{
     attachments.push(meta);renderAtts();
     toast('📎 "'+f.name+'" সংযুক্ত হয়েছে');
   }catch(err){toast('⚠️ '+err.message)}
+  finally{attPending=null;renderAtts()}
 };
 /* ছবি পিকার — সিস্টেম চুজার নিজেই গ্যালারি + ক্যামেরা দুটোই দেয় (capture ফোর্স করলে Android-এ শুধু ক্যামেরা খুলত) */
 const imgInput=document.createElement('input');imgInput.type='file';
@@ -1129,17 +1139,24 @@ imgInput.accept='image/*';
 imgInput.style.display='none';document.body.appendChild(imgInput);
 imgInput.onchange=async e=>{
   const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(attPending)return;
   if(!/^image\//.test(f.type)){toast('⚠️ এটি ছবি নয়');return}
+  attPending='ছবি প্রস্তুত হচ্ছে…';renderAtts();
   try{
-    toast('🖼️ ছবি প্রস্তুত হচ্ছে…');
     const dataUrl=await downscaleImage(f);
     if(dataUrl.length>MAX_IMG_B64)throw new Error('ছবিটি অনেক বড় — ছোট করে আবার চেষ্টা করো');
     imgAttachments.push(dataUrl);renderAtts();
     toast('🖼️ ছবি সংযুক্ত হয়েছে');
   }catch(err){toast('⚠️ '+err.message)}
+  finally{attPending=null;renderAtts()}
 };
 function renderAtts(){
   const box=$('#attachRow');box.innerHTML='';
+  if(attPending){
+    const d=document.createElement('div');d.className='att pending';
+    d.innerHTML='<svg class="spn" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg><span>'+esc(attPending)+'</span>';
+    box.appendChild(d);
+  }
   attachments.forEach((a,i)=>{
     const d=document.createElement('div');d.className='att';
     const ic=(a.type==='binary'||a.mime==='application/pdf')?'📕':'📄';
