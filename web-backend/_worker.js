@@ -422,10 +422,13 @@ let _buCache = null;
 async function buKeys(env) {
   const now = Date.now();
   if (_buCache && now - _buCache.ts < 120000) return _buCache.list;
-  const list = [];
-  for (let i = 1; i <= 15; i++) { const v = await env.AH_KV.get('cfg:BROWSER_USE_API_KEY_' + i); if (v) list.push({ i, key: v }); }
-  _buCache = { ts: now, list };
-  return list;
+  const list = []; const seen = new Set();
+  const add = (i, v) => { if (v && !seen.has(v)) { seen.add(v); list.push({ i, key: v }); } };
+  for (let i = 1; i <= 15; i++) { try { add(i, env['BU_KEY_' + i]); } catch {} }
+  for (let i = 1; i <= 15; i++) { try { const v = await env.AH_KV.get('cfg:BROWSER_USE_API_KEY_' + i); if (v) add(100 + i, v); } catch {} }
+  list.sort((a, b) => a.i - b.i);
+  _buCache = { ts: now, list: list.slice(0, 15) };
+  return _buCache.list;
 }
 async function buCall(env, path, opts = {}) {
   const ks = await buKeys(env);
@@ -471,8 +474,8 @@ async function runAgentTool(env, keys, tool, args, emit) {
   if (tool === 'bu.status') { const r = await buCall(env, '/api/v2/tasks/' + args.taskId); return { status: r.j.status, result: String(r.j.result || r.j.output || '').slice(0, 1500) }; }
   if (tool === 'bu.health') {
     const ks = await buKeys(env); const out = [];
-    for (const k of ks) { try { const ac2 = new AbortController(); const to2 = setTimeout(() => ac2.abort(), 10000); const r = await fetch('https://api.browser-use.com/api/v2/tasks?pageSize=1', { signal: ac2.signal, headers: { 'X-Browser-Use-API-Key': k.key } }).finally(() => clearTimeout(to2)); out.push({ key: k.i, ok: r.ok, status: r.status }); } catch { out.push({ key: k.i, ok: false, error: 'timeout/network' }); } }
-    return { keys: out, note: 'balance দেখার API নেই — 401/402 এলে ওই key মৃত ধরে পরেরটা ব্যবহার হবে' };
+    for (const k of ks.slice(0, 3)) { try { const ac2 = new AbortController(); const to2 = setTimeout(() => ac2.abort(), 7000); const r = await fetch('https://api.browser-use.com/api/v2/tasks?pageSize=1', { signal: ac2.signal, headers: { 'X-Browser-Use-API-Key': k.key } }).finally(() => clearTimeout(to2)); out.push({ key: k.i, ok: r.ok, status: r.status }); if (r.ok) break; } catch (e) { out.push({ key: k.i, ok: false, error: 'timeout/network' }); out.push({ note: 'CF worker থেকে BU API পৌঁছানো যাচ্ছে না — web.eye (thum.io+vision) ব্যবহার করুন' }); break; } }
+    return { totalKeys: ks.length, keys: out, note: 'balance দেখার API নেই — 401/402 এলে ওই key মৃত ধরে পরেরটা ব্যবহার হবে' };
   }
   if (tool === 'verify.url') {
     const r = await fetch(args.url, { method: args.method || 'GET' });
