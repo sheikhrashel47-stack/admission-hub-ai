@@ -8,6 +8,16 @@
 2. **Performance (হাজার হাজার লাইন + দীর্ঘ সময়):** সৎ বাস্তবতা — এক model call-এ ~৩০০-৮০০ লাইন; একটানা এক run সীমিত (Worker time limit)। সমাধান = **bounded chunk → checkpoint → cron/queue resume** → ঘণ্টার পর ঘণ্টা কাজ, এক task-এ কয়েক হাজার লাইন। ৫০০০+ লাইন output UI-তে = chunked/virtual rendering (P4#217)। → Phase 1.5, 5, 10।
 3. **Owner না থাকলেও নিজে কাজ (সবচেয়ে গুরুত্বপূর্ণ):** away-mode = job queue + cron worker + Telegram report + **pre-approved mission policy**। প্রমাণ ইতিমধ্যে আছে: watchman রাত ৩টায় (BD) নিজে চলে। সীমা: production deploy approval-gated থাকবে, নাহলে mission pre-approve করা থাকতে হবে। → Phase 8 (দ্রুততম পথ: 8.1+8.2+8.4 fast-track করা যেতে পারে)।
 
+## 🖥️ JUZU-এর কম্পিউটার (ফ্রি, কার্ড লাগে না) — ২০২৬-০৯-০৪ থেকে লাইভ
+| মেশিন | কী | ক্ষমতা | প্রমাণ |
+|---|---|---|---|
+| **JUJU-PC1** | GitHub Actions Linux VM (`.github/workflows/juju-pc1.yml`) | 4 core / 15GB RAM / 145GB disk / Node 22 + Python 3.12 + git; public repo = unlimited minutes | run 33759486505 success; artifact `juju-out.txt` |
+| **JUJU-PC2** | Cloudflare Workers (admission-hub-ai.pages.dev) | ২৪/৭ জেগে থাকা সার্ভার — agent brain, memory, scheduler, watchman | /api/health ok |
+| **JUJU-PC3** | Cloud Chrome (Browserless + thum.io) | আসল ব্রাউজার — click/type/screenshot/DOM = চোখ+হাত | screenshot QA (qa-mobile.png) |
+- PC1 চালানোর নিয়ম: `POST /repos/{owner}/{repo}/actions/workflows/juju-pc1.yml/dispatches {"ref":"main","inputs":{"cmd":"..."}}` অথবা repository_dispatch `juju-pc1`; ফল = artifact `juju-out` (7 দিন থাকে)।
+- PC1-এ একসাথে একাধিক job চলে → Phase 9-এর swarm/parallel-এর ভিত্তি।
+- নিরাপত্তা: dispatch-এ PAT লাগে (server-side); Phase 5-এ Safe Command Gateway (safe/unknown/destructive/dangerous) যোগ হবে। Phase 5.2-এ agent.shell টুল এই PC1-কেই ব্যবহার করবে।
+
 ## 📚 Blueprint ফাইল ম্যাপ
 | ফাইল | কী আছে |
 |---|---|
@@ -38,7 +48,7 @@
 - [x] 1.4 **Diff view UI** (diff-result এলে green/red/hunk রেন্ডার) — (2026-09-04, c074c7d)
 - [x] 1.5 **Code workspace**: প্রতি codeBox-এ ⛶ → fullscreen overlay + copy — (2026-09-04, c074c7d)
 - [x] 1.6 **Task panel** (`#sTasks`): list + status + ↻রিজিউম (server checkpoint) + 🔁নতুন করে; live stop card-এ — (2026-09-04, c074c7d)
-- [ ] 1.7 Streaming markdown polish + zero-waste layout (P4#213-215) 🟡 আংশিক — wsCard layout tight; streaming renderer পরের ধাপে
+- [x] 1.7 Streaming markdown polish + zero-waste layout — mdLive(): streaming-এ খোলা code-fence/bold নিজে বন্ধ করে (ভাঙা block/flicker নেই) + pre/table scroll rules — (2026-09-04, a07a705)
 - [x] 1.8 **Message/task search** (টাস্ক প্যানেলে 🔍 — task + বর্তমান conversation, jump+flash) — (2026-09-04, c074c7d)
 - [x] 1.9 Mobile-first QA — browserless 375x812 + 1280x800 screenshot: overflow/clipping নেই (qa-mobile.png, qa-desktop.png) — (2026-09-04)
 - [x] 1.10 Deploy → gh-pages `e8ae045` → live verify (HTTP 200, wsCard marker, sw v10) — (2026-09-04)
@@ -151,6 +161,7 @@
 
 ## 📈 Status Legend ও Reporting নিয়ম (ভবিষ্যৎ agent-এর জন্য)
 - প্রতি ধাপ শেষে: `[x]` + `(2026-MM-DD, commit abc1234)` লিখে commit করতে হবে।
+- **COMPLETE ঘোষণার নিয়ম (owner-নির্দেশ, 2026-09-04):** phase-এর ১০/১০ ধাপ `[x]` না হলে "COMPLETE" বলা যাবে না; আংশিক হলে বলতে হবে "PHASE X — n/10, বাকি: …"।
 - Phase শেষে owner-কে বলতে হবে: **"PHASE X COMPLETE — WAITING FOR OWNER APPROVAL"** — approval ছাড়া পরের phase নয়।
 - ধাপ আটকে গেলে: সৎ partial report (কী হয়েছে / কী বাকি / কেন আটকেছে / বিকল্প কী)।
 - **বর্তমান অবস্থা (2026-09-04):** Phase 1-10 সব pending। আগে থেকে live: D1 storage, 3-vault backup, 8-model router+fallback, web read/search/eye, watchman cron, approval gate, streaming chat, rollback reflex — এগুলো সংশ্লিষ্ট phase-এর ধাপে ভিত্তি হিসেবে কাজে লাগবে (বিস্তারিত: `docs/BLUEPRINT-AUDIT-143.md`)।
