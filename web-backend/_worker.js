@@ -105,7 +105,9 @@ function bytesToB64(u) { let s = ''; for (let i = 0; i < u.length; i += 8192) s 
 async function filebPut(env, id, b64) {
   if (env.AH_R2) { try { await env.AH_R2.put('fileb:' + id, b64ToBytes(b64)); return 'r2'; } catch {} }
   const ok = await env.AH_KV.put('fileb:' + id, b64).then(() => true).catch(() => false);
-  return ok ? 'kv' : null;
+  if (ok) return 'kv';
+  if (b64.length <= 3.5 * 1024 * 1024 && (await storePut(env, 'fileb:' + id, b64))) return 'd1'; // শেষ জাল: ছবি হারাবে না
+  return null;
 }
 async function filebGet(env, id) {
   if (env.AH_R2) { try { const o = await env.AH_R2.get('fileb:' + id); if (o) return bytesToB64(new Uint8Array(await o.arrayBuffer())); } catch {} }
