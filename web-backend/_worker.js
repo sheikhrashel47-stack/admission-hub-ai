@@ -515,7 +515,7 @@ async function chatToolLoop(keys, env, msg, imode, intent) {
   if (/^(hi|hello|hey|সালাম|হাই|হ্যালো|কেমন আছো|শুভ|thanks|ধন্যবাদ)/i.test(t)) return null;
   const um = t.match(/https?:\/\/\S+/);
   const plan = [];
-  const ghOk = !imode || imode === 'auto' || imode === 'coding' || imode === 'agent' || imode === 'mission';
+  const ghOk = !imode || imode !== 'chat';
   const webOk = !imode || imode === 'auto' || imode === 'research' || imode === 'agent' || imode === 'mission';
   if (ghOk && /(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
   if (webOk && um && /(পড়ো|read|খোলো|সাইট|site|website|page|লিংক|link)/i.test(t)) plan.push({ tool: 'web.read', args: { url: um[0] } });
@@ -1139,7 +1139,7 @@ export default {
       const intent = classifyIntent(imsg);
       const stChat = await storeGetJson(env, 'ctx:state:' + (chatId || ''), null);
       const stPrev = stChat || (await storeGetJson(env, 'ctx:state', null));
-      const imode = (body.imode && MODE_SYS[body.imode]) ? body.imode : ((stPrev && stPrev.mode) || 'auto');
+      const imode = (body.imode && MODE_SYS[body.imode]) ? body.imode : ((stChat && stChat.mode) || 'auto');
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
       const lt = await storeGetJson(env, 'ctx:lasttask', null);
       const summary = await ensureSummary(keys, env, c, data);
