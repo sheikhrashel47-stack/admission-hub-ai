@@ -48,8 +48,10 @@
 - ✅ `main` এখন লাইভ সাইটের সাথে **হুবহু মিলে যায়** (`main/web/index.html` == gh-pages `index.html`, ১৬২৩ লাইন)
 - ✅ দুইটা ঝুলন্ত ব্রাঞ্চ মার্জ হয়েছে: `arena/01a06399` (Phase 1 polish — আগে gh-pages-এ ডিপ্লয়ড ছিল কিন্তু main-এ মার্জ হয়নি) ও `arena/01a0640f` (৪ নতুন provider + `FALLBACK_ORDER`)
 - ⚠️ **নিয়ম:** নতুন কাজ সবসময় `main`-এর `web/` থেকে শুরু করে `gh-pages`-এ ডিপ্লয় করো। কখনো `gh-pages` থেকে উল্টো দিকে না — নইলে আবার drift হবে
-- ⬜ **বাকি:** `arena/01a0640f`-এর নতুন provider চেইন CF Pages backend-এ **ডিপ্লয় করা** (Cloudflare API token দরকার — আগেরটা `401 Invalid API Token`)
-- ⬜ **বাকি:** নতুন ৪ provider-এর API key KV `cfg:*`-তে বসানো (key না বসালে সেগুলো config-এ দেখাবে না — বিদ্যমান নিরাপদ আচরণ)
+- ✅ **ডিপ্লয় সম্পন্ন (২০২৬-০৯-০৩):** নতুন ৯-provider worker production-এ লাইভ — CF Pages deployment `4b7dad11` (gh-pages `8180e53`), status success। প্রমাণ: লাইভ `/api/config`-এ `Cerebras · Llama 3.3 70B` দেখছে (পুরনো worker-এ এই মডেল ছিল না)। chat E2E ✅ (৩×৭ → ২১)
+- ✅ লাইভ fallback chain এখন: **groq → cerebras → gemini → mistral** (KV-তে এই ৪টার key আছে)। বাকি ৫ provider (sambanova/deepinfra/together/openrouter/huggingface) key বসালেই অটো যুক্ত হবে — key না থাকলে config-এ দেখায় না (নিরাপদ আচরণ)
+- ✅ **Deploy pipeline এখন জানা ও প্রমাণিত:** `main`-এ কাজ করো → `gh-pages`-এ sync push করো → CF Pages **অটো** production deploy (production_branch=`gh-pages`, destination_dir=`web-backend`)। Preview deployment-ও অটো হয় (প্রতি branch-এ) — production ছোঁয়ার আগে preview URL-এ টেস্ট করা যায়
+- ✅ Rollback প্রমাণিত পথ: CF API `POST /pages/projects/admission-hub-ai/deployments/{id}/rollback` (পূর্বের good deployment: `6625ac05`)
 - ⬜ **ঝুঁকি:** backend কোড ৩ কপি (`server.mjs` / `worker.mjs` / `web-backend/_worker.js`) — হাতে sync করতে হয়; ভবিষ্যতে এক উৎসে আনা উচিত
 - ⬜ **নেই:** `.github/workflows` — কোনো CI/CD নেই, সব ম্যানুয়াল (Phase 8)
 
