@@ -28,20 +28,20 @@
 
 | Phase | নাম | অবস্থা | যা আছে (বাস্তব) / যা বাকি |
 |---|---|---|---|
-| **1** | Premium Chat UI | ✅ **সম্পূর্ণ (ডিপ্লয়ড)** | চ্যাট/কম্পোজার/+ মেনু/⋮ মেনু/long-press/markdown+code/মডেল সিলেক্টর/থিম/কীবোর্ড/loading-error/ছবি-ফাইল UI+আপলোড স্পিনার/virtualized windowed history/**jump-to-latest/loading skeleton/offline-reconnect banner/tool-executing ("এজেন্ট ফাইল/ছবি বিশ্লেষণ করছে") state/reply-quote/archive/desktop responsive (≥760px)**। **বাকি:** শুধু ১০k-message full virtualization |
-| **2** | AI Core + Router | ✅ **~৯০%** | Multi-provider **৯টি** (Groq/Cerebras/SambaNova/Gemini/Mistral/DeepInfra/Together/OpenRouter/HuggingFace) + **explicit `FALLBACK_ORDER` চেইন** (key থাকলেই অটো যুক্ত), SSE streaming, context (tail ২৪ + summary compaction), retry/regenerate, provider health ping, vision+PDF → Gemini রাউটিং। **বাকি:** model registry-তে full capability metadata, health engine (latency/success/quota), semantic memory, token budget manager, tool-aware trimming, durable task runtime, parallel execution |
-| **3** | Universal Tool System | 🟡 **~৪০% (ফিক্সড-ফ্লো)** | ✅ web search (Tavily), file read/write/analyze, chat/project search, Google Drive backup। ❌ model-driven tool-calling loop, code execution/shell, GitHub ops, Cloudflare/Supabase/Gmail/Telegram/Browser tools |
-| **4** | Autonomous Agent Engine | ⬜ **শুরু হয়নি** | `features.agent:false`; plan→tools→execute→verify লুপ নেই |
-| **4.5** | Multi-Agent Workforce | ⬜ | — |
-| **5** | Project Brain | 🟡 আংশিক | user memory + docs আছে; living project-graph/knowledge নেই |
-| **6** | Owner Security | ⬜ প্রায় শূন্য | শুধু “key server-side”; auth/passkey/vault/audit নেই |
-| **7** | Ecosystem Integration | 🟡 আংশিক | Cloudflare + AI providers + GitHub Pages + Drive লাইভ; Supabase/Gmail/Telegram/Browser বাকি |
-| **8** | Dev + Deploy Automation | 🟡 ম্যানুয়াল | হাতে push/deploy; agent automation/rollback/preview নেই |
-| **8.5** | High-Performance Engine | ⬜ | — |
-| **9** | Continuity + History | 🟡 আংশিক | chat history + usage log আছে; agent task timeline/checkpoint নেই |
-| **10** | Full QA + Production | ⬜ | — |
+| **1** | Premium Chat UI | ✅ **সম্পূর্ণ** | সব UI lock; বাকি শুধু ১০k-message full virtualization |
+| **2** | AI Core + Router | ✅ ~৯৫% | ৮ provider (৭ লাইভ), fallback chain, SSE, vision+PDF routing, summary compaction |
+| **3** | Universal Tool System | ✅ ~৮৫% | model-driven ReAct tool loop লাইভ (/api/agent); tool bus: gh/cf/web.eye/bu/review/deploy/verify; বাকি: code execution (WebContainers) |
+| **4** | Autonomous Agent Engine | ✅ **সম্পূর্ণ (২০৬-০৯-০৩)** | ReAct loop + reviewer gate + rollback reflex + checkpoint/resume + watchman cron + চোখ (thum.io+Gemini vision) + হাত (Browser Use, ১১ key rotation) + PWA Agent Control UI (unlock/switch/approval/live cards) |
+| **4.5** | Multi-Agent Workforce | ⬜ বাকি | deferred |
+| **5** | Project Brain | 🟡 ~৫০% | user memory + স্মৃতি UI আছে; বাকি: codebase index/vector search |
+| **6** | Owner Security | ✅ ~৮৫% | owner code gate + session (KV+stateless HMAC fallback) + keys শুধু server-side + destructive gate; বাকি: passkey, audit log |
+| **7** | Ecosystem | ✅ ~৮০% | CF+GitHub+Drive+Telegram+Internet Archive লাইভ; বাকি: Supabase/Gmail |
+| **8** | Dev + Deploy Automation | 🟡 ~৭০% | agent deploy.ghpages + rollback প্রমাণিত; ম্যানুয়াল pipeline জানা; বাকি: GitHub Actions CI/CD |
+| **8.5** | High-Performance Engine | ⬜ বাকি | deferred (parallel/long jobs) |
+| **9** | Continuity + History | ✅ ~৯০% | history+usage+checkpoints+watch log + **৩-vault encrypted nightly backup (Drive+Telegram+IA), restore প্রমাণিত** |
+| **10** | Full QA + Production | ⬜ বাকি | self-test suite, load/QA, final hardening |
 
-**এক লাইনে:** Phase 1 শেষ, Phase 2 feature-complete (advanced অংশ বাকি) → দাঁড়িয়ে আছে **Phase 3 (model-driven tool loop)**-এর দরজায়, যেটা Phase 4 Agent-এর ভিত্তি।
+**এক লাইনে (২০২৬-০৯-০৪):** Phase 1-4 সম্পূর্ণ + স্টোরেজ সাম্রাজ্য (D1+vaults) লাইভ → বাকি: **4.5, 5(index), 8(CI/CD), 8.5, 10(QA)**; deferred power-ups: WebContainers, Vectorize, skills, council, parallel, cost ledger।
 
 ### 🔧 Git/Deploy sync অবস্থা (২০২৬-০৯-০৩)
 
