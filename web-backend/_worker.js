@@ -481,7 +481,7 @@ const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
-  if(/^(hi|hello|hey|yo|sup|সালাম|আসসালামু|আসসারালামু|হাই|হ্যালো|হেই|শুভ (সকাল|সন্ধ্যা|রাত্রি|দুপুর)|good (morning|evening|night)|কেমন আছো|কি খবর|কী খবর|thanks|ধন্যবাদ|thx)[\s!,.?্।…]*$/i.test(low)) return 'greeting';
+  if(/^(hi|hello|hey|yo|sup|হাই|হ্যালো|হেই|শুভ (সকাল|সন্ধ্যা|রাত্রি|দুপুর)|good (morning|evening|night)|কেমন আছো|কি খবর|কী খবর|thanks|ধন্যবাদ|thx|(আসসালামু|আসসারালামু|সালামু|সালাম)( আলাইকুম| ওয়ালাইকুম)?)[\s!,.?্।…]*$/i.test(low)) return 'greeting';
   if(/(মুছে|delete|drop table|force[- ]push|history rewrite|rewrite history|revoke|purge|ব্যান|রিভোক|format c)/i.test(low)) return 'critical';
   if(/```/.test(s)) return 'coding';
   if(/(কোড|\bcode\b|html|css|javascript|\bjs\b|python|sql|regex|function|bug|ডিবাগ|debug|compile|script|ওয়েবসাইট|website|webpage|অ্যাপ|app|পেজ|page)/i.test(low) && /(বানাও|বানিয়ে|লিখ|দাও|fix|ঠিক|refactor|optimize|debug|সরাও|যোগ)/i.test(low)) return 'coding';
@@ -1137,7 +1137,8 @@ export default {
       msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
       const imsg = mRe ? String(msgs[msgs.length-2] && msgs[msgs.length-2].content || '') : String(body.message || '');
       const intent = classifyIntent(imsg);
-      const stPrev = (await storeGetJson(env, 'ctx:state:' + (chatId || ''), null)) || (await storeGetJson(env, 'ctx:state', null));
+      const stChat = await storeGetJson(env, 'ctx:state:' + (chatId || ''), null);
+      const stPrev = stChat || (await storeGetJson(env, 'ctx:state', null));
       const imode = (body.imode && MODE_SYS[body.imode]) ? body.imode : ((stPrev && stPrev.mode) || 'auto');
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
       const lt = await storeGetJson(env, 'ctx:lasttask', null);
@@ -1150,7 +1151,7 @@ export default {
       else if (/আপনি/.test(imsg)) sysAdd += '\n[TONE: সম্মানসূচক আপনি]';
       const ctxTopic = (stPrev && stPrev.topic) || (lt && lt.task) || '';
       if (PRON_RE.test(imsg) && ctxTopic) sysAdd += '\n[PRONOUN] user-এর "ওটা/এটা/it" = "' + String(ctxTopic).slice(0, 200) + '" — এই প্রসঙ্গে মিলিয়ে উত্তর দাও।';
-      if ((intent === 'instruction' || intent === 'critical') && PRON_RE.test(imsg) && !ctxTopic) sysAdd += '\n[RULE:clarify] নির্দেশ অস্পষ্ট — কোনো কাজ/টুল না করে শুধু একটা পরিষ্কার বাংলা প্রশ্ন করো (কোন জিনিস/কোন কাজ?)।';
+      if ((intent === 'instruction' || intent === 'critical') && PRON_RE.test(imsg) && !stChat && msgs.length <= 4) sysAdd += '\n[RULE:clarify] নির্দেশ অস্পষ্ট — কোনো কাজ/টুল না করে শুধু একটা পরিষ্কার বাংলা প্রশ্ন করো (কোন জিনিস/কোন কাজ?)।';
       if (intent === 'critical') {
         const pend = await storeGet(env, 'ctx:pendcrit');
         const yesNow = /^(হ্যাঁ|হ্যা|yes|confirm|ঠিক আছে|ok|okay)$/i.test(imsg.trim());
