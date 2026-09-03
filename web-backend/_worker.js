@@ -206,6 +206,19 @@ async function* openaiStream(base, key, model, messages, signal) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({ model, messages: cleanMsgs(messages), stream: true, temperature: 0.6, max_tokens: 2048 }),
   });
+  // কিছু provider (যেমন OpenRouter free — Cloudflare network থেকে) stream এ 404 দেয় কিন্তু non-stream চলে
+  if (!r.ok && (r.status === 404 || r.status === 400)) {
+    const r2 = await fetch(`${base}/chat/completions`, {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({ model, messages: cleanMsgs(messages), stream: false, temperature: 0.6, max_tokens: 2048 }),
+    });
+    if (r2.ok) {
+      const j = await r2.json().catch(() => null);
+      const t = j?.choices?.[0]?.message?.content;
+      if (t) { yield t; return; }
+    }
+  }
   if (!r.ok || !r.body) throw new Error('provider HTTP ' + r.status);
   const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
   while (true) {
