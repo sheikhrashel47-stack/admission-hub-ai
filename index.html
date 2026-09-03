@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#F5F7FA">
+<meta name="theme-color" content="#FCFCFE">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Admission Hub AI">
@@ -379,6 +379,8 @@ svg{width:20px;height:20px;display:block}
 .agStep.done{border-left-color:var(--green);background:var(--green-t)}
 .agReport{background:var(--card2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 
+.row.ai>.avx{display:none}
+.row.ai .msgWrap{flex:1;min-width:0}
 /* code head icon buttons + in-app preview */
 .cbIc{width:26px;height:26px;border-radius:7px;color:#cfc9e8;display:flex;align-items:center;justify-content:center;margin-left:2px}
 .cbIc:active{background:rgba(255,255,255,.18)}
@@ -389,8 +391,12 @@ svg{width:20px;height:20px;display:block}
 .cpHd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + var(--safe-t)) 14px 10px;background:#221d3a;color:#fff;font-weight:700;font-size:13px}
 #cpX{background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700}
 #cpFrame{flex:1;border:0;width:100%;background:#fff}
+html.standalone #toolbar{padding-top:8px}
+html.standalone #drawer{padding-top:10px}
+html.standalone .cpHd{padding-top:10px}
+html.standalone #netBanner{top:6px}
 /* Gemini-ref: soft bg + bottom color animation */
-html[data-theme="light"]{background:#f7f8fc}
+html[data-theme="light"]{background:#fcfcfe}
 html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8fc 55%,#edf2fb 100%)}
 #glow{position:fixed;left:50%;bottom:-14vh;width:170vw;height:48vh;transform:translateX(-50%);background:radial-gradient(50% 62% at 50% 100%,rgba(124,155,255,.30),rgba(147,120,255,.13) 55%,rgba(255,255,255,0) 78%);filter:blur(6px);pointer-events:none;z-index:1;animation:glowP 7s ease-in-out infinite alternate}
 @keyframes glowP{from{opacity:.5;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(-12px)}}
@@ -1806,7 +1812,8 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
-window.__SWV='ahai-v17';
+window.__SWV='ahai-v19';
+try{if(navigator.standalone)document.documentElement.classList.add('standalone')}catch(e){}
 let _swRel=0;
 setInterval(()=>{try{fetch('sw.js?ts='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{if(t.indexOf(window.__SWV)<0){location.reload()}}).catch(()=>{})}catch(e){}},45000);
 if(navigator.serviceWorker&&navigator.serviceWorker.addEventListener){navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='JUJU_UPDATE'){location.reload()}})}
