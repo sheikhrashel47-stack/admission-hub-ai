@@ -10,7 +10,11 @@
 | `GROQ_API_KEY` | Groq (gsk_) | দ্রুততম চ্যাট মডেল (fast/lite) | server.mjs, `_worker.js` | Phase 1-2 (লাইভ) | ✅ verified |
 | ~~`XAI_API_KEY`~~ (Grok) | xAI — Grok | ~~মডেল fallback~~ | — | — | ❌ **বাদ দেওয়া হয়েছে** (২০২৬-০৯-০২) — পেইড ক্রেডিট লাগে; owner পলিসি: **প্রজেক্টে কোনো পেইড সার্ভিস নয়** |
 | `MISTRAL_API_KEY` | Mistral | ব্যাকআপ মডেল (m2) | server.mjs, `_worker.js` | Phase 1-2 (লাইভ) | ✅ verified |
-| `CEREBRAS_API_KEY` | Cerebras (csk-) | আল্ট্রা-ফাস্ট ফ্রি মডেল | — (কোড-রেডি নয়) | Phase 3 (মডেল রাউটারে যোগ) | ✅ verified |
+| `CEREBRAS_API_KEY` | Cerebras (csk-) | আল্ট্রা-ফাস্ট ফ্রি মডেল (`llama-3.3-70b`) | `_worker.js`/`worker.mjs`/`lib/providers.mjs` | Phase 3 (মডেল রাউটারে যোগ) | ✅ verified |
+| `SAMBANOVA_API_KEY` | SambaNova | Llama 3.3 70B (`Meta-Llama-3.3-70B-Instruct`) — উদার ফ্রি, শক্ত general/code ব্যাকআপ | `_worker.js`/`worker.mjs`/`lib/providers.mjs` | Phase 3 | 🔑 owner বসিয়েছেন (CF secret) |
+| `DEEPINFRA_API_KEY` | DeepInfra | DeepSeek-V3 (`deepseek-ai/DeepSeek-V3`) — reasoning + code ফলব্যাক | `_worker.js`/`worker.mjs`/`lib/providers.mjs` | Phase 3 | 🔑 owner বসিয়েছেন (CF secret) |
+| `TOGETHER_API_KEY` | Together | Llama 3.3 70B Turbo-Free (`meta-llama/Llama-3.3-70B-Instruct-Turbo-Free`) — specialty/code, মাঝ-ফলব্যাক | `_worker.js`/`worker.mjs`/`lib/providers.mjs` | Phase 3 | 🔑 owner বসিয়েছেন (CF secret) |
+| `HUGGINGFACE_API_KEY` | Hugging Face | Qwen2.5 72B (`Qwen/Qwen2.5-72B-Instruct`) — সবার শেষ universal ফলব্যাক (রেট-লিমিট ফ্রি) | `_worker.js`/`worker.mjs`/`lib/providers.mjs` | Phase 3 | 🔑 owner বসিয়েছেন (CF secret) |
 | `OPENROUTER_API_KEY` | OpenRouter | ১০০+ মডেল এক key-তে; `openrouter/free` রাউটার মডেল (স্বয়ংক্রিয়ভাবে ফ্রি মডেল বেছে নেয় — কখনো পুরনো হয় না) | `_worker.js`/`worker.mjs`/`lib/providers.mjs` (গেটেড, চালু হলে) | Phase 3 | ✅ verified ২০২৬-০৯-০২ — free tier, SSE চ্যাট + সাজেশন PASS |
 | `TAVILY_API_KEY` | Tavily Search | ওয়েব রিসার্চ (সাইটেশনসহ) | server.mjs, `_worker.js` | Phase 1-2 (লাইভ) | ✅ verified |
 | `BROWSER_USE_API_KEY_1..3` | Browser Use Cloud (`api.browser-use.com`, হেডার `X-Browser-Use-API-Key`) | ক্লাউড ব্রাউজার এজেন্ট (ওয়েব টাস্ক অটোমেশন) — একটি শেষ হলে পরেরটি (রোটেশন) | — (কোড-রেডি নয়) | Phase 3 (Browser tool) | ✅ ৩টিই verified · বাজেট-গেটেড (ক্রেডিট-ভিত্তিক) |

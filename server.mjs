@@ -214,7 +214,7 @@ function openSSE(res) {
   return (ev) => { try { res.write(`data: ${JSON.stringify(ev)}\n\n`); } catch {} };
 }
 
-const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY' };
+const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY' };
 const allowedFile = (name) => TEXT_EXT.includes((name || '').split('.').pop().toLowerCase());
 const fileList = () => loadJson('files.json', []);
 
