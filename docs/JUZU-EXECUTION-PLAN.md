@@ -3,6 +3,11 @@
 > **উৎস:** Owner-এর ৪টি blueprint — Part 1 (143 capability), Part 2 (Pro Max 70+), Part 3 (20 Ultra), Part 4 (250 capability, 5 Phase)। সবগুলো মিলিয়ে এখানে ১০টা execution phase-এ ভাগ করা।
 > **নিয়ম:** প্রতি phase ৫-১০টা ধাপ। ধাপ শেষ = `[x]` + তারিখ + commit sha। Phase শেষ না হওয়া পর্যন্ত পরের phase শুরু নয় (owner override ছাড়া)। প্রতি phase-এর শেষ ধাপ = deploy + live test।
 
+## 🔥 Owner-এর ৩টা মূল দাবি (২০২৬-০৯-০৪) — সব phase-এ এগুলো খেয়াল রাখতে হবে
+1. **ফ্রি কম্পিউটার (owner-এর নিজের PC নেই):** জুজুর "দেহ" = **GitHub Actions runner** (ফ্রি Linux VM, কার্ড লাগে না; public repo-তে unlimited, private-এ ২০০০ min/মাস) + **Cloudflare Workers/cron** (২৪/৭ জেগে থাকে) + প্রয়োজনে **GitHub Codespaces** ফ্রি কোটা (~১২০ core-hours/মাস)। Oracle/AWS/GCP বাদ — কার্ড লাগে। → Phase 5 + 8।
+2. **Performance (হাজার হাজার লাইন + দীর্ঘ সময়):** সৎ বাস্তবতা — এক model call-এ ~৩০০-৮০০ লাইন; একটানা এক run সীমিত (Worker time limit)। সমাধান = **bounded chunk → checkpoint → cron/queue resume** → ঘণ্টার পর ঘণ্টা কাজ, এক task-এ কয়েক হাজার লাইন। ৫০০০+ লাইন output UI-তে = chunked/virtual rendering (P4#217)। → Phase 1.5, 5, 10।
+3. **Owner না থাকলেও নিজে কাজ (সবচেয়ে গুরুত্বপূর্ণ):** away-mode = job queue + cron worker + Telegram report + **pre-approved mission policy**। প্রমাণ ইতিমধ্যে আছে: watchman রাত ৩টায় (BD) নিজে চলে। সীমা: production deploy approval-gated থাকবে, নাহলে mission pre-approve করা থাকতে হবে। → Phase 8 (দ্রুততম পথ: 8.1+8.2+8.4 fast-track করা যেতে পারে)।
+
 ## 📚 Blueprint ফাইল ম্যাপ
 | ফাইল | কী আছে |
 |---|---|
@@ -116,7 +121,8 @@
 - [ ] 8.5 **Health score**: project + agent — daily report "আজকের top ৩ সমস্যা" (P3#8)
 - [ ] 8.6 **Observability**: per-task latency/tools/failures/retries/token-estimate (P2 AC)
 - [ ] 8.7 **Incident Commander mode**: freeze→collect→compare deployment→recover→report (P3#19)
-- [ ] 8.8 Deploy → test (queued task + Telegram notify প্রমাণ)
+- [ ] 8.8 **Away-mode policy**: pre-approved mission হলে owner-অনুপস্থিতিতে পুরো কাজ; production deploy ছাড়া সব নিজে থেকে; প্রতিটি কিছুর Telegram report (owner দাবি #3)
+- [ ] 8.9 Deploy → test (queued task + Telegram notify + away-mode প্রমাণ)
 
 ## 🟦 PHASE 9 — Multi-Brain + Advanced Reasoning
 **লক্ষ্য:** কঠিন কাজে একাধিক brain। রেফ: P2 Part A/B/Q-S,AA-AB,BM-BN; P3#14,15; P4#202-210।
