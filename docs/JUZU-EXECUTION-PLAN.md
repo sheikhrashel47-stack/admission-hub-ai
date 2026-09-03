@@ -40,6 +40,13 @@
 
 ---
 
+## 🟦 PHASE 0 — সব জুজু (owner-inserted, 2026-09-04) — COMPLETE
+- [x] 0.1 docs/UI-BLUEPRINT.md (flat feed, orb, working strip, type ramp) — (81c13b0)
+- [x] 0.2 backend: deterministic intent router (owner-gated read-only tool loop: gh.repos/gh.read/web.*) + context pack (ctx:lasttask + chat history) + [SUGGEST] client-strip — (d0b1c5b, 53a8d32)
+- [x] 0.3 frontend: flat feed (bubble-border বিদায়), জুজু header+orb, type ramp, model-UI hide — (d0b1c5b)
+- [x] 0.4 orb animation (idle/think/work/happy/err) + working strip tap-to-expand + task card default-collapsed — (d0b1c5b)
+- [x] 0.5 QA: live test (সাধারণ chat-এ ১৭ repo উত্তর; follow-up "private কয়টা" → ৬টি = context ✅) + 375/1280 screenshots (qa0-*.png) + sw v11 — (2026-09-04)
+
 ## 🟦 PHASE 1 — Workspace UI (popup বিদায়, persistent workspace)
 **লক্ষ্য:** Agent Control = main chat-এর ভেতরেই live workspace। ব্লুপ্রিন্ট রেফ: P1#1,43,44,46,113 (FOUNDATION RULE), P4#211-220।
 - [x] 1.1 Agent activity sheet → **main conversation-এ live cards** (task চলার সময় chat-এই দেখা যাবে) — (2026-09-04, c074c7d)
