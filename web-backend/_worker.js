@@ -374,7 +374,7 @@ async function pingProviders(keys) {
     try {
       let ok = false;
       if (m.pid === 'gemini') ok = (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`)).ok;
-      else if (m.pid === 'openrouter') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000); const r = await fetch(`${PING_BASE.openrouter}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
+      else if (m.pid === 'openrouter') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000); const r = await fetch(`${PING_BASE.openrouter}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, stream: false, temperature: 0.6, max_tokens: 8, messages: [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else if (m.pid === 'pollinations') { const r = await fetch('https://text.pollinations.ai/' + encodeURIComponent('ping')); ok = r.ok && (await r.text()).trim().length > 0; }
       else {
         const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000);
