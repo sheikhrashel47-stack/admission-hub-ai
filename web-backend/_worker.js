@@ -385,7 +385,7 @@ async function cfApi(keys, path, opts = {}) {
 async function runTool(keys, tool, args) {
   switch (tool) {
     case 'gh.repos': { const j = await ghApi(keys, '/user/repos?per_page=100&sort=updated'); return { count: j.length, repos: j.map((x) => ({ name: x.name, private: x.private, updated: x.updated_at })) }; }
-    case 'gh.read': { const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}${args.ref ? '?ref=' + args.ref : ''}`); return { path: j.path, size: j.size, text: atob(String(j.content || '').replace(/\n/g, '')).slice(0, 20000) }; }
+    case 'gh.read': { const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}${args.ref ? '?ref=' + args.ref : ''}`); return { path: j.path, size: j.size, text: new TextDecoder().decode(Uint8Array.from(atob(String(j.content || '').replace(/\n/g, '')), (c) => c.charCodeAt(0))).slice(0, 20000) }; }
     case 'gh.commit': {
       let sha; try { sha = (await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`)).sha; } catch {}
       const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`, { method: 'PUT', body: JSON.stringify({ message: args.message || 'agent update', content: btoa(unescape(encodeURIComponent(args.content))), sha, branch: args.branch }) });
