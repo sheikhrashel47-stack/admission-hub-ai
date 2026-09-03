@@ -1084,7 +1084,7 @@ async function regenerate(msg){
     if(acc&&acc.trim()){body.innerHTML=md(stripSug(acc))+'<div class="meta" style="margin-top:6px">⏸ থামানো হয়েছে</div>';_msgMeta.set(shell,{id:curId,mid:shell.dataset.mid,userText:(msg.userText||''),content:acc,partial:true});bindLongPress(shell)}
     else body.innerHTML='<div class="errCard"><b>যোগাযোগ সমস্যা</b><p>Retry চাপো</p></div>';
   }
-  finally{streaming=false;sendBtn.disabled=false;sendBtn.style.display='flex';stopBtn.style.display='none'}
+  finally{streaming=false;sendBtn.disabled=false;sendBtn.style.display='flex';stopBtn.style.display='none';if(window.__pendReload){window.__pendReload=null;setTimeout(()=>location.reload(),800)}}
 }
 function renderFollowUps(body, list){
   if(!list||!list.length)return;
@@ -1812,12 +1812,18 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
-window.__SWV='ahai-v19';
+window.__SWV='ahai-v20';
+function clog(m){try{fetch(apiBase()+'/api/clog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({m:String(m).slice(0,400)})}).catch(()=>{})}catch(e){}}
+window.addEventListener('error',e=>clog('ERR '+e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno));
+window.addEventListener('unhandledrejection',ev=>clog('REJ '+((ev.reason&&ev.reason.message)||ev.reason||'')));
+function safeReload(tag){if(window.streaming){window.__pendReload=tag;return}location.reload()}
+setInterval(()=>{try{if(curId)localStorage.setItem('juzuLast',curId)}catch(e){}
+  try{if(!streaming&&curId&&msgs&&msgs.childElementCount===0){clog('EMPTYMSGS curId='+curId);openChat(curId).catch(()=>{})}}catch(e){}},8000);
 try{if(navigator.standalone)document.documentElement.classList.add('standalone')}catch(e){}
 let _swRel=0;
-setInterval(()=>{try{fetch('sw.js?ts='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{if(t.indexOf(window.__SWV)<0){location.reload()}}).catch(()=>{})}catch(e){}},45000);
-if(navigator.serviceWorker&&navigator.serviceWorker.addEventListener){navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='JUJU_UPDATE'){location.reload()}})}
-if(navigator.serviceWorker){navigator.serviceWorker.addEventListener('controllerchange',()=>{const n=Date.now();if(n-_swRel>15000){_swRel=n;location.reload()}})}
+setInterval(()=>{try{fetch('sw.js?ts='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{if(t.indexOf(window.__SWV)<0){safeReload('sw')}}).catch(()=>{})}catch(e){}},45000);
+if(navigator.serviceWorker&&navigator.serviceWorker.addEventListener){navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='JUJU_UPDATE'){safeReload('activate')}})}
+if(navigator.serviceWorker){navigator.serviceWorker.addEventListener('controllerchange',()=>{const n=Date.now();if(n-_swRel>15000){_swRel=n;safeReload('cc')}})}
   window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{})});
 }
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e});
@@ -2088,6 +2094,7 @@ function openCodeFs(code,lang){
     if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){const tv=$('#tVoice');if(tv)tv.style.display='none'}
     const sa=$('#setApi');if(sa)sa.textContent=API.replace(/^https?:\/\//,'');
     await loadHistory();await loadMemory();await updStatus();
+    try{const last=localStorage.getItem('juzuLast');if(last&&!new URLSearchParams(location.search).has('new')&&!curId){await openChat(last).catch(()=>{})}}catch(e){}
     restoreDraft();
   }catch(e){
     $('#dStatus').textContent='ব্যাকএন্ড সংযোগ নেই';
