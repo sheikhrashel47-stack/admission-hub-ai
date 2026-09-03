@@ -1103,7 +1103,7 @@ export default {
       let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
       let hasMulti = !!(body.images && body.images.length);
       let extraText = '';
-      if (!mRe) { try { if (await ownerOk(env, req)) { const tn = await chatToolLoop(keys, env, msg); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
+      if (!mRe) { try { if (await ownerOk(env, req)) { const tn = await chatToolLoop(keys, env, String(body.message || '')); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
       const binParts = [];
       if (body.media && body.media.length) {
         const files = await kvGet(env, 'files', {});
