@@ -8,7 +8,7 @@ const SYSTEM = `তুমি "ADMISSION HUB AI" — Admission Hub-এর জন�
 শুধু সত্য তথ্য দেবে; যা জানো না সেটা সৎভাবে বলবে। সাইটেশন [1] ফরম্যাটে দিলে সেগুলো সোর্স তালিকায় মিলবে।
 তুমি এখন chat + research mode-এ চলছ। Agent tools, GitHub, deploy এখনো যুক্ত হয়নি — সেই কাজ চাইলে জানিয়ে দেবে "এখনো যুক্ত হয়নি (Phase 5+)"।
 
-কোড-নিয়ম (সবসময়): কোড দিলে ``` fence-এর ভিতরে সম্পূর্ণ RAW কোড দেবে — HTML entity escape কখনো করবে না (&lt; &gt; &amp; লিখবে না); কোড লম্বা হলেও সম্পূর্ণ ফাইল দেবে, মাঝপথে ছেঁড়বে না।
+কোড-নিয়ম (সবসময়): কোড দিলে code-fence-এর ভিতরে সম্পূর্ণ RAW কোড দেবে — HTML entity escape কখনো করবে না (&lt; &gt; &amp; লিখবে না); কোড লম্বা হলেও সম্পূর্ণ ফাইল দেবে, মাঝপথে ছেঁড়বে না।
 উত্তর-শৈলী (সবসময়): প্রচলিত সহজ বাংলায় সরাসরি উত্তর — অপ্রয়োজনীয় ভূমিকা/ভণিতা নয়; দরকার হলে **বোল্ড** টার্ম, টেবিল, বুলেট; সংখ্যা/তারিখ স্পষ্ট; যা নিশ্চিত নও তা সততার সাথে বলো।
 যদি উপযুক্ত হয়, উত্তরের একদম শেষে ২–৩টি ফলো-আপ প্রশ্ন দিতে পারো — ঠিক এই ফরম্যাটে, এর বাইরে আর কিছু নয়:
 
@@ -478,16 +478,49 @@ function parseSuggestions(ans) {
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
 const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1 };
-async function chatToolLoop(keys, env, msg) {
+/* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
+function classifyIntent(t){
+  const s=String(t||'').trim(); const low=s.toLowerCase();
+  if(/^(hi|hello|hey|yo|sup|সালাম|আসসালামু|আসসারালামু|হাই|হ্যালো|হেই|শুভ (সকাল|সন্ধ্যা|রাত্রি|দুপুর)|good (morning|evening|night)|কেমন আছো|কি খবর|কী খবর|thanks|ধন্যবাদ|thx)[\s!,.?্।…]*$/i.test(low)) return 'greeting';
+  if(/(মুছে|delete|drop table|force[- ]push|history rewrite|rewrite history|revoke|purge|ব্যান|রিভোক|format c)/i.test(low)) return 'critical';
+  if(/```/.test(s)) return 'coding';
+  if(/(কোড|\bcode\b|html|css|javascript|\bjs\b|python|sql|regex|function|bug|ডিবাগ|debug|compile|script|ওয়েবসাইট|website|webpage|অ্যাপ|app|পেজ|page)/i.test(low) && /(বানাও|বানিয়ে|লিখ|দাও|fix|ঠিক|refactor|optimize|debug|সরাও|যোগ)/i.test(low)) return 'coding';
+  if(/(খবর|সর্বশেষ|সাম্প্রতিক|latest|news|research|রিসার্চ|খুঁজ|খোজ|search|বর্তমান|current|price|দাম|weather|আবহাওয়া|ফলাফল|result|বিজ্ঞপ্তি|notice|তথ্য|info)/i.test(low)) return 'research';
+  if(/(করো|করুন|কর|বানাও|দাও|লিখ|যোগ কর|সরাও|চালু|বন্ধ|পাঠাও|send|create|make|build|upload|আপলোড|analyze|বিশ্লেষণ|ঠিক কর|update|হালনাগাদ)/i.test(low)) return 'instruction';
+  if(/(কী|কি|কেন|কবে|কোথায়|কত|কোন|why|how|what|when|who|where|which)|\?$/.test(low)) return 'question';
+  return 'conversation';
+}
+const MODE_SYS={
+  chat:'\n[MODE: chat] কোনো tool/web নয় — নিজের জ্ঞান থেকে সাধারণ কথোপকথন।',
+  research:'\n[MODE: research] তথ্য-ভিত্তিক উত্তর; tool/সোর্স-ফল থাকলে সেটাই সত্য।',
+  coding:'\n[MODE: coding] কোড-প্রথম: সম্পূর্ণ RAW কোড fence-এ, ব্যাখ্যা ≤৪ বুলেট।',
+  agent:'\n[MODE: agent] ইঞ্জিনিয়ারিং নির্দেশ — ধাপে ধাপে পরিকল্পনা করে এগোও।',
+  mission:'\n[MODE: mission] লক্ষ্য-ভিত্তিক: আগে ৩-৫ ধাপের পরিকল্পনা, তারপর অগ্রগতি।'
+};
+const STYLE_SYS={
+  greeting:'\n[STYLE: ১-২ লাইন, উষ্ণ]',
+  conversation:'\n[STYLE: ১-৩ লাইন, সহজ কথা]',
+  question:'\n[STYLE: ৩-৬ লাইন, সরাসরি উত্তর]',
+  research:'\n[STYLE: বুলেট/টেবিল, সোর্সসহ]',
+  instruction:'\n[STYLE: ২-৪ লাইন পরিকল্পনা/নিশ্চিতকরণ]',
+  coding:'\n[STYLE: কোড-প্রথম, ব্যাখ্যা সংক্ষিপ্ত]',
+  critical:'\n[STYLE: শুধু নিশ্চিতকরণ/সতর্কবার্তা]'
+};
+const PRON_RE=/(ওটা|ওইটা|ঐটা|সেটা|এটা|that|it|আগেরটা|আগের টা|same|একই|আবার)/i;
+async function chatToolLoop(keys, env, msg, imode, intent) {
   const t = String(msg || '').trim();
   if (t.length < 6) return null;
+  if (intent === 'greeting') return null;
+  if (imode === 'chat') return null;
   if (/^(hi|hello|hey|সালাম|হাই|হ্যালো|কেমন আছো|শুভ|thanks|ধন্যবাদ)/i.test(t)) return null;
   const um = t.match(/https?:\/\/\S+/);
   const plan = [];
-  if (/(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
-  if (um && /(পড়ো|read|খোলো|সাইট|site|website|page|লিংক|link)/i.test(t)) plan.push({ tool: 'web.read', args: { url: um[0] } });
-  else if (um && /(স্ক্রিনশট|ছবি|eye|দেখো)/i.test(t)) plan.push({ tool: 'web.eye', args: { url: um[0] } });
-  if (!plan.length && /(খবর|search|খুঁজ|খোজ|research|রিসার্চ|সাম্প্রতিক|latest|নিয়ম|ভর্তি)/i.test(t)) plan.push({ tool: 'web.search', args: { query: t.slice(0, 200) } });
+  const ghOk = !imode || imode === 'auto' || imode === 'coding' || imode === 'agent' || imode === 'mission';
+  const webOk = !imode || imode === 'auto' || imode === 'research' || imode === 'agent' || imode === 'mission';
+  if (ghOk && /(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
+  if (webOk && um && /(পড়ো|read|খোলো|সাইট|site|website|page|লিংক|link)/i.test(t)) plan.push({ tool: 'web.read', args: { url: um[0] } });
+  else if (webOk && um && /(স্ক্রিনশট|ছবি|eye|দেখো)/i.test(t)) plan.push({ tool: 'web.eye', args: { url: um[0] } });
+  if (webOk && !plan.length && /(খবর|search|খুঁজ|খোজ|research|রিসার্চ|সাম্প্রতিক|latest|নিয়ম|ভর্তি)/i.test(t)) plan.push({ tool: 'web.search', args: { query: t.slice(0, 200) } });
   if (!plan.length) return null;
   const notes = [];
   for (const st of plan.slice(0, 2)) {
@@ -730,7 +763,7 @@ export default {
       try { const b = await req.json(); const m = String((b && b.m) || '').slice(0, 400); if (m) saved = await storePut(env, 'clog:' + Date.now() + ':' + Math.random().toString(36).slice(2, 6), m, 604800); } catch (e) { err = String((e && e.message) || e); }
       return json({ ok: true, saved: saved, err: err, hasDB: !!env.AH_DB, hasKV: !!env.AH_KV });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p2-v22' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -1102,14 +1135,33 @@ export default {
       }
 
       msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
+      const imsg = mRe ? String(msgs[msgs.length-2] && msgs[msgs.length-2].content || '') : String(body.message || '');
+      const intent = classifyIntent(imsg);
+      const stPrev = (await storeGetJson(env, 'ctx:state:' + (chatId || ''), null)) || (await storeGetJson(env, 'ctx:state', null));
+      const imode = (body.imode && MODE_SYS[body.imode]) ? body.imode : ((stPrev && stPrev.mode) || 'auto');
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
       const lt = await storeGetJson(env, 'ctx:lasttask', null);
       const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') + (lt ? '\n\n## জুজুর সর্বশেষ কাজ (প্রসঙ্গ ধরে রাখো — follow-up হলে এর সাথে মিলিয়ে বুঝো)\n- নির্দেশ: ' + String(lt.task || '').slice(0, 300) + '\n- স্ট্যাটাস: ' + lt.status + '\n- ফলাসার: ' + String(lt.report || '').slice(0, 500) : '');
-      let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
+      let sysAdd = '';
+      if (imode !== 'auto' && MODE_SYS[imode]) sysAdd += MODE_SYS[imode];
+      sysAdd += STYLE_SYS[intent] || '';
+      if (/(তুই|ইয়ার|দোস্ত|ভাই)/.test(imsg)) sysAdd += '\n[TONE: একদম বন্ধুর মতো সহজ বাংলা]';
+      else if (/আপনি/.test(imsg)) sysAdd += '\n[TONE: সম্মানসূচক আপনি]';
+      const ctxTopic = (stPrev && stPrev.topic) || (lt && lt.task) || '';
+      if (PRON_RE.test(imsg) && ctxTopic) sysAdd += '\n[PRONOUN] user-এর "ওটা/এটা/it" = "' + String(ctxTopic).slice(0, 200) + '" — এই প্রসঙ্গে মিলিয়ে উত্তর দাও।';
+      if ((intent === 'instruction' || intent === 'critical') && PRON_RE.test(imsg) && !ctxTopic) sysAdd += '\n[RULE:clarify] নির্দেশ অস্পষ্ট — কোনো কাজ/টুল না করে শুধু একটা পরিষ্কার বাংলা প্রশ্ন করো (কোন জিনিস/কোন কাজ?)।';
+      if (intent === 'critical') {
+        const pend = await storeGet(env, 'ctx:pendcrit');
+        const yesNow = /^(হ্যাঁ|হ্যা|yes|confirm|ঠিক আছে|ok|okay)$/i.test(imsg.trim());
+        if (yesNow && pend === '1') { sysAdd += '\n[CRITICAL: approved] owner নিশ্চিত করেছেন — সাবধানে পথ দেখাও।'; await storePut(env, 'ctx:pendcrit', '0', 60); }
+        else { sysAdd += '\n[RULE:critical] ঝুঁকিপূর্ণ action — কোনো কাজ না করে শুধু নিশ্চিতকরণ চাও ("নিশ্চিত হলে হ্যাঁ লিখো")।'; await storePut(env, 'ctx:pendcrit', '1', 600); }
+      }
+      if (intent === 'greeting') sysAdd += '\n[RULE:greeting] কোনো tool/তথ্য/সাজেশন নয় — ১-২ লাইনের উষ্ণ উত্তর দাও।';
+      let finalMsgs = [{ role: 'system', content: baseSys + sysAdd }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
       let hasMulti = !!(body.images && body.images.length);
       let extraText = '';
-      if (!mRe) { try { if (await ownerOk(env, req)) { const tn = await chatToolLoop(keys, env, String(body.message || '')); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
+      if (!mRe) { try { if (intent !== 'greeting' && imode !== 'chat' && (await ownerOk(env, req))) { const tn = await chatToolLoop(keys, env, String(body.message || ''), imode, intent); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
       const binParts = [];
       if (body.media && body.media.length) {
         const files = await kvGet(env, 'files', {});
@@ -1146,7 +1198,8 @@ export default {
       return sseStream((emit, close) => {
         (async () => {
           try {
-            if (body.web) {
+            const effWeb = (body.web || imode === 'research') && intent !== 'greeting' && imode !== 'chat';
+            if (effWeb) {
               const lastC = finalMsgs[finalMsgs.length - 1].content;
               const q = typeof lastC === 'string' ? lastC : lastC.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
               emit({ step: 'SEARCHING' });
@@ -1168,8 +1221,8 @@ export default {
             if (!answer) throw new Error('খালি');
             const parsed = parseSuggestions(answer);
             answer = parsed.text;
-            const meta = { model: attempt?.model, provider: attempt?.pid, mode: body.mode || 'balanced', seconds: Math.round((Date.now() - t0) / 100) / 10, tokens: Math.ceil(answer.length / 4) };
-            const srcs2 = body.web ? (await kvGet(env, 'lastSources', [])) : [];
+            const meta = { model: attempt?.model, provider: attempt?.pid, mode: body.mode || 'balanced', intent: intent, imode: imode, seconds: Math.round((Date.now() - t0) / 100) / 10, tokens: Math.ceil(answer.length / 4) };
+            const srcs2 = effWeb ? (await kvGet(env, 'lastSources', [])) : [];
             const ph = c.messages[c.messages.length - 1];
             if (ph && ph.partial) Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: srcs2, suggestions: parsed.list });
             else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: srcs2, suggestions: parsed.list });
@@ -1181,7 +1234,8 @@ export default {
             u.byModel[kk] = u.byModel[kk] || { requests: 0, tokens: 0 };
             u.byModel[kk].requests += 1; u.byModel[kk].tokens += meta.tokens;
             await kvSet(env, 'chats', data); // এক লেখাতেই history+usage — অর্ধেক কোটা খরচ
-            emit({ done: true, id: c.id, meta, sources: body.web ? (await kvGet(env, 'lastSources', [])) : [], suggestions: parsed.list });
+            try { const stt = JSON.stringify({ topic: imsg.slice(0, 140), intent: intent, mode: imode, pending: /\?\s*$/.test(answer) ? 'question' : null, ts: Date.now() }); await storePut(env, 'ctx:state:' + c.id, stt, 30 * 86400); await storePut(env, 'ctx:state', stt, 30 * 86400); } catch (e) {}
+            emit({ done: true, id: c.id, meta, sources: effWeb ? (await kvGet(env, 'lastSources', [])) : [], suggestions: parsed.list });
           } catch (e) {
             try {
               if (answer && answer.trim()) {
