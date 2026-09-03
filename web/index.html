@@ -379,6 +379,16 @@ svg{width:20px;height:20px;display:block}
 .agStep.done{border-left-color:var(--green);background:var(--green-t)}
 .agReport{background:var(--card2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 
+/* code head icon buttons + in-app preview */
+.cbIc{width:26px;height:26px;border-radius:7px;color:#cfc9e8;display:flex;align-items:center;justify-content:center;margin-left:2px}
+.cbIc:active{background:rgba(255,255,255,.18)}
+.cbIc svg{width:13px;height:13px}
+.cbHead .cbFull{margin-left:auto}
+#codePrev{position:fixed;inset:0;z-index:130;background:#fff;display:none;flex-direction:column}
+#codePrev.show{display:flex}
+.cpHd{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:calc(10px + var(--safe-t)) 14px 10px;background:#221d3a;color:#fff;font-weight:700;font-size:13px}
+#cpX{background:rgba(255,255,255,.14);color:#fff;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700}
+#cpFrame{flex:1;border:0;width:100%;background:#fff}
 /* Gemini-ref: soft bg + bottom color animation */
 html[data-theme="light"]{background:#f7f8fc}
 html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8fc 55%,#edf2fb 100%)}
@@ -686,6 +696,7 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
       <div id="taskList"></div>
     </div>
   </div>
+  <div id="codePrev"><div class="cpHd"><span id="cpTitle">প্রিভিউ</span><button id="cpX">✕ বন্ধ</button></div><iframe id="cpFrame" sandbox="allow-scripts"></iframe></div>
   <div id="codeFs"><div class="cfsHd"><span id="cfsTitle">কোড</span><button id="cfsCopy">কপি</button><button id="cfsX">✕ বন্ধ</button></div><pre id="cfsBody"></pre></div>
 
   <!-- ===== সিস্টেম স্ট্যাটাস ===== -->
@@ -792,7 +803,7 @@ function hl(code,lang){
 }
 function md(src){
   const cb=[];let h=esc(src);
-  h=h.replace(/```([\w+-]*)\n([\s\S]*?)\n```/g,(m,l,c)=>{cb.push({h:hl(c,l),l:l||'code'});return '\u0000C'+(cb.length-1)+'\u0000'});
+  window._CBRAW=window._CBRAW||[];h=h.replace(/```([\w+-]*)\n([\s\S]*?)\n```/g,(m,l,c)=>{cb.push({h:hl(c,l),l:l||'code',g:window._CBRAW.push(c)-1});return '\u0000C'+(cb.length-1)+'\u0000'});
   h=h.replace(/`([^`\n]+)`/g,(m,c)=>'\u0000I'+c+'\u0000');
   h=h.replace(/^###### (.*)$/gm,'<h6>$1</h6>').replace(/^##### (.*)$/gm,'<h5>$1</h5>').replace(/^#### (.*)$/gm,'<h4>$1</h4>').replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
   h=h.replace(/^---+$/gm,'<hr>');
@@ -808,7 +819,7 @@ function md(src){
   h=h.replace(/^\s*[-*] (.*)$/gm,'<li>$1</li>').replace(/^\s*\d+\. (.*)$/gm,'<li>$1</li>');
   h=h.replace(/(<li>[\s\S]*?<\/li>(?:\n<li>[\s\S]*?<\/li>)*)/g,'<ul>$1</ul>');
   h=h.replace(/\n+/g,'<br>\n');
-  h=h.split('\u0000C').map((p,i)=>{if(!i)return p;const j=parseInt(p.slice(0,p.indexOf('\u0000')));const cbx=cb[j];const rest=p.slice(p.indexOf('\u0000')+1);return '<div class="codeBox"><div class="cbHead"><span class="cbLang">'+esc(cbx.l)+'</span><button class="cbFull" aria-label="বড় করে দেখো">⛶</button><button class="cbCopy" aria-label="এক ক্লিকে কোড কপি"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2.4"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>কপি</button></div><pre><code>'+cbx.h+'</code></pre></div>'+rest}).join('');
+  h=h.split('\u0000C').map((p,i)=>{if(!i)return p;const j=parseInt(p.slice(0,p.indexOf('\u0000')));const cbx=cb[j];const rest=p.slice(p.indexOf('\u0000')+1);return '<div class="codeBox" data-ci="'+cbx.g+'"><div class="cbHead"><span class="cbLang">'+esc(cbx.l)+'</span>'+(/html|htm|svg|xml/.test(cbx.l)?'<button class="cbIc cbPrev" aria-label="প্রিভিউ"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>':'')+'<button class="cbIc cbDl" aria-label="ফাইল ডাউনলোড"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 21h14"/></svg></button><button class="cbFull" aria-label="বড় করে দেখো">⛶</button><button class="cbCopy" aria-label="এক ক্লিকে কোড কপি"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2.4"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>কপি</button></div><pre><code>'+cbx.h+'</code></pre></div>'+rest}).join('');
   h=h.split('\u0000I').map((p,i)=>i?'<code>'+p.slice(0,p.indexOf('\u0000'))+'</code>'+p.slice(p.indexOf('\u0000')+1):p).join('');
   return h;
 }
@@ -1080,6 +1091,8 @@ function renderFollowUps(body, list){
 }
 
 /* tap avatar / timestamp → message menu (native selection চলতে দেয়) */
+function openCodePrev(code,title){const t=$('#cpTitle');if(t)t.textContent='প্রিভিউ · '+(title||'কোড');const f=$('#cpFrame');if(f)f.srcdoc=code;const w=$('#codePrev');if(w)w.classList.add('show')}
+function dlCode(code,lang){const ext=/html|htm/.test(lang)?'html':/css/.test(lang)?'css':/js|javascript/.test(lang)?'js':/py/.test(lang)?'py':'txt';const b=new Blob([code],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='juzu-file.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast('⬇ ফাইল ডাউনলোড হচ্ছে')}
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('✅ কপি হয়েছে')}catch{toast('⚠️ কপি হয়নি')}}
 msgs.addEventListener('click',(e)=>{
   const ma=e.target.closest?e.target.closest('.msgActs button'):null;
@@ -1088,7 +1101,9 @@ msgs.addEventListener('click',(e)=>{
     else if(ma.dataset.a==='share'){if(navigator.share){navigator.share({text:txt}).catch(()=>{})}else copyText(txt)}
     else if(ma.dataset.a==='speak'){speak(txt);toast('🔊 পড়া হচ্ছে')}
     return}
-  const cc=e.target.closest('.cbCopy');if(cc){const pre=cc.closest('.codeBox')&&cc.closest('.codeBox').querySelector('pre');if(pre)copyText(pre.innerText);return}
+  const pv=e.target.closest('.cbPrev');if(pv){const bx=pv.closest('.codeBox');openCodePrev((window._CBRAW||[])[+bx.dataset.ci]||'',(bx.querySelector('.cbLang')||{}).textContent||'');return}
+  const dl=e.target.closest('.cbDl');if(dl){const bx=dl.closest('.codeBox');dlCode((window._CBRAW||[])[+bx.dataset.ci]||'',(bx.querySelector('.cbLang')||{}).textContent||'');return}
+  const cc=e.target.closest('.cbCopy');if(cc){const bx=cc.closest('.codeBox');const raw=(window._CBRAW||[])[+bx.dataset.ci];copyText(raw!==undefined?raw:(bx&&bx.querySelector('pre')?bx.querySelector('pre').innerText:''));return}
   const av=e.target.closest('.avx.ai');if(av){const r=av.closest('.row.ai');if(r&&_msgMeta.has(r))openMsgMenu(r);return}
   const mt=e.target.closest('.who .meta');if(mt){const r=mt.closest('.row.ai');if(r&&_msgMeta.has(r))openMsgMenu(r)}
 });
@@ -1181,6 +1196,7 @@ function closeSheets(){$$('.sheet').forEach(s=>s.classList.remove('show'));scrim
 function openSheetCloseAll(id){closeSheets();if(id)openSheet(id)}
 function scrimOn(){$('#scrim').classList.add('show')}
 function scrimOff(){$('#scrim').classList.remove('show')}
+$('#cpX').onclick=()=>{const w=$('#codePrev');if(w)w.classList.remove('show');const f=$('#cpFrame');if(f)f.srcdoc=''};
 $('#scrim').onclick=()=>{closeSheets();closeDrawer()};
 $$('[data-close]').forEach(b=>b.onclick=()=>closeSheets());
 
@@ -2047,7 +2063,7 @@ function openCodeFs(code,lang){
   const ov=$('#codeFs');if(ov)ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('show')});
   document.addEventListener('click',e=>{
     const f=e.target.closest?e.target.closest('.cbFull'):null;
-    if(f){const box=f.closest('.codeBox');if(box)openCodeFs((box.querySelector('code')||{}).textContent||'',(box.querySelector('.cbLang')||{}).textContent||'')}
+    if(f){const box=f.closest('.codeBox');if(box)openCodeFs(((window._CBRAW||[])[+box.dataset.ci]!==undefined?window._CBRAW[+box.dataset.ci]:(box.querySelector('code')||{}).textContent||''),(box.querySelector('.cbLang')||{}).textContent||'')}
   });
 })();
 
