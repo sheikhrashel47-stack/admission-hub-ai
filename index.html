@@ -51,19 +51,20 @@ svg{width:20px;height:20px;display:block}
 
 /* ---------- header ---------- */
 #toolbar{display:flex;align-items:center;gap:8px;padding:calc(8px + var(--safe-t)) 12px 8px;background:transparent;border-bottom:0;z-index:30}
-.hbtn{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--dim);flex:none}
+.hbtn{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.92);box-shadow:0 2px 10px rgba(25,35,70,.10);display:flex;align-items:center;justify-content:center;color:var(--dim);flex:none}
 .hbtn:active{background:var(--card2)}
-.titleWrap{flex:1;min-width:0;text-align:center;display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 6px;border-radius:12px}
+.titleWrap{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:4px 8px;border-radius:12px}
 .titleWrap .t1{font-size:14.5px;font-weight:700;letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .titleWrap .t2{font-size:10.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.hright{display:flex;gap:2px;flex:none}
+.hright{display:flex;gap:0;flex:none;background:rgba(255,255,255,.92);border-radius:999px;padding:3px;box-shadow:0 2px 10px rgba(25,35,70,.10)}
+.hright .hbtn{width:34px;height:34px;background:none;box-shadow:none}
 
 /* ---------- scroll ---------- */
 #chat{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;padding:6px 16px calc(96px + var(--safe-b));min-height:0}
 #msgs{display:flex;flex-direction:column;gap:14px;padding-bottom:60px}
 
 /* ---------- hero (home) ---------- */
-#hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:52px 6px 4px}
+#hero{display:flex;flex-direction:column;align-items:center;text-align:center;padding:14px 6px 4px}
 .greet{font-family:ui-serif,Georgia,"New York","Noto Serif Bengali",serif;font-size:24px;color:var(--txt);font-weight:600;letter-spacing:.2px}
 .greet .em{color:var(--green);font-weight:700}
 .greet .spark{color:var(--green);font-size:15px;vertical-align:middle}
@@ -96,7 +97,7 @@ svg{width:20px;height:20px;display:block}
 .hdRow{display:flex;align-items:center;gap:7px}
 .hdOrb{width:22px;height:22px;box-shadow:0 2px 8px rgba(109,91,240,.4)}
 .hdOrb .eyeL,.hdOrb .eyeR{width:3.5px;height:5.5px;border-radius:2px}
-.heroOrb{width:84px;height:84px;margin:0 auto 14px}
+.heroOrb{width:78px;height:78px;margin:0 auto 12px}
 .heroOrb .eyeL,.heroOrb .eyeR{width:11px;height:17px;border-radius:8px;top:36%}
 .heroOrb .eyeL{left:30%}.heroOrb .eyeR{left:54%}
 #agBar{cursor:pointer}
@@ -377,6 +378,16 @@ svg{width:20px;height:20px;display:block}
 .agStep.done{border-left-color:var(--green);background:var(--green-t)}
 .agReport{background:var(--card2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 
+/* Gemini-ref: soft bg + bottom color animation */
+html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8fc 55%,#edf2fb 100%)}
+#glow{position:fixed;left:50%;bottom:-14vh;width:170vw;height:48vh;transform:translateX(-50%);background:radial-gradient(50% 62% at 50% 100%,rgba(124,155,255,.30),rgba(147,120,255,.13) 55%,rgba(255,255,255,0) 78%);filter:blur(6px);pointer-events:none;z-index:1;animation:glowP 7s ease-in-out infinite alternate}
+@keyframes glowP{from{opacity:.5;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(-12px)}}
+#chat{position:relative;z-index:2}
+.msgActs{display:flex;gap:2px;margin-top:6px;opacity:.8}
+.msgActs button{width:30px;height:30px;border-radius:8px;color:var(--dim);display:flex;align-items:center;justify-content:center}
+.msgActs button:active{background:rgba(0,0,0,.07)}
+.msgActs svg{width:15px;height:15px}
+#comp{background:#fff;box-shadow:0 8px 28px rgba(30,40,80,.13)}
 /* drawer = ChatGPT-style dark sidebar */
 #drawer{background:#0e0e11;border-right:0}
 #drawer .brand b{color:#f4f4f6;font-size:15px}
@@ -498,6 +509,7 @@ svg{width:20px;height:20px;display:block}
     </section>
   </div></main>
 
+  <div id="glow" aria-hidden="true"></div>
   <footer id="compWrap">
     <div id="comp">
       <button id="fabBtn" aria-label="টুলস">
@@ -836,7 +848,7 @@ function addUserMsg(text,ts,att){
 }
 function addAiShell(){
   const r=document.createElement('div');r.className='row ai';
-  r.innerHTML='<div class="avx ai"><span class="eyeL"></span><span class="eyeR"></span></div><div class="msgWrap"><div class="who"><b>জুজু</b><span id="aiBadges"></span> <span class="meta" style="margin:0">'+fmtTime()+'</span></div><div class="msgA" id="aiBody"></div></div>';
+  r.innerHTML='<div class="avx ai"><span class="eyeL"></span><span class="eyeR"></span></div><div class="msgWrap"><div class="who"><b>জুজু</b><span id="aiBadges"></span> <span class="meta" style="margin:0">'+fmtTime()+'</span></div><div class="msgA" id="aiBody"></div><div class="msgActs"><button data-a="copy" aria-label="কপি"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="11" height="11" rx="2.4"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button><button data-a="share" aria-label="শেয়ার"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-1"/></svg></button><button data-a="speak" aria-label="শুনো"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg></button></div></div>';
   msgs.appendChild(r);scrollB();return r;
 }
 function aiBadgesHtml(){let h='';if(agentMode)h+='<span class="badge agent">✦ Agent</span>';if(web)h+='<span class="badge web">🌐 Web</span>';return h}
@@ -1068,6 +1080,12 @@ function renderFollowUps(body, list){
 /* tap avatar / timestamp → message menu (native selection চলতে দেয়) */
 async function copyText(t){try{await navigator.clipboard.writeText(t);toast('✅ কপি হয়েছে')}catch{toast('⚠️ কপি হয়নি')}}
 msgs.addEventListener('click',(e)=>{
+  const ma=e.target.closest?e.target.closest('.msgActs button'):null;
+  if(ma){const rEl=ma.closest('.row.ai');const txt=rEl?((rEl.querySelector('.msgA')||{}).innerText||''):'';
+    if(ma.dataset.a==='copy')copyText(txt);
+    else if(ma.dataset.a==='share'){if(navigator.share){navigator.share({text:txt}).catch(()=>{})}else copyText(txt)}
+    else if(ma.dataset.a==='speak'){speak(txt);toast('🔊 পড়া হচ্ছে')}
+    return}
   const cc=e.target.closest('.cbCopy');if(cc){const pre=cc.closest('.codeBox')&&cc.closest('.codeBox').querySelector('pre');if(pre)copyText(pre.innerText);return}
   const av=e.target.closest('.avx.ai');if(av){const r=av.closest('.row.ai');if(r&&_msgMeta.has(r))openMsgMenu(r);return}
   const mt=e.target.closest('.who .meta');if(mt){const r=mt.closest('.row.ai');if(r&&_msgMeta.has(r))openMsgMenu(r)}
