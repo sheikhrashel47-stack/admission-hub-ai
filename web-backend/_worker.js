@@ -61,7 +61,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -398,6 +398,51 @@ async function runTool(keys, tool, args) {
     default: throw new Error('অজানা টুল: ' + tool);
   }
 }
+/* ============ PHASE 4+ AGENT ENGINE (ReAct loop + checkpoint + reviewer + rollback reflex) ============ */
+const AGENT_SYS = `তুমি "ADMISSION HUB AI Agent" — মালিকের প্রাইভেট অটোনোমাস ইঞ্জিনিয়ারিং এজেন্ট। বাংলায় ভেবে JSON-এ উত্তর দাও।
+প্রতি উত্তরে শুধু একটা JSON (কোনো অতিরিক্ত লেখা নয়):
+{"thought":"এই ধাপে কী ভাবলে","action":{"tool":"<নাম>","args":{...}}}
+অথবা কাজ শেষ হলে: {"thought":"...","final":"<markdown রিপোর্ট: কী করেছ, প্রমাণ, বদল, পরামর্শ>"}
+টুলসমূহ: gh.repos{} · gh.read{repo,path,ref?} · gh.commit{repo,path,content,message,branch?} · cf.pages.deployments{project,limit?} · cf.pages.rollback{project,deploymentId} · cf.workers{} · cf.kv.keys{ns} · web.search{query} · verify.url{url,expect?} · review.diff{diff} · deploy.ghpages{path,content,message}
+নিয়ম: (১) সর্বোচ্চ ১০ action (২) gh.commit/deploy.ghpages-এর আগে review.diff বাধ্যতামূলক (৩) deploy.ghpages-এর পর verify.url{url:"https://admission-hub-ai.pages.dev/api/system"} বাধ্যতামূলক (৪) verify ব্যর্থ হলে deploy result-এর prevProdId দিয়ে cf.pages.rollback (৫) যে টুলের result পেয়েছ সেটা উদ্ধৃত করে পরের ধাপ ঠিক করো (৬) ধ্বংসাত্মক কাজ (delete) কখনো নয় (৭) args-এ বিশাল কনটেন্ট এড়াও, প্রয়োজনে আগে gh.read করে তারপর ছোট বদল।`;
+const REVIEW_SYS = `তুমি কঠোর কোড-রিভিউয়ার। দেওয়া diff/কনটেন্ট-এ bug, regression, security ফাঁস বা ভাঙা লজিক থাকলে শুধু JSON দাও: {"verdict":"BLOCK","reason":"..."} — নাহলে {"verdict":"OK","note":"..."}`;
+function safeJson(t) {
+  try { return JSON.parse(t); } catch {}
+  const m = /\{[\s\S]*\}/.exec(String(t || ''));
+  if (m) { try { return JSON.parse(m[0]); } catch {} }
+  return null;
+}
+function buildAgentPrompt(state) {
+  const msgs = [{ role: 'system', content: AGENT_SYS }, { role: 'user', content: 'মালিকের নির্দেশ: ' + state.task }];
+  for (const h of state.history.slice(-8)) msgs.push({ role: h.role, content: h.content });
+  msgs.push({ role: 'user', content: state.history.length ? 'পরবর্তী ধাপের JSON দাও।' : 'শুরু করো — প্রথম ধাপের JSON দাও।' });
+  return msgs;
+}
+async function runAgentTool(env, keys, tool, args, emit) {
+  if (tool === 'verify.url') {
+    const r = await fetch(args.url, { method: args.method || 'GET' });
+    const t = await r.text();
+    const matched = args.expect ? t.includes(args.expect) : null;
+    if (!r.ok) throw new Error('verify HTTP ' + r.status);
+    if (matched === false) throw new Error('expect পাওয়া যায়নি');
+    return { ok: true, status: r.status, matched, bytes: t.length };
+  }
+  if (tool === 'web.search') return { results: await searchWeb(keys.TAVILY_API_KEY, args.query || '', 5) };
+  if (tool === 'review.diff') {
+    let out = '';
+    const msgs = [{ role: 'system', content: REVIEW_SYS }, { role: 'user', content: String(args.diff || '').slice(0, 6000) }];
+    for await (const t of streamAnswer(keys, msgs, 'hf', 'balanced', () => {}, null, false)) out += t;
+    return { verdict: safeJson(out) || { verdict: 'OK', note: out.slice(0, 300) } };
+  }
+  if (tool === 'deploy.ghpages') {
+    const dep = await cfApi(keys, `/accounts/${CF_ACC}/pages/projects/admission-hub-ai/deployments?per_page=1`);
+    const prevProdId = (dep.result[0] || {}).id || null;
+    let sha; try { sha = (await ghApi(keys, `/repos/sheikhrashel47-stack/admission-hub-ai/contents/${args.path}`)).sha; } catch {}
+    const j = await ghApi(keys, `/repos/sheikhrashel47-stack/admission-hub-ai/contents/${args.path}`, { method: 'PUT', body: JSON.stringify({ message: args.message || 'agent deploy', content: btoa(unescape(encodeURIComponent(args.content))), sha, branch: 'gh-pages' }) });
+    return { committed: true, sha: j.content && j.content.sha, prevProdId, note: 'gh-pages-এ কমিট হয়েছে — CF অটো-ডিপ্লয় চলছে (~২০ সেকেন্ড)' };
+  }
+  return runTool(keys, tool, args);
+}
 let _pingCache = null;
 async function pingCached(keys) {
   const now = Date.now();
@@ -444,6 +489,62 @@ export default {
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
        session ৭ দিন। Destructive টুল (delete) এই ভার্সনে নেই। */
+    if (method === 'POST' && path === '/api/agent') {
+      if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক unlock লাগবে' }, 401);
+      const b = await req.json().catch(() => ({}));
+      let state = null;
+      if (b.resume) state = await env.AH_KV.get('agent:task:' + b.resume, 'json').catch(() => null);
+      if (!state) state = { id: crypto.randomUUID(), task: String(b.task || '').slice(0, 2000), history: [], i: 0, status: 'running', ts: Date.now() };
+      await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state));
+      const stream = new ReadableStream({
+        async start(ctrl) {
+          const enc = new TextEncoder();
+          const emit = (o) => { try { ctrl.enqueue(enc.encode('data: ' + JSON.stringify(o) + '\n\n')); } catch {} };
+          emit({ taskId: state.id, task: state.task });
+          try {
+            while (state.i < 10 && state.status === 'running') {
+              state.i++;
+              emit({ step: state.i, phase: 'think' });
+              let out = '';
+              for await (const t of streamAnswer(keys, buildAgentPrompt(state), 'auto', 'fast', () => {}, null, false)) out += t;
+              const j = safeJson(out);
+              if (!j) { emit({ fail: 'মডেল সঠিক JSON দেয়নি', raw: out.slice(0, 200) }); state.status = 'badjson'; break; }
+              state.history.push({ role: 'assistant', content: out.slice(0, 3000) });
+              if (j.final) { state.status = 'done'; state.report = j.final; emit({ done: true, report: j.final, steps: state.i }); break; }
+              const act = j.action || {};
+              emit({ step: state.i, phase: 'tool', tool: act.tool, thought: (j.thought || '').slice(0, 200) });
+              let res;
+              try { res = await runAgentTool(env, keys, act.tool, act.args || {}, emit); }
+              catch (e) { res = { error: String(e.message || e).slice(0, 200) }; }
+              emit({ step: state.i, phase: 'result', tool: act.tool, ok: !res.error, preview: JSON.stringify(res).slice(0, 300) });
+              state.history.push({ role: 'user', content: 'TOOL RESULT ' + act.tool + ': ' + JSON.stringify(res).slice(0, 4000) });
+              await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state));
+              emit({ checkpoint: state.id, step: state.i });
+            }
+            if (state.status === 'running') state.status = 'maxsteps';
+          } catch (e) { state.status = 'error'; state.error = String(e.message || e); emit({ error: state.error }); }
+          await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state));
+          emit({ done: true, status: state.status, id: state.id, report: state.report || null });
+          ctrl.close();
+        },
+      });
+      return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', ...cors } });
+    }
+    if (method === 'GET' && path === '/api/watch') {
+      const want = keys.WATCH_SECRET; const got = req.headers.get('X-Watch') || '';
+      if (!want || got !== want) return json({ error: 'watch secret ভুল' }, 401);
+      const rep2 = { ts: Date.now(), checks: [] };
+      const chk = async (name, fn) => { try { const v = await fn(); rep2.checks.push(Object.assign({ name, ok: true }, v)); } catch (e) { rep2.checks.push({ name, ok: false, error: String(e.message || e).slice(0, 80) }); } };
+      await chk('backend_system', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/system'); const j = await r.json(); return { providers: j.providers.filter((p) => p.ok).length + '/' + j.providers.length }; });
+      await chk('pwa_index', async () => { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); return { bytes: t.length }; });
+      await chk('chat_e2e', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'ping', model: 'auto', mode: 'fast' }) }); const t = await r.text(); if (!/done":true/.test(t)) throw new Error('chat done নেই'); return {}; });
+      await chk('drive', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/storage'); const j = await r.json(); if (!(j.drive && j.drive.connected)) throw new Error('drive বিছিন্ন'); return {}; });
+      await env.AH_KV.put('watch:latest', JSON.stringify(rep2));
+      const log = (await env.AH_KV.get('watch:log', 'json').catch(() => null)) || [];
+      log.unshift({ ts: rep2.ts, ok: rep2.checks.every((c) => c.ok), bad: rep2.checks.filter((c) => !c.ok).map((c) => c.name) });
+      await env.AH_KV.put('watch:log', JSON.stringify(log.slice(0, 30)));
+      return json(rep2);
+    }
     if (method === 'POST' && path === '/api/owner/unlock') {
       const b = await req.json().catch(() => ({}));
       return json(await ownerUnlock(env, b.code));
