@@ -439,16 +439,22 @@ async function buCall(env, path, opts = {}) {
   }
   throw new Error('সব Browser Use key ব্যর্থ (' + lastErr + ') — balance শেষ হতে পারে');
 }
+const VISION_MODELS = ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
 async function visionCritique(keys, b64png, question) {
-  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + keys.GEMINI_API_KEY, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: question || 'ওয়েবপেজের স্ক্রিনশট দেখে বলো: পেজ ঠিকমতো লোড হয়েছে কিনা, UI/layout ভাঙা কিনা, দৃশ্যমান কোনো এরর আছে কিনা, মূল কনটেন্ট দেখা যাচ্ছে কিনা। সংক্ষেপে বাংলায় বলো, শেষে এক লাইনে JSON: {"ok":true/false,"note":"..."}' }, { inline_data: { mime_type: 'image/png', data: b64png } }] }] }),
-  });
-  const raw = await r.text();
-  let j = {}; try { j = JSON.parse(raw); } catch {}
-  const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
-  if (t) return t;
-  return 'vision debug: HTTP ' + r.status + ' :: ' + raw.slice(0, 250);
+  const body = JSON.stringify({ contents: [{ parts: [{ text: question || 'ওয়েবপেজের স্ক্রিনশট দেখে বলো: পেজ ঠিকমতো লোড হয়েছে কিনা, UI/layout ভাঙা কিনা, দৃশ্যমান কোনো এরর আছে কিনা, মূল কনটেন্ট দেখা যাচ্ছে কিনা। সংক্ষেপে বাংলায় বলো, শেষে এক লাইনে JSON: {"ok":true/false,"note":"..."}' }, { inline_data: { mime_type: 'image/png', data: b64png } }] }] });
+  let last = '';
+  for (const m of VISION_MODELS) {
+    for (let tryN = 0; tryN < 2; tryN++) {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + keys.GEMINI_API_KEY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+      const raw = await r.text();
+      let j = {}; try { j = JSON.parse(raw); } catch {}
+      const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
+      if (t) return t + '\n[vision: ' + m + ']';
+      last = m + ' HTTP ' + r.status;
+      if (r.status !== 503 && r.status !== 429) break;
+    }
+  }
+  return 'vision ব্যর্থ (' + last + ')';
 }
 async function runAgentTool(env, keys, tool, args, emit) {
   if (tool === 'web.eye') {
