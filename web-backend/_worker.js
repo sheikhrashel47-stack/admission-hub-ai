@@ -24,8 +24,8 @@ const MODELS = [
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
   { pid: 'deepinfra', id: 'di', label: 'DeepInfra · DeepSeek-V3', model: 'deepseek-ai/DeepSeek-V3', speed: 3, quality: 4, coding: 5 },
   { pid: 'together', id: 'tg', label: 'Together · Llama 3.3 70B Turbo', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', speed: 3, quality: 4, coding: 4 },
-  { pid: 'openrouter', id: 'or', label: 'OpenRouter · Nemotron Lightning (free)', model: 'nvidia/nemotron-3.5-lightning:free', speed: 5, quality: 3, coding: 4 },
-  { pid: 'openrouter', id: 'or2', label: 'OpenRouter · North Mini Code (free)', model: 'cohere/north-mini-code:free', speed: 4, quality: 3, coding: 4 },
+  { pid: 'openrouter', id: 'or', label: 'OpenRouter · Nemotron Lightning (free)', model: 'nvidia/nemotron-3.5-lightning:free', speed: 5, quality: 3, coding: 4, hide: 1 },
+  { pid: 'openrouter', id: 'or2', label: 'OpenRouter · North Mini Code (free)', model: 'cohere/north-mini-code:free', speed: 4, quality: 3, coding: 4, hide: 1 },
   { pid: 'huggingface', id: 'hf', label: 'Hugging Face · Qwen2.5 72B', model: 'Qwen/Qwen2.5-72B-Instruct', speed: 2, quality: 3, coding: 3 },
   { pid: 'ollama', id: 'o120', label: 'Ollama · GPT-OSS 120B', model: 'gpt-oss:120b', speed: 3, quality: 4, coding: 5 },
   { pid: 'ollama', id: 'o20', label: 'Ollama · GPT-OSS 20B', model: 'gpt-oss:20b', speed: 4, quality: 3, coding: 4 },
@@ -401,7 +401,7 @@ export default {
     if (method === 'GET' && path === '/api/config') {
       const healthy = await pingCached(keys).catch(() => []);
       const okPids = new Set(healthy.filter((p) => p.ok).map((p) => p.pid));
-      const models = MODELS.filter((m) => hasKey(keys, m.pid) && (okPids.has(m.pid))).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
+      const models = MODELS.filter((m) => !m.hide && hasKey(keys, m.pid) && (okPids.has(m.pid))).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
       return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true, driveBackup: !!(await loadDriveCfg(env)) } });
     }
 
