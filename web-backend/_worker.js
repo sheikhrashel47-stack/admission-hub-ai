@@ -587,7 +587,7 @@ export default {
       let state = null;
       if (b.resume) state = await env.AH_KV.get('agent:task:' + b.resume, 'json').catch(() => null);
       if (!state) state = { id: crypto.randomUUID(), task: String(b.task || '').slice(0, 2000), history: [], i: 0, status: 'running', ts: Date.now() };
-      await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state));
+      await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state)).catch(() => {});
       const stream = new ReadableStream({
         async start(ctrl) {
           const enc = new TextEncoder();
@@ -610,12 +610,12 @@ export default {
               catch (e) { res = { error: String(e.message || e).slice(0, 200) }; }
               emit({ step: state.i, phase: 'result', tool: act.tool, ok: !res.error, preview: JSON.stringify(res).slice(0, 300) });
               state.history.push({ role: 'user', content: 'TOOL RESULT ' + act.tool + ': ' + JSON.stringify(res).slice(0, 4000) });
-              await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state));
+              await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state)).catch(() => {});
               emit({ checkpoint: state.id, step: state.i });
             }
             if (state.status === 'running') state.status = 'maxsteps';
           } catch (e) { state.status = 'error'; state.error = String(e.message || e); emit({ error: state.error }); }
-          await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state));
+          await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state)).catch(() => {});
           emit({ done: true, status: state.status, id: state.id, report: state.report || null });
           ctrl.close();
         },
@@ -652,7 +652,7 @@ export default {
       const healthy = await pingCached(keys).catch(() => []);
       const okPids = new Set(healthy.filter((p) => p.ok).map((p) => p.pid));
       const models = MODELS.filter((m) => !m.hide && hasKey(keys, m.pid) && (okPids.has(m.pid))).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
-      return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: !!keys.GITHUB_PAT, deploy: !!(keys.CF_GLOBAL_KEY && keys.CF_EMAIL), image: true, driveBackup: !!(await loadDriveCfg(env)) } });
+      return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: true, github: !!keys.GITHUB_PAT, deploy: !!(keys.CF_GLOBAL_KEY && keys.CF_EMAIL), image: true, driveBackup: !!(await loadDriveCfg(env)) } });
     }
 
     if (method === 'GET' && path === '/api/system') {
