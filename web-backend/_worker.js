@@ -248,7 +248,12 @@ function pickChain(keys, model, mode, multimodal) {
   } else {
     list = [...MODELS].sort((a, b) => (FALLBACK_ORDER.indexOf(a.pid) - FALLBACK_ORDER.indexOf(b.pid)));
   }
-  if (multimodal) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 4); // 503 হলে পরের Gemini মডেল — ছবি-চ্যাট কখনো মরবে না
+  if (multimodal) {
+    const g = list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]])[0];
+    if (!g) return [];
+    // 503/high-demand হলে পরের Gemini — ছবি-চ্যাট কখনো মরবে না
+    return ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'].map((mn, i) => Object.assign({}, g, { model: mn, id: g.id + '-v' + i }));
+  }
   return list.filter((m) => hasKey(keys, m.pid)).slice(0, 9);
 }
 
