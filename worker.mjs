@@ -288,9 +288,12 @@ async function handle(req) {
       const q = (url.searchParams.get('q') || '').toLowerCase().trim();
       const dateF = (url.searchParams.get('date') || '').trim();
       const proj = url.searchParams.get('project') || '';
+      const arch = url.searchParams.get('archived'); // ডিফল্ট: archived বাদ | ?archived=1 → শুধু archived | ?archived=all → সব
       const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
       const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
       let list = data.chats;
+      if (arch === '1' || arch === 'true') list = list.filter((c) => !!c.archived);
+      else if (arch !== 'all') list = list.filter((c) => !c.archived);
       if (proj) list = list.filter((c) => c.project === proj);
       if (q) list = list.filter((c) => (c.title || '').toLowerCase().includes(q) || (c.messages || []).some((m) => m.role !== 'system' && String(m.content || '').toLowerCase().includes(q)));
       if (dateF) {

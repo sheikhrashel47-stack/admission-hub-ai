@@ -1,9 +1,10 @@
-/* Admission Hub AI — Service Worker v8
+/* Admission Hub AI — Service Worker v9
    - HTML (./, ./index.html): NETWORK-FIRST → সবসময় তাজা ভার্সন (পুরোনো ক্যাশ আর আটকাবে না)
    - Assets (icons/manifest): cache-first → দ্রুত খোলে
    - API (chat/research/files): network only — কখনো cache হয় না
-   - Offline: পুরোনো ক্যাশ থেকে শেল দেখায় */
-const CACHE = 'ahai-v8';
+   - Offline: পুরোনো ক্যাশ থেকে শেল দেখায়
+   v9: Phase 1 polish — jump-to-latest, offline banner, skeletons, reply/quote, archive */
+const CACHE = 'ahai-v9';
 const SHELL = [
   './',
   './index.html',
