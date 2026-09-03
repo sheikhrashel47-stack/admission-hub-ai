@@ -465,7 +465,12 @@ async function buCall(env, path, opts = {}) {
   let lastErr = '';
   for (const k of ks) {
     const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 12000);
-    const r = await fetch('https://api.browser-use.com' + path, { method: opts.method || 'GET', signal: ac.signal, headers: { 'X-Browser-Use-API-Key': k.key, 'Content-Type': 'application/json' }, body: opts.body }).finally(() => clearTimeout(to));
+    let r;
+    try {
+      r = await fetch('https://api.browser-use.com' + path, { method: opts.method || 'GET', signal: ac.signal, headers: { 'X-Browser-Use-API-Key': k.key, 'Content-Type': 'application/json' }, body: opts.body }).finally(() => clearTimeout(to));
+    } catch {
+      throw new Error('BU API CF network থেকে পৌঁছানো যাচ্ছে না (blocked) — screenshot/পরীক্ষার জন্য web.eye ব্যবহার করুন');
+    }
     if (r.ok) return { j: await r.json().catch(() => ({})), keyIndex: k.i };
     lastErr = 'key#' + k.i + ' HTTP ' + r.status;
     if (![401, 402, 403, 429].includes(r.status)) throw new Error('browser-use HTTP ' + r.status);
