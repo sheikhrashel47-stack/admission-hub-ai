@@ -73,7 +73,7 @@ async function loadKeys(env) {
 }
 
 function kvGet(env, key, fallback) { return env.AH_KV.get(key, 'json').then((v) => v ?? fallback); }
-function kvSet(env, key, val) { return env.AH_KV.put(key, JSON.stringify(val)); }
+function kvSet(env, key, val) { return env.AH_KV.put(key, JSON.stringify(val)).catch(() => {}); } // quota-safe: লেখা ব্যর্থ হলে চ্যাট চলবে, সেভ পরে resume হবে
 
 /* ---------- Google Drive backup (loadKeys প্যাটার্ন: env binding → KV cfg:GOOGLE_DRIVE_*_1) ---------- */
 const DRIVE_FOLDER_NAME = 'ADMISSION-HUB-AI-Backups';
@@ -631,10 +631,10 @@ export default {
       await chk('pwa_index', async () => { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); return { bytes: t.length }; });
       await chk('chat_e2e', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'ping', model: 'auto', mode: 'fast' }) }); const t = await r.text(); if (!/done":true/.test(t)) throw new Error('chat done নেই'); return {}; });
       await chk('drive', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/storage'); const j = await r.json(); if (!(j.drive && j.drive.connected)) throw new Error('drive বিছিন্ন'); return {}; });
-      await env.AH_KV.put('watch:latest', JSON.stringify(rep2));
+      await env.AH_KV.put('watch:latest', JSON.stringify(rep2)).catch(() => {});
       const log = (await env.AH_KV.get('watch:log', 'json').catch(() => null)) || [];
       log.unshift({ ts: rep2.ts, ok: rep2.checks.every((c) => c.ok), bad: rep2.checks.filter((c) => !c.ok).map((c) => c.name) });
-      await env.AH_KV.put('watch:log', JSON.stringify(log.slice(0, 30)));
+      await env.AH_KV.put('watch:log', JSON.stringify(log.slice(0, 30))).catch(() => {});
       return json(rep2);
     }
     if (method === 'POST' && path === '/api/owner/unlock') {
@@ -805,7 +805,7 @@ export default {
         }
         files[id] = rec;
         await kvSet(env, 'files', files);
-        await env.AH_KV.put('fileb:' + id, b64);
+        await env.AH_KV.put('fileb:' + id, b64).catch(() => { throw new Error('স্টোরেজে লেখা যায়নি (আজকের ফ্রি কোটা শেষ) — ফাইল সেভ হয়নি, কাল আবার চেষ্টা করুন'); });
         return json(rec);
       }
       const content = (body.content || '').slice(0, MAX_TEXT);
@@ -821,7 +821,7 @@ export default {
       }
       files[id] = rec;
       await kvSet(env, 'files', files);
-      await env.AH_KV.put('file:' + id, content);
+      await env.AH_KV.put('file:' + id, content).catch(() => { throw new Error('স্টোরেজে লেখা যায়নি (আজকের ফ্রি কোটা শেষ) — ফাইল সেভ হয়নি, কাল আবার চেষ্টা করুন'); });
       return json(rec);
     }
     if (method === 'GET' && path === '/api/storage') {
