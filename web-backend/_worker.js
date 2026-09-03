@@ -725,8 +725,9 @@ export default {
     const keys = await loadKeys(env);
 
     if (method === 'POST' && path === '/api/clog') {
-      try { const b = await request.json(); const m = String((b && b.m) || '').slice(0, 400); if (m) await storePut(env, 'clog:' + Date.now() + ':' + Math.random().toString(36).slice(2, 6), m, 604800); } catch (e) {}
-      return json({ ok: true });
+      let saved = null, err = '';
+      try { const b = await request.json(); const m = String((b && b.m) || '').slice(0, 400); if (m) saved = await storePut(env, 'clog:' + Date.now() + ':' + Math.random().toString(36).slice(2, 6), m, 604800); } catch (e) { err = String((e && e.message) || e); }
+      return json({ ok: true, saved: saved, err: err, hasDB: !!env.AH_DB, hasKV: !!env.AH_KV });
     }
     if (method === 'GET' && path === '/api/health') return json({ ok: true });
 
