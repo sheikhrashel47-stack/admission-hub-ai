@@ -61,7 +61,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','TAVILY_API_KEY'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -355,6 +355,49 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' };
+const CF_ACC = 'abb783e456e51a5d338419de93d5e576';
+async function sha256hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+async function ownerUnlock(env, code) {
+  const want = await env.AH_KV.get('owner:code_hash');
+  if (!want) return { error: 'owner code সেট করা নেই' };
+  if ((await sha256hex(String(code || ''))) !== want) return { error: 'ভুল কোড' };
+  const sess = crypto.randomUUID();
+  await env.AH_KV.put('sess:' + sess, '1', { expirationTtl: 7 * 86400 });
+  return { session: sess, ttlDays: 7 };
+}
+async function ownerOk(env, req) {
+  const t = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  if (!t) return false;
+  return !!(await env.AH_KV.get('sess:' + t));
+}
+async function ghApi(keys, path, opts = {}) {
+  const r = await fetch('https://api.github.com' + path, { method: opts.method || 'GET', headers: { Authorization: `Bearer ${keys.GITHUB_PAT}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }, body: opts.body });
+  const t = await r.text(); let j = {}; try { j = JSON.parse(t); } catch {}
+  if (!r.ok) throw new Error('github HTTP ' + r.status + ': ' + String(j.message || '').slice(0, 80));
+  return j;
+}
+async function cfApi(keys, path, opts = {}) {
+  const r = await fetch('https://api.cloudflare.com/client/v4' + path, { method: opts.method || 'GET', headers: { 'X-Auth-Email': keys.CF_EMAIL, 'X-Auth-Key': keys.CF_GLOBAL_KEY, 'Content-Type': 'application/json' }, body: opts.body });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.success === false) throw new Error('cloudflare HTTP ' + r.status + ': ' + String((j.errors || [{}])[0].message || '').slice(0, 80));
+  return j;
+}
+async function runTool(keys, tool, args) {
+  switch (tool) {
+    case 'gh.repos': { const j = await ghApi(keys, '/user/repos?per_page=100&sort=updated'); return { count: j.length, repos: j.map((x) => ({ name: x.name, private: x.private, updated: x.updated_at })) }; }
+    case 'gh.read': { const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}${args.ref ? '?ref=' + args.ref : ''}`); return { path: j.path, size: j.size, text: atob(String(j.content || '').replace(/\n/g, '')).slice(0, 20000) }; }
+    case 'gh.commit': {
+      let sha; try { sha = (await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`)).sha; } catch {}
+      const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`, { method: 'PUT', body: JSON.stringify({ message: args.message || 'agent update', content: btoa(unescape(encodeURIComponent(args.content))), sha, branch: args.branch }) });
+      return { committed: true, sha: j.content && j.content.sha, url: j.content && j.content.html_url };
+    }
+    case 'cf.pages.deployments': { const j = await cfApi(keys, `/accounts/${CF_ACC}/pages/projects/${args.project}/deployments?per_page=${args.limit || 10}`); return { deployments: j.result.map((x) => ({ id: x.id, env: x.environment, status: (x.latest_stage || {}).status, branch: ((x.deployment_trigger || {}).metadata || {}).branch, created: x.created_on })) }; }
+    case 'cf.pages.rollback': { const j = await cfApi(keys, `/accounts/${CF_ACC}/pages/projects/${args.project}/deployments/${args.deploymentId}/rollback`, { method: 'POST' }); return { rolledBack: true, id: j.result && j.result.id }; }
+    case 'cf.workers': { const j = await cfApi(keys, `/accounts/${CF_ACC}/workers/scripts`); return { workers: j.result.map((w) => w.id) }; }
+    case 'cf.kv.keys': { const j = await cfApi(keys, `/accounts/${CF_ACC}/storage/kv/namespaces/${args.ns}/keys?per_page=100`); return { keys: j.result.map((k) => k.name) }; }
+    default: throw new Error('অজানা টুল: ' + tool);
+  }
+}
 let _pingCache = null;
 async function pingCached(keys) {
   const now = Date.now();
@@ -398,11 +441,25 @@ export default {
 
     if (method === 'GET' && path === '/api/health') return json({ ok: true });
 
+    /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
+       পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
+       session ৭ দিন। Destructive টুল (delete) এই ভার্সনে নেই। */
+    if (method === 'POST' && path === '/api/owner/unlock') {
+      const b = await request.json().catch(() => ({}));
+      return json(await ownerUnlock(env, b.code));
+    }
+    if (path === '/api/tools') {
+      if (method !== 'POST') return json({ error: 'POST লাগবে' }, 405);
+      if (!(await ownerOk(env, request))) return json({ error: '🔒 মালিক পরিচয় লাগবে — আগে /api/owner/unlock' }, 401);
+      const b = await request.json().catch(() => ({}));
+      try { return json({ ok: true, tool: b.tool, result: await runTool(keys, b.tool, b.args || {}) }); }
+      catch (e) { return json({ ok: false, tool: b.tool, error: String(e.message || e).slice(0, 200) }, 500); }
+    }
     if (method === 'GET' && path === '/api/config') {
       const healthy = await pingCached(keys).catch(() => []);
       const okPids = new Set(healthy.filter((p) => p.ok).map((p) => p.pid));
       const models = MODELS.filter((m) => !m.hide && hasKey(keys, m.pid) && (okPids.has(m.pid))).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
-      return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true, driveBackup: !!(await loadDriveCfg(env)) } });
+      return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: !!keys.GITHUB_PAT, deploy: !!(keys.CF_GLOBAL_KEY && keys.CF_EMAIL), image: true, driveBackup: !!(await loadDriveCfg(env)) } });
     }
 
     if (method === 'GET' && path === '/api/system') {
