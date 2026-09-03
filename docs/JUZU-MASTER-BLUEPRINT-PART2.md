@@ -116,3 +116,6 @@ USER → PERSISTENT CHAT → INTENT ENGINE → JUZU ORCHESTRATOR (Planner+Memory
 **PRO:** MCP + Code Index + RAG + Sub-agents + Reviewer + Sandbox + Background Jobs + Observability।
 **PRO MAX:** Model Cascade + Multi-model Debate + Visual Regression + Self-healing + Auto Benchmark + Skill Registry + Skill Composition + Long-running Jobs + Auto Documentation + Auto PR Review + Agent Evaluation Lab + Crash Recovery + Cost/Quota Intelligence।
 **ULTRA:** Main→Planner→Researcher→Coder→Browser→Tester→Security Reviewer→Final Reviewer→Deployment→Health Monitor→Rollback-if-needed।
+
+---
+> 🗺️ **কাজের ক্রম দেখো:** `docs/JUZU-EXECUTION-PLAN.md` — সব blueprint মিলিয়ে 10 phase-এ ভাগ করা মাস্টার রোডম্যাপ। এটাই এখন একমাত্র execution সত্য।

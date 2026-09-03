@@ -256,3 +256,6 @@
 ## 🏆 চূড়ান্ত নোট (owner-এর ভাষায়)
 "এই ২৫০টি capability একসঙ্গে 'একটা giant prompt' দিয়ে model-এর মধ্যে ঢুকিয়ে দিলেই হবে না। এগুলোকে বাস্তবে **orchestrator + memory database + model router + tool gateway + browser/computer runtime + durable task state + UI renderer + security/permission layer** হিসেবে implement করতে হবে। তাহলেই এটা সত্যিকারের agent architecture হবে — শুধু 'একটা chatbot-এর উপর অনেকগুলো instruction' হবে না।"
 - উদাহরণ interaction: "Question Bank-এ mobile-এ scrolling কেন smooth না?" → দেখছি → memory→GitHub→codebase→browser→repro→diagnosis→implement→build→test→visual verify। "Hi ভাই" → কোনো workflow নয়। "ওই bug-টা ঠিক কর" → context resolve।
+
+---
+> 🗺️ **কাজের ক্রম দেখো:** `docs/JUZU-EXECUTION-PLAN.md` — সব blueprint মিলিয়ে 10 phase-এ ভাগ করা মাস্টার রোডম্যাপ। এটাই এখন একমাত্র execution সত্য।

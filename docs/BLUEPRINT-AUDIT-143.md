@@ -162,3 +162,6 @@
 4. **Notify engine** = Telegram (36,85,118,126)
 5. **Index/RAG** (24,25,23)
 6. বাকি ❌ = প্রয়োজন হলে
+
+---
+> 🗺️ **কাজের ক্রম দেখো:** `docs/JUZU-EXECUTION-PLAN.md` — সব blueprint মিলিয়ে 10 phase-এ ভাগ করা মাস্টার রোডম্যাপ। এটাই এখন একমাত্র execution সত্য।

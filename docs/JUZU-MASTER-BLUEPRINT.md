@@ -161,3 +161,6 @@ Analyze আগে বলে তারপর approval। বাধ্যতাম
 141. **Developer-experience communication** (I inspected/found/changed/tested/fixed/verified)।
 142. **Collaboration**: YOU=OWNER/DIRECTOR · JUZU=OPERATOR · TOOLS=HANDS · MODELS=BRAINS · MEMORY=KNOWLEDGE · SANDBOX=WORKSPACE · VERIFIER=QA।
 143. **Final E2E flow**: USER→CHAT→INTENT→(CONVERSATION | TASK→ANALYZE→PLAN→APPROVAL?→EXECUTE→TOOL ROUTER→OBSERVE→VERIFY→PASS/FAIL→REPLAN…)→FINAL REPORT→**SESSION STILL ACTIVE**→"এবার এটা করো…"।
+
+---
+> 🗺️ **কাজের ক্রম দেখো:** `docs/JUZU-EXECUTION-PLAN.md` — সব blueprint মিলিয়ে 10 phase-এ ভাগ করা মাস্টার রোডম্যাপ। এটাই এখন একমাত্র execution সত্য।

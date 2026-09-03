@@ -77,3 +77,6 @@ INCIDENT → freeze risky changes → collect logs → identify service → comp
 OWNER → JUZU CORE (Intelligence+Planner+Memory) → MODEL ROUTER (Coder/Research/Review brains) → TOOL ENGINE (GitHub/Browser/Cloudflare) → SANDBOX/CI → TEST+SECURITY → VISUAL QA → DEPLOY GATE → POST-DEPLOY QA → PASS=COMPLETE / FAIL=RECOVER।
 **দর্শন:** "AI that writes code" নয় — **"AI Engineering Operating System"**।
 **নিয়ম:** full access থাকলেও destructive action-এ internal approval firewall — এতে agent দুর্বল হয় না, account-উড়ে-যাওয়ার ঝুঁকি কমে।
+
+---
+> 🗺️ **কাজের ক্রম দেখো:** `docs/JUZU-EXECUTION-PLAN.md` — সব blueprint মিলিয়ে 10 phase-এ ভাগ করা মাস্টার রোডম্যাপ। এটাই এখন একমাত্র execution সত্য।
