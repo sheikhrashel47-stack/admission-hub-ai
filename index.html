@@ -406,6 +406,8 @@ svg{width:20px;height:20px;display:block}
 .cfsHd button{color:#fff;font-size:13px;font-weight:700;border:1px solid rgba(255,255,255,.35);border-radius:9px;padding:6px 12px;background:none}
 #cfsBody{flex:1;overflow:auto;background:#0C121B;color:#D7E0EC;border-radius:12px;padding:14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:0}
 .cbFull{margin-left:auto}
+.msgA pre,.codeBox pre,.wsReport pre{max-height:360px;overflow:auto}
+.msgA table{display:block;overflow-x:auto;max-width:100%}
 </style>
 </head>
 <body>
@@ -738,6 +740,14 @@ function md(src){
   return h;
 }
 
+/* streaming-safe markdown: খোলা fence/bold বন্ধ করে render — flicker/ভাঙা block নেই */
+function mdLive(src){
+  let t=src;
+  if(((t.match(/```/g)||[]).length)%2)t+='\n```';
+  if(((t.match(/\*\*/g)||[]).length)%2)t+='**';
+  return md(t);
+}
+
 /* ============ task card (real steps driven by events) ============ */
 function taskCard(steps){
   const d=document.createElement('div');d.className='taskCard';
@@ -908,7 +918,7 @@ async function go(text){
           if(!stepsShown&&shell._card){const li=shell._steps.length-1;tset(shell._card,Math.max(0,li-1),'done');tset(shell._card,li,'now');stepsShown=true}
           typing.style.display='none';
           acc+=ev.token;
-          body.innerHTML=md(acc);
+          body.innerHTML=mdLive(acc);
           if(shell._card)body.appendChild(shell._card);
           scrollB();
         }
@@ -976,7 +986,7 @@ async function regenerate(msg){
     const reader=r.body.getReader(),dec=new TextDecoder();let buf='';
     for(;;){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
       while((i=buf.indexOf('\n\n'))>=0){const ch=buf.slice(0,i);buf=buf.slice(i+2);const ln=ch.split('\n').find(l=>l.startsWith('data:'));if(!ln)continue;const ev=JSON.parse(ln.slice(5));
-        if(ev.token){acc+=ev.token;body.innerHTML=md(acc);scrollB()}
+        if(ev.token){acc+=ev.token;body.innerHTML=mdLive(acc);scrollB()}
         if(ev.done){body.innerHTML=md(acc);_msgMeta.set(shell,{id:curId,mid:shell.dataset.mid,userText:(msg.userText||''),srcs:ev.sources||[],content:acc});bindLongPress(shell)}
         if(ev.stopped){body.innerHTML='<div class="errCard"><b>জেনারেশন বাধাপ্রাপ্ত</b><p>'+esc(ev.error||'সার্ভার সমস্যা')+'</p><div class="row"><button class="primary" id="rgRetry">আবার চেষ্টা</button></div></div>';const rb=body.querySelector('#rgRetry');if(rb)rb.onclick=()=>regenerate(msg)}
       }}
