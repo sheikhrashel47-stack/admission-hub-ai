@@ -432,7 +432,8 @@ async function buCall(env, path, opts = {}) {
   if (!ks.length) throw new Error('কোনো Browser Use key নেই');
   let lastErr = '';
   for (const k of ks) {
-    const r = await fetch('https://api.browser-use.com' + path, { method: opts.method || 'GET', headers: { 'X-Browser-Use-API-Key': k.key, 'Content-Type': 'application/json' }, body: opts.body });
+    const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 12000);
+    const r = await fetch('https://api.browser-use.com' + path, { method: opts.method || 'GET', signal: ac.signal, headers: { 'X-Browser-Use-API-Key': k.key, 'Content-Type': 'application/json' }, body: opts.body }).finally(() => clearTimeout(to));
     if (r.ok) return { j: await r.json().catch(() => ({})), keyIndex: k.i };
     lastErr = 'key#' + k.i + ' HTTP ' + r.status;
     if (![401, 402, 403, 429].includes(r.status)) throw new Error('browser-use HTTP ' + r.status);
@@ -470,7 +471,7 @@ async function runAgentTool(env, keys, tool, args, emit) {
   if (tool === 'bu.status') { const r = await buCall(env, '/api/v2/tasks/' + args.taskId); return { status: r.j.status, result: String(r.j.result || r.j.output || '').slice(0, 1500) }; }
   if (tool === 'bu.health') {
     const ks = await buKeys(env); const out = [];
-    for (const k of ks) { try { const r = await fetch('https://api.browser-use.com/api/v2/tasks?pageSize=1', { headers: { 'X-Browser-Use-API-Key': k.key } }); out.push({ key: k.i, ok: r.ok, status: r.status }); } catch { out.push({ key: k.i, ok: false }); } }
+    for (const k of ks) { try { const ac2 = new AbortController(); const to2 = setTimeout(() => ac2.abort(), 10000); const r = await fetch('https://api.browser-use.com/api/v2/tasks?pageSize=1', { signal: ac2.signal, headers: { 'X-Browser-Use-API-Key': k.key } }).finally(() => clearTimeout(to2)); out.push({ key: k.i, ok: r.ok, status: r.status }); } catch { out.push({ key: k.i, ok: false, error: 'timeout/network' }); } }
     return { keys: out, note: 'balance দেখার API নেই — 401/402 এলে ওই key মৃত ধরে পরেরটা ব্যবহার হবে' };
   }
   if (tool === 'verify.url') {
