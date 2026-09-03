@@ -26,10 +26,13 @@ const MODELS = [
   { pid: 'together', id: 'tg', label: 'Together · Llama 3.3 70B Turbo', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', speed: 3, quality: 4, coding: 4 },
   { pid: 'openrouter', id: 'or', label: 'OpenRouter · Free Router', model: 'openrouter/free', speed: 3, quality: 4, coding: 4 },
   { pid: 'huggingface', id: 'hf', label: 'Hugging Face · Qwen2.5 72B', model: 'Qwen/Qwen2.5-72B-Instruct', speed: 2, quality: 3, coding: 3 },
+  { pid: 'pollinations', id: 'polli', label: 'Pollinations · Free (key লাগে না)', model: 'openai', speed: 2, quality: 2, coding: 2 },
 ];
 const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY' };
 // টেক্সট চ্যাটের ফিক্সড fallback ক্রম (প্রথমটা সেরা/দ্রুততম)
-const FALLBACK_ORDER = ['groq', 'cerebras', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'openrouter', 'huggingface'];
+const FALLBACK_ORDER = ['groq', 'cerebras', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'openrouter', 'huggingface', 'pollinations'];
+// key লাগে না এমন provider (pollinations) সবসময় "available" — বাকিরা key-নির্ভর
+const hasKey = (keys, pid) => (pid === 'pollinations' ? true : !!keys[KEYMAP[pid]]);
 const NL = '\n';
 const NN = '\n\n';
 const TEXT_EXT = ['txt','md','csv','json','html','htm','css','js','mjs','ts','tsx','jsx','xml','yml','yaml','sh','sql','py','env'];
@@ -184,7 +187,7 @@ function pickChain(keys, model, mode, multimodal) {
     list = [...MODELS].sort((a, b) => (FALLBACK_ORDER.indexOf(a.pid) - FALLBACK_ORDER.indexOf(b.pid)));
   }
   if (multimodal) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 1);
-  return list.filter((m) => keys[KEYMAP[m.pid]]).slice(0, 9);
+  return list.filter((m) => hasKey(keys, m.pid)).slice(0, 9);
 }
 
 function cleanMsgs(messages) {
@@ -240,29 +243,52 @@ async function* geminiStream(key, model, messages, signal) {
 }
 
 async function* streamAnswer(keys, messages, model, mode, emit, signal, multimodal) {
+  // নির্দিষ্ট মডেল বাছা হলেও সেটা ব্যর্থ হলে AUTO chain-এ নেমে আসে — ইউজার কখনো "সব ব্যর্থ" দেখবে না
+  const explicit = model && model !== 'auto';
+  const chains = explicit
+    ? [pickChain(keys, model, mode, multimodal), pickChain(keys, 'auto', mode, multimodal)]
+    : [pickChain(keys, model, mode, multimodal)];
+  const tried = new Set();
   let attempt = null;
-  const chain = pickChain(keys, model, mode, multimodal);
-  if (!chain.length) throw new Error('কোনো AI provider key নেই — KV-তে cfg:* চেক করো');
-  for (const m of chain) {
-    const key = keys[KEYMAP[m.pid]];
-    const ac = new AbortController();
-    const onAbort = () => ac.abort();
-    if (signal) { if (signal.aborted) ac.abort(); else signal.addEventListener('abort', onAbort); }
-    try {
-      emit({ attempt: { provider: m.pid, label: m.label, model: m.model } }); attempt = m;
-      let got = false;
-      const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1' }[m.pid];
-      const it = m.pid === 'gemini' ? geminiStream(key, m.model, messages, ac.signal) : openaiStream(base, key, m.model, messages, ac.signal);
-      for await (const t of it) { got = true; yield t; }
-      if (!got) throw new Error('খালি');
-      return attempt;
-    } catch (e) {
-      if (ac.signal.aborted) throw e;
-    } finally {
-      signal?.removeEventListener('abort', onAbort);
+  for (const chain of chains) {
+    for (const m of chain) {
+      const tag = m.pid + ':' + m.id;
+      if (tried.has(tag)) continue;
+      tried.add(tag);
+      const key = keys[KEYMAP[m.pid]];
+      const ac = new AbortController();
+      const onAbort = () => ac.abort();
+      if (signal) { if (signal.aborted) ac.abort(); else signal.addEventListener('abort', onAbort); }
+      try {
+        emit({ attempt: { provider: m.pid, label: m.label, model: m.model } }); attempt = m;
+        let got = false;
+        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1' }[m.pid];
+        const it = m.pid === 'gemini' ? geminiStream(key, m.model, messages, ac.signal)
+          : m.pid === 'pollinations' ? pollinationsStream(messages, ac.signal)
+          : openaiStream(base, key, m.model, messages, ac.signal);
+        for await (const t of it) { got = true; yield t; }
+        if (!got) throw new Error('খালি');
+        return attempt;
+      } catch (e) {
+        if (ac.signal.aborted) throw e;
+      } finally {
+        signal?.removeEventListener('abort', onAbort);
+      }
     }
   }
   throw new Error('সব AI provider ব্যর্থ');
+}
+
+// keyless fallback: Pollinations text GET (শুধু শেষ ইউজার-বার্তা, URL-সীমার জন্য ছোট)
+async function* pollinationsStream(messages, signal) {
+  const last = [...messages].reverse().find((m) => m.role === 'user' && typeof m.content === 'string');
+  const q = (last?.content || '').slice(0, 1500);
+  if (!q.trim()) throw new Error('খালি প্রশ্ন');
+  const r = await fetch('https://text.pollinations.ai/' + encodeURIComponent(q) + '?model=openai', { signal });
+  if (!r.ok) throw new Error('pollinations HTTP ' + r.status);
+  const t = (await r.text()).trim();
+  if (!t) throw new Error('খালি উত্তর');
+  yield t;
 }
 
 async function searchWeb(key, query, max = 5) {
@@ -313,18 +339,24 @@ function parseSuggestions(ans) {
 }
 const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1' };
 async function pingProviders(keys) {
+  // §45 সৎ health: model-list নয় — আসল ১-টোকেন completion দিয়ে পরীক্ষা (60s cache আছে)
   const out = []; const seen = new Set();
   for (const m of MODELS) {
     if (seen.has(m.pid)) continue;
-    const key = keys[KEYMAP[m.pid]];
-    if (!key) continue;
+    if (!hasKey(keys, m.pid)) continue;
     seen.add(m.pid);
+    const key = keys[KEYMAP[m.pid]] || '';
     try {
-      let r;
-      if (m.pid === 'gemini') r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`);
-      else if (m.pid === 'openrouter') r = await fetch(`${PING_BASE[m.pid]}/auth/key`, { headers: { Authorization: `Bearer ${key}` } });
-      else r = await fetch(`${PING_BASE[m.pid]}/models`, { headers: { Authorization: `Bearer ${key}` } });
-      out.push({ pid: m.pid, label: m.label, ok: !!r.ok });
+      let ok = false;
+      if (m.pid === 'gemini') ok = (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`)).ok;
+      else if (m.pid === 'openrouter') ok = (await fetch(`${PING_BASE.openrouter}/auth/key`, { headers: { Authorization: `Bearer ${key}` } })).ok;
+      else if (m.pid === 'pollinations') { const r = await fetch('https://text.pollinations.ai/' + encodeURIComponent('ping')); ok = r.ok && (await r.text()).trim().length > 0; }
+      else {
+        const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000);
+        const r = await fetch(`${PING_BASE[m.pid]}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }) });
+        clearTimeout(to); ok = r.ok;
+      }
+      out.push({ pid: m.pid, label: m.label, ok });
     } catch { out.push({ pid: m.pid, label: m.label, ok: false }); }
   }
   return out;
@@ -342,18 +374,18 @@ export default {
     if (method === 'GET' && path === '/api/health') return json({ ok: true });
 
     if (method === 'GET' && path === '/api/config') {
-      const models = MODELS.filter((m) => keys[KEYMAP[m.pid]]).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
+      const models = MODELS.filter((m) => hasKey(keys, m.pid)).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
       return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true, driveBackup: !!(await loadDriveCfg(env)) } });
     }
 
     if (method === 'GET' && path === '/api/system') {
-      const n = MODELS.filter((m) => keys[KEYMAP[m.pid]]).length;
       const providers = await pingProviders(keys).catch(() => []);
+      const n = providers.filter((p) => p.ok).length;
       const drv = await loadDriveCfg(env);
       return json({
         providers,
         services: [
-          { name: 'AI Providers', status: n ? n + ' সক্রিয়' : 'কোনো key নেই', dot: n ? 'ok' : 'err' },
+          { name: 'AI Providers', status: providers.length ? n + '/' + providers.length + ' সক্রিয়' : 'কোনো key নেই', dot: n ? 'ok' : 'err' },
           { name: 'API Server', status: 'Operational', dot: 'ok' },
           { name: 'Web Research', status: keys.TAVILY_API_KEY ? 'Operational' : 'Setup needed', dot: keys.TAVILY_API_KEY ? 'ok' : 'warn' },
           { name: 'Storage (KV)', status: 'Operational', dot: 'ok' },
