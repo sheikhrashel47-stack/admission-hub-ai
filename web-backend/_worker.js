@@ -145,7 +145,7 @@ async function vaultIA(env, name, bytes) {
   const ident = 'ahai-vault-' + new Date().toISOString().slice(0, 7);
   const r = await fetch('https://s3.us.archive.org/' + ident + '/' + encodeURIComponent(name), {
     method: 'PUT',
-    headers: { Authorization: 'LOW ' + ak + ':' + sk, 'x-archive-auto-make-bucket': 'yes', 'x-archive-meta-collection': 'opensource', 'x-archive-meta-mediatype': 'data' },
+    headers: { Authorization: 'LOW ' + ak + ':' + sk, 'x-archive-auto-make-bucket': '1', 'x-archive-meta-collection': 'opensource', 'x-archive-meta-mediatype': 'data' },
     body: bytes,
   });
   if (!r.ok) throw new Error('ia HTTP ' + r.status);
