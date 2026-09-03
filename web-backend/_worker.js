@@ -599,7 +599,7 @@ export default {
       if (method !== 'POST') return json({ error: 'POST লাগবে' }, 405);
       if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক পরিচয় লাগবে — আগে /api/owner/unlock' }, 401);
       const b = await req.json().catch(() => ({}));
-      try { return json({ ok: true, tool: b.tool, result: await runTool(keys, b.tool, b.args || {}) }); }
+      try { return json({ ok: true, tool: b.tool, result: await runAgentTool(env, keys, b.tool, b.args || {}, () => {}) }); }
       catch (e) { return json({ ok: false, tool: b.tool, error: String(e.message || e).slice(0, 200) }, 500); }
     }
     if (method === 'GET' && path === '/api/config') {
