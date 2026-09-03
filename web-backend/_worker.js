@@ -683,7 +683,7 @@ export default {
       return json(mem);
     }
 
-    if (method === 'GET' && path === '/api/usage') return json(await kvGet(env, 'usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} }));
+    if (method === 'GET' && path === '/api/usage') { const d = await kvGet(env, 'chats', { chats: [] }); return json(d.usage || await kvGet(env, 'usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} })); }
 
     if (method === 'GET' && path === '/api/chats') {
       const data = await kvGet(env, 'chats', { chats: [] });
@@ -986,13 +986,13 @@ export default {
             if (ph && ph.partial) Object.assign(ph, { content: answer, partial: false, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: srcs2, suggestions: parsed.list });
             else c.messages.push({ role: 'assistant', content: answer, ts: Date.now(), model: (attempt?.pid || '') + ' · ' + (attempt?.model || ''), mode: meta.mode, meta, sources: srcs2, suggestions: parsed.list });
             c.updatedAt = Date.now();
-            await kvSet(env, 'chats', data);
-            const u = await kvGet(env, 'usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} });
+            if (!data.usage) data.usage = await kvGet(env, 'usage', { total: { requests: 0, tokens: 0, cost: 0 }, byModel: {} });
+            const u = data.usage;
             u.total.requests += 1; u.total.tokens += meta.tokens;
             const kk = attempt?.label || 'unknown';
             u.byModel[kk] = u.byModel[kk] || { requests: 0, tokens: 0 };
             u.byModel[kk].requests += 1; u.byModel[kk].tokens += meta.tokens;
-            await kvSet(env, 'usage', u);
+            await kvSet(env, 'chats', data); // এক লেখাতেই history+usage — অর্ধেক কোটা খরচ
             emit({ done: true, id: c.id, meta, sources: body.web ? (await kvGet(env, 'lastSources', [])) : [], suggestions: parsed.list });
           } catch (e) {
             try {
