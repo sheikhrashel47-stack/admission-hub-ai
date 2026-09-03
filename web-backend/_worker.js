@@ -248,7 +248,7 @@ function pickChain(keys, model, mode, multimodal) {
   } else {
     list = [...MODELS].sort((a, b) => (FALLBACK_ORDER.indexOf(a.pid) - FALLBACK_ORDER.indexOf(b.pid)));
   }
-  if (multimodal) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 1);
+  if (multimodal) return list.filter((m) => m.pid === 'gemini' && keys[KEYMAP[m.pid]]).slice(0, 4); // 503 হলে পরের Gemini মডেল — ছবি-চ্যাট কখনো মরবে না
   return list.filter((m) => hasKey(keys, m.pid)).slice(0, 9);
 }
 
