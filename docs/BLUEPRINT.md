@@ -28,8 +28,8 @@
 
 | Phase | নাম | অবস্থা | যা আছে (বাস্তব) / যা বাকি |
 |---|---|---|---|
-| **1** | Premium Chat UI | ✅ **কার্যত সম্পূর্ণ** | চ্যাট/কম্পোজার/+ মেনু/⋮ মেনু/long-press/markdown+code/মডেল সিলেক্টর/থিম/কীবোর্ড/loading-error/ছবি-ফাইল UI+আপলোড স্পিনার/virtualized windowed history। **বাকি:** jump-to-latest, loading skeleton, offline/reconnect banner, tool-executing state, desktop responsive, ১০k-message full virtualization |
-| **2** | AI Core + Router | ✅ **~৯০%** | Multi-provider (Gemini/Groq/Cerebras/Mistral/OpenRouter), auto fallback চেইন, SSE streaming, context (tail ২৪ + summary compaction), retry/regenerate, provider health ping, vision+PDF → Gemini রাউটিং। **বাকি:** model registry-তে full capability metadata, health engine (latency/success/quota), semantic memory, token budget manager, tool-aware trimming, durable task runtime, parallel execution |
+| **1** | Premium Chat UI | ✅ **সম্পূর্ণ (ডিপ্লয়ড)** | চ্যাট/কম্পোজার/+ মেনু/⋮ মেনু/long-press/markdown+code/মডেল সিলেক্টর/থিম/কীবোর্ড/loading-error/ছবি-ফাইল UI+আপলোড স্পিনার/virtualized windowed history/**jump-to-latest/loading skeleton/offline-reconnect banner/tool-executing ("এজেন্ট ফাইল/ছবি বিশ্লেষণ করছে") state/reply-quote/archive/desktop responsive (≥760px)**। **বাকি:** শুধু ১০k-message full virtualization |
+| **2** | AI Core + Router | ✅ **~৯০%** | Multi-provider **৯টি** (Groq/Cerebras/SambaNova/Gemini/Mistral/DeepInfra/Together/OpenRouter/HuggingFace) + **explicit `FALLBACK_ORDER` চেইন** (key থাকলেই অটো যুক্ত), SSE streaming, context (tail ২৪ + summary compaction), retry/regenerate, provider health ping, vision+PDF → Gemini রাউটিং। **বাকি:** model registry-তে full capability metadata, health engine (latency/success/quota), semantic memory, token budget manager, tool-aware trimming, durable task runtime, parallel execution |
 | **3** | Universal Tool System | 🟡 **~৪০% (ফিক্সড-ফ্লো)** | ✅ web search (Tavily), file read/write/analyze, chat/project search, Google Drive backup। ❌ model-driven tool-calling loop, code execution/shell, GitHub ops, Cloudflare/Supabase/Gmail/Telegram/Browser tools |
 | **4** | Autonomous Agent Engine | ⬜ **শুরু হয়নি** | `features.agent:false`; plan→tools→execute→verify লুপ নেই |
 | **4.5** | Multi-Agent Workforce | ⬜ | — |
@@ -42,6 +42,16 @@
 | **10** | Full QA + Production | ⬜ | — |
 
 **এক লাইনে:** Phase 1 শেষ, Phase 2 feature-complete (advanced অংশ বাকি) → দাঁড়িয়ে আছে **Phase 3 (model-driven tool loop)**-এর দরজায়, যেটা Phase 4 Agent-এর ভিত্তি।
+
+### 🔧 Git/Deploy sync অবস্থা (২০২৬-০৯-০৩)
+
+- ✅ `main` এখন লাইভ সাইটের সাথে **হুবহু মিলে যায়** (`main/web/index.html` == gh-pages `index.html`, ১৬২৩ লাইন)
+- ✅ দুইটা ঝুলন্ত ব্রাঞ্চ মার্জ হয়েছে: `arena/01a06399` (Phase 1 polish — আগে gh-pages-এ ডিপ্লয়ড ছিল কিন্তু main-এ মার্জ হয়নি) ও `arena/01a0640f` (৪ নতুন provider + `FALLBACK_ORDER`)
+- ⚠️ **নিয়ম:** নতুন কাজ সবসময় `main`-এর `web/` থেকে শুরু করে `gh-pages`-এ ডিপ্লয় করো। কখনো `gh-pages` থেকে উল্টো দিকে না — নইলে আবার drift হবে
+- ⬜ **বাকি:** `arena/01a0640f`-এর নতুন provider চেইন CF Pages backend-এ **ডিপ্লয় করা** (Cloudflare API token দরকার — আগেরটা `401 Invalid API Token`)
+- ⬜ **বাকি:** নতুন ৪ provider-এর API key KV `cfg:*`-তে বসানো (key না বসালে সেগুলো config-এ দেখাবে না — বিদ্যমান নিরাপদ আচরণ)
+- ⬜ **ঝুঁকি:** backend কোড ৩ কপি (`server.mjs` / `worker.mjs` / `web-backend/_worker.js`) — হাতে sync করতে হয়; ভবিষ্যতে এক উৎসে আনা উচিত
+- ⬜ **নেই:** `.github/workflows` — কোনো CI/CD নেই, সব ম্যানুয়াল (Phase 8)
 
 ---
 

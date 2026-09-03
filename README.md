@@ -9,13 +9,13 @@
 | কী | লিংক |
 |---|---|
 | 🌐 **PWA অ্যাপ (Public)** | **https://sheikhrashel47-stack.github.io/admission-hub-ai/** — ব্রাউজারে খুলো → **Add to Home Screen** (iOS: Safari → Share → Add to Home Screen) |
-| 🤖 AI Backend (free) | `https://rashelzayan213.workers.dev/admission-hub-ai` — Cloudflare Workers (keys server-side) |
+| 🤖 AI Backend (free) | `https://admission-hub-ai.pages.dev` — Cloudflare Pages `_worker.js` + KV (keys server-side) |
 | 📦 GitHub repo | `https://github.com/sheikhrashel47-stack/admission-hub-ai` |
 
 ## যা আছে (সত্যি যা আছে)
 
 - 💬 প্রিমিয়াম chat — streaming, markdown, tables, code highlight, citations
-- 🧠 Model Router: AUTO (task-ভিত্তিক) + fallback (Groq → Gemini → Cerebras → Mistral)
+- 🧠 Model Router: AUTO (task-ভিত্তিক) + explicit fallback chain (Groq → Gemini → Mistral → OpenRouter; Cerebras বাদ — ফ্রি ক্রেডিট শেষ)
 - 🔎 Web Research (Tavily) — live steps + clickable সোর্স
 - 📁 ফাইল: upload / preview / AI বিশ্লেষণ / প্রশ্ন — **PDF (Gemini নেটিভ পার্সিং)** + txt/md/csv/json/কোড
 - 🖼️ ছবি বিশ্লেষণ — গ্যালারি বা ক্যামেরা থেকে ছবি (Gemini vision), PWA-তে ক্যামেরা capture
@@ -29,7 +29,7 @@
 ## আর্কিটেকচার (সব ফ্রি)
 
 ```
-📱 PWA (GitHub Pages)  ──►  ☁️ Cloudflare Workers backend  ──►  Groq/Gemini/Cerebras/Mistral + Tavily
+📱 PWA (GitHub Pages)  ──►  ☁️ Cloudflare Pages backend  ──►  Groq/Gemini/Mistral/OpenRouter + Tavily
                                  (KV: chats/files/memory)
 ```
 
