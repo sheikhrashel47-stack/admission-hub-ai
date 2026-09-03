@@ -115,6 +115,27 @@ async function filebGet(env, id) {
   if (v) return v;
   return await storeGet(env, 'fileb:' + id);
 }
+function htmlToText(h) { return String(h).replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ').trim(); }
+async function ddgSearch(q) {
+  try {
+    const r = await fetch('https://lite.duckduckgo.com/lite/?q=' + encodeURIComponent(q), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }, body: 'q=' + encodeURIComponent(q) });
+    const t = await r.text(); const out = []; let m;
+    const re = /<a[^>]+href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+    while ((m = re.exec(t)) && out.length < 5) { if (/duckduckgo\.com\/(l|y)\?/.test(m[1]) || !m[2].trim()) continue; out.push({ title: htmlToText(m[2]).slice(0, 120), url: m[1], snippet: '' }); }
+    return out;
+  } catch { return []; }
+}
+async function readPage(env, url) {
+  const jk = await storeGet(env, 'cfg:JINA_API_KEY');
+  if (jk) { try { const r = await fetch('https://r.jina.ai/' + url, { headers: { Authorization: 'Bearer ' + jk } }); if (r.ok) { const t = await r.text(); if (t.trim()) return { source: 'jina reader', text: t.slice(0, 20000) }; } } catch {} }
+  const fk = await storeGet(env, 'cfg:FIRECRAWL_API_KEY');
+  if (fk) { try { const r = await fetch('https://api.firecrawl.dev/v2/scrape', { method: 'POST', headers: { Authorization: 'Bearer ' + fk, 'Content-Type': 'application/json' }, body: JSON.stringify({ url, formats: ['markdown'] }) }); const j = await r.json().catch(() => ({})); const md = j && j.data && j.data.markdown; if (md) return { source: 'firecrawl', text: String(md).slice(0, 20000) }; } catch {} }
+  const sk = await storeGet(env, 'cfg:SCRAPINGBEE_API_KEY');
+  if (sk) { try { const r = await fetch('https://app.scrapingbee.com/api/v1/?api_key=' + sk + '&url=' + encodeURIComponent(url)); if (r.ok) { const t = await r.text(); if (t.trim()) return { source: 'scrapingbee', text: htmlToText(t).slice(0, 20000) }; } } catch {} }
+  const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ahai/1.0)' } });
+  if (!r.ok) throw new Error('read HTTP ' + r.status);
+  return { source: 'direct fetch', text: htmlToText(await r.text()).slice(0, 20000) };
+}
 /* ---- Vault framework: Drive (private) + Telegram (unlimited) + Internet Archive (encrypted cold) ---- */
 async function backupKey(env) {
   let k = await storeGet(env, 'cfg:BACKUP_KEY');
@@ -529,7 +550,7 @@ const AGENT_SYS = `তুমি "ADMISSION HUB AI Agent" — মালিকে�
 প্রতি উত্তরে শুধু একটা JSON (কোনো অতিরিক্ত লেখা নয়):
 {"thought":"এই ধাপে কী ভাবলে","action":{"tool":"<নাম>","args":{...}}}
 অথবা কাজ শেষ হলে: {"thought":"...","final":"<markdown রিপোর্ট: কী করেছ, প্রমাণ, বদল, পরামর্শ>"}
-টুলসমূহ: gh.repos{} · gh.read{repo,path,ref?} · gh.commit{repo,path,content,message,branch?} · cf.pages.deployments{project,limit?} · cf.pages.rollback{project,deploymentId} · cf.workers{} · cf.kv.keys{ns} · web.search{query} · verify.url{url,expect?} · web.eye{url,question?} · bu.task{task,url?} · bu.status{taskId} · bu.health{} · review.diff{diff} · deploy.ghpages{path,content,message}
+টুলসমূহ: gh.repos{} · gh.read{repo,path,ref?} · gh.commit{repo,path,content,message,branch?} · cf.pages.deployments{project,limit?} · cf.pages.rollback{project,deploymentId} · cf.workers{} · cf.kv.keys{ns} · web.search{query} · verify.url{url,expect?} · web.eye{url,question?} · web.read{url} · bu.task{task,url?} · bu.status{taskId} · bu.health{} · review.diff{diff} · deploy.ghpages{path,content,message}
 নিয়ম: (১) সর্বোচ্চ ১০ action (২) gh.commit/deploy.ghpages-এর আগে review.diff বাধ্যতামূলক (৩) deploy.ghpages-এর পর verify.url{url:"https://admission-hub-ai.pages.dev/api/system"} বাধ্যতামূলক (৪) verify ব্যর্থ হলে deploy result-এর prevProdId দিয়ে cf.pages.rollback (৫) যে টুলের result পেয়েছ সেটা উদ্ধৃত করে পরের ধাপ ঠিক করো (৬) ধ্বংসাত্মক কাজ (delete) কখনো নয় (৭) args-এ বিশাল কনটেন্ট এড়াও, প্রয়োজনে আগে gh.read করে তারপর ছোট বদল।`;
 const REVIEW_SYS = `তুমি কঠোর কোড-রিভিউয়ার। দেওয়া diff/কনটেন্ট-এ bug, regression, security ফাঁস বা ভাঙা লজিক থাকলে শুধু JSON দাও: {"verdict":"BLOCK","reason":"..."} — নাহলে {"verdict":"OK","note":"..."}`;
 function safeJson(t) {
@@ -593,13 +614,17 @@ async function visionCritique(keys, b64png, question) {
 }
 async function runAgentTool(env, keys, tool, args, emit) {
   if (tool === 'web.eye') {
-    const sr = await fetch('https://image.thum.io/get/width/1024/crop/768/noanimate/' + args.url);
-    if (!sr.ok) throw new Error('screenshot HTTP ' + sr.status);
-    const buf = await sr.arrayBuffer();
-    const bytes = new Uint8Array(buf); let bin = '';
+    let bytes = null, source = 'thum.io (keyless)';
+    try { const sr = await fetch('https://image.thum.io/get/width/1024/crop/768/noanimate/' + args.url); if (sr.ok) bytes = new Uint8Array(await sr.arrayBuffer()); } catch {}
+    if (!bytes || bytes.length < 500) {
+      const bt = await storeGet(env, 'cfg:BROWSERLESS_API_KEY');
+      if (bt) { try { const r = await fetch('https://production-sfo.browserless.io/screenshot?token=' + bt, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: args.url, options: { width: 1024, height: 768 } }) }); if (r.ok) { bytes = new Uint8Array(await r.arrayBuffer()); source = 'browserless.io'; } } catch {} }
+    }
+    if (!bytes || bytes.length < 500) throw new Error('কোনো screenshot সেবা পৌঁছায়নি (thum.io + browserless দুটোই ব্যর্থ)');
+    let bin = '';
     for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
     const verdict = await visionCritique(keys, btoa(bin), args.question);
-    return { source: 'thum.io (keyless)', bytes: buf.byteLength, verdict: verdict.slice(0, 1500) };
+    return { source, bytes: bytes.length, verdict: verdict.slice(0, 1500) };
   }
   if (tool === 'bu.task') { const r = await buCall(env, '/api/v2/tasks', { method: 'POST', body: JSON.stringify({ task: args.task, url: args.url }) }); return { taskId: r.j.id, keyIndex: r.keyIndex }; }
   if (tool === 'bu.status') { const r = await buCall(env, '/api/v2/tasks/' + args.taskId); return { status: r.j.status, result: String(r.j.result || r.j.output || '').slice(0, 1500) }; }
@@ -616,7 +641,11 @@ async function runAgentTool(env, keys, tool, args, emit) {
     if (matched === false) throw new Error('expect পাওয়া যায়নি');
     return { ok: true, status: r.status, matched, bytes: t.length };
   }
-  if (tool === 'web.search') return { results: await searchWeb(keys.TAVILY_API_KEY, args.query || '', 5) };
+  if (tool === 'web.search') {
+    try { return { results: await searchWeb(keys.TAVILY_API_KEY, args.query || '', 5), source: 'tavily' }; }
+    catch (e) { const ddg = await ddgSearch(args.query || ''); if (ddg.length) return { results: ddg, source: 'duckduckgo (fallback)' }; throw e; }
+  }
+  if (tool === 'web.read') return await readPage(env, String(args.url || ''));
   if (tool === 'review.diff') {
     let out = '';
     const msgs = [{ role: 'system', content: REVIEW_SYS }, { role: 'user', content: String(args.diff || '').slice(0, 6000) }];
