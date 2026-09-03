@@ -403,7 +403,7 @@ const AGENT_SYS = `তুমি "ADMISSION HUB AI Agent" — মালিকে�
 প্রতি উত্তরে শুধু একটা JSON (কোনো অতিরিক্ত লেখা নয়):
 {"thought":"এই ধাপে কী ভাবলে","action":{"tool":"<নাম>","args":{...}}}
 অথবা কাজ শেষ হলে: {"thought":"...","final":"<markdown রিপোর্ট: কী করেছ, প্রমাণ, বদল, পরামর্শ>"}
-টুলসমূহ: gh.repos{} · gh.read{repo,path,ref?} · gh.commit{repo,path,content,message,branch?} · cf.pages.deployments{project,limit?} · cf.pages.rollback{project,deploymentId} · cf.workers{} · cf.kv.keys{ns} · web.search{query} · verify.url{url,expect?} · review.diff{diff} · deploy.ghpages{path,content,message}
+টুলসমূহ: gh.repos{} · gh.read{repo,path,ref?} · gh.commit{repo,path,content,message,branch?} · cf.pages.deployments{project,limit?} · cf.pages.rollback{project,deploymentId} · cf.workers{} · cf.kv.keys{ns} · web.search{query} · verify.url{url,expect?} · web.eye{url,question?} · bu.task{task,url?} · bu.status{taskId} · bu.health{} · review.diff{diff} · deploy.ghpages{path,content,message}
 নিয়ম: (১) সর্বোচ্চ ১০ action (২) gh.commit/deploy.ghpages-এর আগে review.diff বাধ্যতামূলক (৩) deploy.ghpages-এর পর verify.url{url:"https://admission-hub-ai.pages.dev/api/system"} বাধ্যতামূলক (৪) verify ব্যর্থ হলে deploy result-এর prevProdId দিয়ে cf.pages.rollback (৫) যে টুলের result পেয়েছ সেটা উদ্ধৃত করে পরের ধাপ ঠিক করো (৬) ধ্বংসাত্মক কাজ (delete) কখনো নয় (৭) args-এ বিশাল কনটেন্ট এড়াও, প্রয়োজনে আগে gh.read করে তারপর ছোট বদল।`;
 const REVIEW_SYS = `তুমি কঠোর কোড-রিভিউয়ার। দেওয়া diff/কনটেন্ট-এ bug, regression, security ফাঁস বা ভাঙা লজিক থাকলে শুধু JSON দাও: {"verdict":"BLOCK","reason":"..."} — নাহলে {"verdict":"OK","note":"..."}`;
 function safeJson(t) {
@@ -418,7 +418,53 @@ function buildAgentPrompt(state) {
   msgs.push({ role: 'user', content: state.history.length ? 'পরবর্তী ধাপের JSON দাও।' : 'শুরু করো — প্রথম ধাপের JSON দাও।' });
   return msgs;
 }
+let _buCache = null;
+async function buKeys(env) {
+  const now = Date.now();
+  if (_buCache && now - _buCache.ts < 120000) return _buCache.list;
+  const list = [];
+  for (let i = 1; i <= 15; i++) { const v = await env.AH_KV.get('cfg:BROWSER_USE_API_KEY_' + i); if (v) list.push({ i, key: v }); }
+  _buCache = { ts: now, list };
+  return list;
+}
+async function buCall(env, path, opts = {}) {
+  const ks = await buKeys(env);
+  if (!ks.length) throw new Error('কোনো Browser Use key নেই');
+  let lastErr = '';
+  for (const k of ks) {
+    const r = await fetch('https://api.browser-use.com' + path, { method: opts.method || 'GET', headers: { 'X-Browser-Use-API-Key': k.key, 'Content-Type': 'application/json' }, body: opts.body });
+    if (r.ok) return { j: await r.json().catch(() => ({})), keyIndex: k.i };
+    lastErr = 'key#' + k.i + ' HTTP ' + r.status;
+    if (![401, 402, 403, 429].includes(r.status)) throw new Error('browser-use HTTP ' + r.status);
+  }
+  throw new Error('সব Browser Use key ব্যর্থ (' + lastErr + ') — balance শেষ হতে পারে');
+}
+async function visionCritique(keys, b64png, question) {
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=' + keys.GEMINI_API_KEY, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: question || 'ওয়েবপেজের স্ক্রিনশট দেখে বলো: পেজ ঠিকমতো লোড হয়েছে কিনা, UI/layout ভাঙা কিনা, দৃশ্যমান কোনো এরর আছে কিনা, মূল কনটেন্ট দেখা যাচ্ছে কিনা। সংক্ষেপে বাংলায় বলো, শেষে এক লাইনে JSON: {"ok":true/false,"note":"..."}' }, { inline_data: { mime_type: 'image/png', data: b64png } }] }] }),
+  });
+  const j = await r.json().catch(() => ({}));
+  const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
+  return t || 'vision খালি উত্তর';
+}
 async function runAgentTool(env, keys, tool, args, emit) {
+  if (tool === 'web.eye') {
+    const sr = await fetch('https://image.thum.io/get/width/1024/crop/768/noanimate/' + args.url);
+    if (!sr.ok) throw new Error('screenshot HTTP ' + sr.status);
+    const buf = await sr.arrayBuffer();
+    const bytes = new Uint8Array(buf); let bin = '';
+    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    const verdict = await visionCritique(keys, btoa(bin), args.question);
+    return { source: 'thum.io (keyless)', bytes: buf.byteLength, verdict: verdict.slice(0, 1500) };
+  }
+  if (tool === 'bu.task') { const r = await buCall(env, '/api/v2/tasks', { method: 'POST', body: JSON.stringify({ task: args.task, url: args.url }) }); return { taskId: r.j.id, keyIndex: r.keyIndex }; }
+  if (tool === 'bu.status') { const r = await buCall(env, '/api/v2/tasks/' + args.taskId); return { status: r.j.status, result: String(r.j.result || r.j.output || '').slice(0, 1500) }; }
+  if (tool === 'bu.health') {
+    const ks = await buKeys(env); const out = [];
+    for (const k of ks) { try { const r = await fetch('https://api.browser-use.com/api/v2/tasks?pageSize=1', { headers: { 'X-Browser-Use-API-Key': k.key } }); out.push({ key: k.i, ok: r.ok, status: r.status }); } catch { out.push({ key: k.i, ok: false }); } }
+    return { keys: out, note: 'balance দেখার API নেই — 401/402 এলে ওই key মৃত ধরে পরেরটা ব্যবহার হবে' };
+  }
   if (tool === 'verify.url') {
     const r = await fetch(args.url, { method: args.method || 'GET' });
     const t = await r.text();
