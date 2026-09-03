@@ -99,6 +99,25 @@ async function storeDel(env, key) {
   if (env.AH_DB) { try { await env.AH_DB.prepare('DELETE FROM kv WHERE key = ?1').bind(key).run(); return; } catch {} }
   try { await env.AH_KV.delete(key); } catch {}
 }
+/* ---- বড় ফাইল pipeline: R2 (fast,10GB) → KV → পুরনো D1 row পড়া ---- */
+function b64ToBytes(b64) { return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); }
+function bytesToB64(u) { let s = ''; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode.apply(null, u.subarray(i, i + 8192)); return btoa(s); }
+async function filebPut(env, id, b64) {
+  if (env.AH_R2) { try { await env.AH_R2.put('fileb:' + id, b64ToBytes(b64)); return 'r2'; } catch {} }
+  const ok = await env.AH_KV.put('fileb:' + id, b64).then(() => true).catch(() => false);
+  return ok ? 'kv' : null;
+}
+async function filebGet(env, id) {
+  if (env.AH_R2) { try { const o = await env.AH_R2.get('fileb:' + id); if (o) return bytesToB64(new Uint8Array(await o.arrayBuffer())); } catch {} }
+  const v = await env.AH_KV.get('fileb:' + id).catch(() => null);
+  if (v) return v;
+  return await storeGet(env, 'fileb:' + id);
+}
+async function filebDel(env, id) {
+  if (env.AH_R2) { try { await env.AH_R2.delete('fileb:' + id); } catch {} }
+  try { await env.AH_KV.delete('fileb:' + id); } catch {}
+  await storeDel(env, 'fileb:' + id);
+}
 
 /* ---------- Google Drive backup (loadKeys প্যাটার্ন: env binding → KV cfg:GOOGLE_DRIVE_*_1) ---------- */
 const DRIVE_FOLDER_NAME = 'ADMISSION-HUB-AI-Backups';
@@ -653,6 +672,16 @@ export default {
       await chk('pwa_index', async () => { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); return { bytes: t.length }; });
       await chk('chat_e2e', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'ping', model: 'auto', mode: 'fast' }) }); const t = await r.text(); if (!/done":true/.test(t)) throw new Error('chat done নেই'); return {}; });
       await chk('drive', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/storage'); const j = await r.json(); if (!(j.drive && j.drive.connected)) throw new Error('drive বিছিন্ন'); return {}; });
+      await chk('nightly_backup', async () => {
+        const chats = await kvGet(env, 'chats', { chats: [] });
+        const mem = await kvGet(env, 'memory', null);
+        const payload = JSON.stringify({ ts: rep2.ts, chats, memory: mem });
+        const name = 'backup-' + new Date(rep2.ts).toISOString().slice(0, 10) + '.json';
+        const d = await driveBackup(env, name, payload, 'application/json');
+        if (!d || !d.id) throw new Error('drive backup ব্যর্থ');
+        await storePut(env, 'backup:latest', JSON.stringify({ ts: rep2.ts, fileId: d.id, bytes: payload.length }));
+        return { bytes: payload.length, fileId: d.id };
+      });
       await storePut(env, 'watch:latest', JSON.stringify(rep2));
       const log = (await storeGetJson(env, 'watch:log', null)) || [];
       log.unshift({ ts: rep2.ts, ok: rep2.checks.every((c) => c.ok), bad: rep2.checks.filter((c) => !c.ok).map((c) => c.name) });
@@ -825,9 +854,11 @@ export default {
             if (d?.id) rec.drive = { fileId: d.id, link: d.webViewLink || null, ts: Date.now() };
           } catch (e) { rec.driveError = String((e && e.message) || e).slice(0, 120); }
         }
+        const where = await filebPut(env, id, b64);
+        if (!where) throw new Error('স্টোরেজে লেখা যায়নি — ফাইল সেভ হয়নি, কিছুক্ষণ পরে চেষ্টা করুন');
+        rec.store = where;
         files[id] = rec;
         await kvSet(env, 'files', files);
-        if (!(await storePut(env, 'fileb:' + id, b64))) throw new Error('স্টোরেজে লেখা যায়নি — ফাইল সেভ হয়নি, কিছুক্ষণ পরে চেষ্টা করুন');
         return json(rec);
       }
       const content = (body.content || '').slice(0, MAX_TEXT);
@@ -885,7 +916,7 @@ export default {
       const meta = files[mFile[1]];
       if (!meta) return json({ error: 'নেই' }, 404);
       const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
-      const b64 = isBin ? await storeGet(env, 'fileb:' + mFile[1]) : null;
+      const b64 = isBin ? await filebGet(env, mFile[1]) : null;
       const content = isBin ? null : await storeGet(env, 'file:' + mFile[1]);
       if (method === 'GET' && !mFile[2]) {
         if (isBin && b64) {
@@ -896,7 +927,7 @@ export default {
       }
       if (method === 'DELETE' && !mFile[2]) {
         delete files[mFile[1]]; await kvSet(env, 'files', files);
-        await storeDel(env, 'file:' + mFile[1]); await storeDel(env, 'fileb:' + mFile[1]);
+        await storeDel(env, 'file:' + mFile[1]); await filebDel(env, mFile[1]);
         if (meta.drive?.fileId) { try { await driveDelete(env, meta.drive.fileId); } catch {} } // Drive কপিও মুছি (best-effort)
         return json({ ok: true });
       }
@@ -952,7 +983,7 @@ export default {
           if (!meta) continue;
           const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
           if (isBin) {
-            const b64 = (await storeGet(env, 'fileb:' + m.id)) || '';
+            const b64 = (await filebGet(env, m.id)) || '';
             if (b64) { binParts.push({ type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }); hasMulti = true; }
           } else {
             const txt = ((await storeGet(env, 'file:' + m.id)) || '').slice(0, 50000);
