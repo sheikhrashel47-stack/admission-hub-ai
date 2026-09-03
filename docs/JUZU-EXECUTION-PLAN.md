@@ -60,16 +60,16 @@
 - [x] 1.9 Mobile-first QA — browserless 375x812 + 1280x800 screenshot: overflow/clipping নেই (qa-mobile.png, qa-desktop.png) — (2026-09-04)
 - [x] 1.10 Deploy → gh-pages `e8ae045` → live verify (HTTP 200, wsCard marker, sw v10) — (2026-09-04)
 
-## 🟦 PHASE 2 — Intent Engine + Conversation Discipline
+## 🟦 PHASE 2 — Intent Engine + Conversation Discipline — COMPLETE (2026-09-04)
 **লক্ষ্য:** message বুঝে সঠিক পথে চালানো; greeting-এ কখনো tool নয়। রেফ: P1#2,90,92,3; P4#121-130,201।
-- [ ] 2.1 **Intent classifier**: conversation / question / research / instruction / coding / critical-action
-- [ ] 2.2 **Greeting hard rule**: "Hi/কেমন আছো" → শূন্য tool, শুধু কথা (code-level enforce)
-- [ ] 2.3 **Pronoun/follow-up resolution**: "ওটা ঠিক কর" → context থেকে resolve
-- [ ] 2.4 **Conversation state tracking**: current topic/goal/pending question (task state-এ save)
-- [ ] 2.5 **Agent modes** toggle: chat / research / coding / agent / mission (mode → tool subset + system prompt)
-- [ ] 2.6 **WAITING_FOR_USER state** + clarification gate (অস্পষ্ট হলে জিজ্ঞেস, অনুমান নয়)
-- [ ] 2.7 Adaptive response length + tone match
-- [ ] 2.8 Deploy → test (greeting/follow-up/mode switch live test)
+- [x] 2.1 **Intent classifier**: conversation / question / research / instruction / coding / critical-action — (2026-09-04, 0b37a30)
+- [x] 2.2 **Greeting hard rule**: "Hi/কেমন আছো/সালাম" → শূন্য tool, শুধু কথা (code-level: classify→greeting ⇒ chatToolLoop null + effWeb off) — (2026-09-04, 0b37a30; live T1 ✅)
+- [x] 2.3 **Pronoun/follow-up resolution**: PRON_RE + ctx:state/ctx:lasttool → "ওটার মধ্যে private কয়টা?" → ৮টি (tool-plan inherit) — (2026-09-04, 4d93162; live T3b ✅)
+- [x] 2.4 **Conversation state tracking**: ctx:state:<chatId> + ctx:state {topic,intent,mode,pending,ts} প্রতি done-এ save — (2026-09-04, 0b37a30)
+- [x] 2.5 **Agent modes** toggle: auto/chat/research/coding/agent/mission — MODE_SYS + tool-subset gate + কম্পোজার-উপরে mode strip UI — (2026-09-04, 0b37a30; live T2a/T2b ✅)
+- [x] 2.6 **WAITING_FOR_USER state** + clarification gate: per-chat state নেই + pronoun → RULE:clarify; critical → নিশ্চিতকরণ gate (ctx:pendcrit) — (2026-09-04, 1fa7b51; live T4/T5 ✅)
+- [x] 2.7 Adaptive response length + tone match: STYLE_SYS[intent] + TONE (তুই/ভাই vs আপনি) system-addendum — (2026-09-04, 0b37a30)
+- [x] 2.8 Deploy → gh-pages 4d93162 → live test: greeting✅ follow-up✅ mode-gate✅ clarify✅ critical✅ health wv=p2-v22 — (2026-09-04)
 
 ## 🟦 PHASE 3 — Security Firewall + Audit + Error Memory
 **লক্ষ্য:** full access-কে controlled করা; capability কমবে না। রেফ: P1#48-56,129-135; P2 Part M; P3#17; P4#190,246-249।
