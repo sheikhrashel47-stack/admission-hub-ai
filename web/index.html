@@ -354,6 +354,58 @@ svg{width:20px;height:20px;display:block}
 .agStep.bad{border-left-color:var(--red)}
 .agStep.done{border-left-color:var(--green);background:var(--green-t)}
 .agReport{background:var(--card2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
+
+/* ===== Phase 1 — Agent Workspace ===== */
+#agBar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--card2);border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);z-index:29;position:relative}
+#agBar.hide{display:none}
+#agBar.run{background:rgba(180,83,9,.07)}
+.agDot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--dim2)}
+.agDot.g{background:var(--green)}.agDot.a{background:var(--amber);animation:agPulse 1s infinite}.agDot.r{background:var(--red)}
+@keyframes agPulse{50%{opacity:.35}}
+#agBarTxt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#agBarProg{width:90px;height:5px;border-radius:3px;background:var(--line2);overflow:hidden;flex:none}
+#agBarProg i{display:block;height:100%;background:var(--grad);width:0;transition:width .4s}
+#agBarStop{flex:none;font-size:11.5px;font-weight:700;color:var(--red);border:1px solid var(--line2);border-radius:8px;padding:3px 9px;background:var(--card)}
+.wsCard{background:var(--card);border:1px solid var(--line2);border-radius:var(--r);padding:10px 12px;box-shadow:var(--shadow-soft);max-width:100%;overflow:hidden}
+.wsHd{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+.wsTask{flex:1;font-size:13.5px;font-weight:600;line-height:1.4;word-break:break-word}
+.wsPill{flex:none;font-size:11px;font-weight:700;border-radius:99px;padding:3px 9px;background:var(--card2);color:var(--dim)}
+.wsPill.run{background:rgba(37,99,235,.12);color:var(--blue)}
+.wsPill.ok{background:var(--green-t);color:var(--green-d)}
+.wsPill.bad{background:rgba(220,38,38,.12);color:var(--red)}
+.wsPill.stop{background:var(--card2);color:var(--dim)}
+.wsProg{height:6px;border-radius:4px;background:var(--line2);overflow:hidden}
+.wsProg i{display:block;height:100%;background:var(--grad);transition:width .5s}
+.wsStepN{font-size:11px;color:var(--dim);margin:4px 0 2px}
+.wsSteps{max-height:260px;overflow-y:auto;margin-top:4px}
+.wsDiff{margin-top:8px;border:1px solid var(--line2);border-radius:var(--rs);overflow:hidden}
+.diffHd{font-size:11.5px;font-weight:700;color:var(--dim);padding:6px 10px;background:var(--card2);border-bottom:1px solid var(--line2)}
+.diffPre{max-height:220px;overflow:auto;background:var(--pre-bg);padding:8px 10px;display:flex;flex-direction:column}
+.diffPre span{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+.dAdd{background:rgba(22,163,74,.13);color:var(--green-d)}
+.dDel{background:rgba(220,38,38,.10);color:var(--red)}
+.dHunk{color:var(--blue);font-weight:700}
+.wsReport{margin-top:8px;border-top:1px dashed var(--line2);padding-top:8px;font-size:13.5px}
+.wsBtns{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.wsBtn{font-size:12px;font-weight:700;border:1px solid var(--line2);border-radius:9px;padding:6px 11px;background:var(--card2);color:var(--txt)}
+.wsBtn.wsStop{color:var(--red)}
+.taskItem{border:1px solid var(--line2);border-radius:var(--rs);padding:9px 11px;margin:7px 0;background:var(--card2)}
+.tiTop{display:flex;gap:7px;align-items:baseline}
+.tiSt{flex:none;font-size:11px;font-weight:700}
+.tiSt.ok{color:var(--green)}.tiSt.run{color:var(--blue)}.tiSt.bad{color:var(--red)}
+.tiTask{font-size:13px;line-height:1.4;word-break:break-word}
+.tiMeta{font-size:11px;color:var(--dim);margin-top:3px}
+.tiBtns{display:flex;gap:6px;margin-top:6px}
+.srItem{display:block;width:100%;text-align:left;font-size:12.5px;color:var(--txt);background:var(--card2);border:1px solid var(--line2);border-radius:9px;padding:7px 10px;margin:5px 0;word-break:break-word}
+.row.flash{animation:rowFlash 1.6s}
+@keyframes rowFlash{0%,55%{background:rgba(109,91,240,.14)}100%{background:transparent}}
+#codeFs{position:fixed;inset:0;background:rgba(5,8,12,.94);z-index:120;display:none;flex-direction:column;padding:calc(10px + var(--safe-t)) 10px calc(10px + var(--safe-b))}
+#codeFs.show{display:flex}
+.cfsHd{display:flex;align-items:center;gap:8px;color:#fff;margin-bottom:8px}
+.cfsHd span{flex:1;font-size:13px;font-weight:700}
+.cfsHd button{color:#fff;font-size:13px;font-weight:700;border:1px solid rgba(255,255,255,.35);border-radius:9px;padding:6px 12px;background:none}
+#cfsBody{flex:1;overflow:auto;background:#0C121B;color:#D7E0EC;border-radius:12px;padding:14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:0}
+.cbFull{margin-left:auto}
 </style>
 </head>
 <body>
@@ -376,6 +428,8 @@ svg{width:20px;height:20px;display:block}
       </button>
     </div>
   </header>
+
+  <div id="agBar" class="hide"><span class="agDot g" id="agBarDot"></span><span id="agBarTxt"></span><div id="agBarProg" style="display:none"><i></i></div><button id="agBarStop" style="display:none">থামাও</button></div>
 
   <main id="chat"><div id="msgs">
     <section id="hero">
@@ -527,6 +581,7 @@ svg{width:20px;height:20px;display:block}
         <div class="secLbl">এজেন্ট স্ট্যাটাস</div>
         <div class="dRow"><span class="k">সেশন</span><span class="v" id="agSessLbl">সক্রিয় ✓</span></div>
         <div class="mItem" id="agSwitchRow"><span class="mi g">⚡</span><div>এজেন্ট সক্রিয়<small>বন্ধ থাকলে কোনো কাজ চলবে না</small></div><span class="agSw" id="agSw"><i></i></span></div>
+        <button id="agTasksBtn" class="mItem"><span class="mi">📋</span><div>টাস্ক প্যানেল<small>সব এজেন্ট টাস্ক + রিজিউম</small></div><span class="right">›</span></button>
         <div id="agTaskBox" style="display:none">
           <div class="secLbl">কাজের নির্দেশ</div>
           <textarea id="agTask" class="agInp" rows="3" placeholder="যেমন: হোমপেজে নতুন নোটিশ যোগ করো…"></textarea>
@@ -544,6 +599,19 @@ svg{width:20px;height:20px;display:block}
       </div>
     </div>
   </div>
+
+  <!-- ===== টাস্ক প্যানেল + খোঁজ (Phase 1) ===== -->
+  <div id="sTasks" class="sheet">
+    <div class="grab"></div>
+    <div class="hd"><div><span class="ttl">📋 টাস্ক প্যানেল</span><span class="sub">এজেন্ট টাস্ক + এই কথোপকথনে খোঁজা</span></div><button class="x" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="bd">
+      <input id="taskSearch" class="agInp" type="search" placeholder="🔍 খুঁজো (মেসেজ/টাস্ক)…" autocomplete="off">
+      <div id="taskSearchRes" style="display:none"></div>
+      <div class="secLbl">সাম্প্রতিক এজেন্ট টাস্ক</div>
+      <div id="taskList"></div>
+    </div>
+  </div>
+  <div id="codeFs"><div class="cfsHd"><span id="cfsTitle">কোড</span><button id="cfsCopy">কপি</button><button id="cfsX">✕ বন্ধ</button></div><pre id="cfsBody"></pre></div>
 
   <!-- ===== সিস্টেম স্ট্যাটাস ===== -->
   <div id="sSys" class="sheet">
@@ -665,7 +733,7 @@ function md(src){
   h=h.replace(/^\s*[-*] (.*)$/gm,'<li>$1</li>').replace(/^\s*\d+\. (.*)$/gm,'<li>$1</li>');
   h=h.replace(/(<li>[\s\S]*?<\/li>(?:\n<li>[\s\S]*?<\/li>)*)/g,'<ul>$1</ul>');
   h=h.replace(/\n+/g,'<br>\n');
-  h=h.split('\u0000C').map((p,i)=>{if(!i)return p;const j=parseInt(p.slice(0,p.indexOf('\u0000')));const cbx=cb[j];const rest=p.slice(p.indexOf('\u0000')+1);return '<div class="codeBox"><div class="cbHead"><span class="cbLang">'+esc(cbx.l)+'</span><button class="cbCopy">কপি</button></div><pre><code>'+cbx.h+'</code></pre></div>'+rest}).join('');
+  h=h.split('\u0000C').map((p,i)=>{if(!i)return p;const j=parseInt(p.slice(0,p.indexOf('\u0000')));const cbx=cb[j];const rest=p.slice(p.indexOf('\u0000')+1);return '<div class="codeBox"><div class="cbHead"><span class="cbLang">'+esc(cbx.l)+'</span><button class="cbFull" aria-label="বড় করে দেখো">⛶</button><button class="cbCopy">কপি</button></div><pre><code>'+cbx.h+'</code></pre></div>'+rest}).join('');
   h=h.split('\u0000I').map((p,i)=>i?'<code>'+p.slice(0,p.indexOf('\u0000'))+'</code>'+p.slice(p.indexOf('\u0000')+1):p).join('');
   return h;
 }
@@ -1601,9 +1669,11 @@ function agentModeSoftSheet(){
   const b=$('#msgActions');
   b.innerHTML='<div class="secLbl">Agent</div>'+
     '<button class="mItem" id="agOn"><span class="mi g">✦</span><div>Agent Mode'+ (agentMode?' — চলছে':' চালু করো')+'<small>ফাইল, রিসার্চ, ইন্সপেক্ট — আসল কাজ</small></div></button>'+
-    '<button class="mItem" id="agTask"><span class="mi">📋</span><div>এজেন্ট স্ট্যাটাস<small>সিস্টেম হেলথ</small></div></button>';
+    '<button class="mItem" id="agTasksOpen"><span class="mi">📋</span><div>টাস্ক প্যানেল<small>এজেন্ট টাস্ক, রিজিউম, খোঁজ</small></div></button>'+
+    '<button class="mItem" id="agSys"><span class="mi">🩺</span><div>এজেন্ট স্ট্যাটাস<small>সিস্টেম হেলথ</small></div></button>';
   $('#agOn').onclick=()=>{toggleAgent();closeSheets()};
-  $('#agTask').onclick=async()=>{closeSheets();try{const s=await api('/api/system');toast('🤖 Agent: '+s.services.find(x=>x.name==='Agent Engine').status)}catch{}};
+  $('#agTasksOpen').onclick=()=>{closeSheets();renderTaskList();openSheet('#sTasks')};
+  $('#agSys').onclick=async()=>{closeSheets();try{const s=await api('/api/system');toast('🤖 Agent: '+s.services.find(x=>x.name==='Agent Engine').status)}catch(e){}};
   openSheet('#sMsg');
 }
 $('#fabBtn').onclick=()=>openSheet('#sTools');
@@ -1653,18 +1723,146 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   });
 })();
 
-/* ============ জুজু Agent Control (Phase 4) ============ */
-const AG_SESS='ahai_owner_sess';
-let agOn=false,agRunning=false;
+/* ============ জুজু Agent Workspace (Phase 1) ============ */
+const AG_SESS='ahai_owner_sess',AG_TASKS='ahai_tasks';
+let agOn=false,agRunning=false,agAbort=null,agCardRef=null;
 function agSess(){return localStorage.getItem(AG_SESS)||''}
-function agCard(cls,ic,txt,sub){
+function agTasks(){try{return JSON.parse(localStorage.getItem(AG_TASKS)||'[]')}catch(e){return[]}}
+function agTasksSave(l){try{localStorage.setItem(AG_TASKS,JSON.stringify(l.slice(0,50)))}catch(e){}}
+function agTaskUpd(id,patch){const l=agTasks().map(t=>t.id===id?Object.assign(t,patch):t);agTasksSave(l);renderTaskList()}
+function statusBn(st){return st==='done'?'✅ সম্পন্ন':st==='running'?'▶ চলছে':st==='stopped'?'⏹ থামানো':st==='maxsteps'?'🔟 স্টেপ-সীমা শেষ':st==='badjson'?'⚠ মডেল-সমস্যা':'❌ '+(st||'ব্যর্থ')}
+
+/* --- header status bar --- */
+function agBarIdle(){
+  const b=$('#agBar');if(!b)return;
+  if(agSess()){b.classList.remove('hide','run');$('#agBarDot').className='agDot g';$('#agBarTxt').textContent='জুজু ওয়ার্কস্পেস সক্রিয় — সেশন চালু আছে';$('#agBarStop').style.display='none';$('#agBarProg').style.display='none'}
+  else b.classList.add('hide');
+}
+function agBarRun(step){
+  const b=$('#agBar');if(!b)return;b.classList.remove('hide');b.classList.add('run');
+  $('#agBarDot').className='agDot a';
+  $('#agBarTxt').textContent='জুজু কাজ করছে — স্টেপ '+step+'/10';
+  $('#agBarProg').style.display='';$('#agBarProg').firstElementChild.style.width=Math.min(step*10,100)+'%';
+  $('#agBarStop').style.display='';
+}
+function agBarDone(txt,ok){
+  const b=$('#agBar');if(!b)return;b.classList.remove('run');
+  $('#agBarDot').className='agDot '+(ok?'g':'r');$('#agBarTxt').textContent=txt;
+  $('#agBarStop').style.display='none';$('#agBarProg').style.display='none';
+  setTimeout(()=>{if(!agRunning)agBarIdle()},3500);
+}
+const _agBarStop=$('#agBarStop');if(_agBarStop)_agBarStop.onclick=()=>{if(agCardRef){const st=agCardRef.querySelector('.wsStop');if(st&&st.style.display!=='none')st.click()}};
+
+/* --- workspace card (main chat-এ live) --- */
+function wsCard(task){
+  const r=document.createElement('div');r.className='row ai';
+  r.innerHTML='<div class="avx ai">🤖</div><div class="msgWrap"><div class="who"><b>জুজু — Agent Workspace</b> <span class="meta" style="margin:0">'+fmtTime()+'</span></div>'+
+  '<div class="wsCard">'+
+    '<div class="wsHd"><span class="wsTask"></span><span class="wsPill run">▶ চলছে</span></div>'+
+    '<div class="wsProg"><i style="width:2%"></i></div>'+
+    '<div class="wsStepN">স্টেপ 0/10</div>'+
+    '<div class="wsSteps"></div>'+
+    '<div class="wsDiff" style="display:none"></div>'+
+    '<div class="wsReport msgA" style="display:none"></div>'+
+    '<div class="wsBtns"><button class="wsBtn wsStop">⏹ থামাও</button><button class="wsBtn wsResume" style="display:none">↻ রিজিউম</button><button class="wsBtn wsFold">▲ ধাপ লুকাও</button></div>'+
+  '</div></div>';
+  r.querySelector('.wsTask').textContent=task;
+  msgs.appendChild(r);scrollB();return r;
+}
+function wsStep(card,cls,ic,txt,sub){
+  const box=card.querySelector('.wsSteps');if(!box||box.style.display==='none')return;
   const d=document.createElement('div');d.className='agStep '+cls;
   d.innerHTML='<span class="ic">'+ic+'</span><div>'+esc(txt)+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>';
-  const box=$('#agSteps');box.appendChild(d);
-  while(box.children.length>60)box.removeChild(box.firstChild);
-  d.scrollIntoView({block:'nearest'});return d;
+  box.appendChild(d);while(box.children.length>60)box.removeChild(box.firstChild);
+  d.scrollIntoView({block:'nearest'});
 }
-function agRender(){$('#agLock').style.display=agSess()?'none':'';$('#agMain').style.display=agSess()?'':'none'}
+function wsPill(card,txt,cls){const p=card.querySelector('.wsPill');p.textContent=txt;p.className='wsPill '+cls}
+function wsProg(card,step){card.querySelector('.wsProg').firstElementChild.style.width=Math.min(step*10,100)+'%';card.querySelector('.wsStepN').textContent='স্টেপ '+step+'/10'}
+function wsShowDiff(card,raw){
+  const box=card.querySelector('.wsDiff');box.style.display='';box.innerHTML='';
+  const h=document.createElement('div');h.className='diffHd';h.textContent='🔀 কোড পরিবর্তন (diff)';box.appendChild(h);
+  const pre=document.createElement('pre');pre.className='diffPre';
+  String(raw).split('\n').slice(0,200).forEach(ln=>{
+    const sp=document.createElement('span');
+    sp.className=ln.indexOf('+')===0?'dAdd':ln.indexOf('-')===0?'dDel':(ln.indexOf('@@')===0||ln.indexOf('diff ')===0?'dHunk':'');
+    sp.textContent=ln;pre.appendChild(sp);
+  });
+  box.appendChild(pre);
+}
+
+/* --- টাস্ক রান (chat-এর ভেতরে live) --- */
+async function runAgent(taskText,resumeId){
+  const task=(taskText||'').trim();
+  if(!task&&!resumeId)return;
+  if(agRunning)return toast('আগে চলমান কাজ শেষ হতে দাও');
+  if(!agSess()){toast('🔒 আগে মালিক-আনলক করো');return openAgentSheet()}
+  agRunning=true;
+  const card=wsCard(task||'(রিজিউম টাস্ক)');agCardRef=card;
+  const stopB=card.querySelector('.wsStop'),resB=card.querySelector('.wsResume'),foldB=card.querySelector('.wsFold');
+  let steps=0,taskId=resumeId||null,finalStatus='error',gotDone=false;
+  stopB.onclick=()=>{if(agAbort)agAbort.abort()};
+  resB.onclick=()=>{if(taskId&&!agRunning)runAgent(task,taskId)};
+  foldB.onclick=()=>{const b=card.querySelector('.wsSteps');const hid=b.style.display!=='none';b.style.display=hid?'none':'';foldB.textContent=hid?'▼ ধাপ দেখো':'▲ ধাপ লুকাও'};
+  agBarRun(0);
+  wsStep(card,'think','🧠',resumeId?'রিজিউম হচ্ছে — চেকপয়েন্ট থেকে…':'কাজ শুরু হলো…',task.slice(0,160));
+  try{
+    agAbort=new AbortController();
+    const r=await fetch(API+'/api/agent',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+agSess()},body:JSON.stringify(resumeId?{resume:resumeId,task}:{task}),signal:agAbort.signal});
+    if(r.status===401){localStorage.removeItem(AG_SESS);agBarIdle();throw new Error('সেশন মেয়াদোত্তীর্ণ — আবার আনলক করো')}
+    if(!r.ok||!r.body)throw new Error('এজেন্ট শুরু করা যায়নি ('+r.status+')');
+    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+    while(true){
+      const {done,value}=await rd.read();if(done)break;
+      buf+=dec.decode(value,{stream:true});
+      const parts=buf.split('\n\n');buf=parts.pop();
+      for(const p of parts){
+        const line=p.split('\n').find(l=>l.indexOf('data: ')===0);if(!line)continue;
+        let e;try{e=JSON.parse(line.slice(6))}catch(x){continue}
+        if(e.taskId){
+          taskId=e.taskId;
+          agTasksSave([{id:taskId,task:e.task||task,ts:Date.now(),status:'running'}].concat(agTasks().filter(t=>t.id!==taskId)));
+          renderTaskList();
+        }
+        else if(e.phase==='think'){steps=e.step||steps+1;wsProg(card,steps);agBarRun(steps);wsStep(card,'think','💭','স্টেপ '+steps+' — ভাবছে…')}
+        else if(e.phase==='tool')wsStep(card,'tool','🔧','স্টেপ '+(e.step||steps)+' — '+e.tool,e.thought||'');
+        else if(e.phase==='result'){
+          wsStep(card,e.ok?'ok':'bad',e.ok?'✅':'❌',e.tool+' — ফল',e.preview||'');
+          if(e.preview&&(/@@/.test(e.preview)||/\\n[+-]{3}/.test(e.preview)))wsShowDiff(card,e.preview.replace(/\\n/g,'\n'));
+        }
+        else if(e.fail){wsStep(card,'bad','⛔','ব্যর্থ: '+e.fail,e.raw||'');finalStatus='badjson'}
+        else if(e.done){
+          gotDone=true;
+          if(e.steps)wsProg(card,e.steps);
+          finalStatus=e.status||(e.report?'done':finalStatus);
+          if(e.report){const rp=card.querySelector('.wsReport');rp.style.display='';rp.innerHTML=md(e.report)}
+          const ok=finalStatus==='done';
+          wsPill(card,ok?'🏁 সম্পন্ন':statusBn(finalStatus),ok?'ok':'bad');
+          card.querySelector('.wsProg').firstElementChild.style.width='100%';
+          stopB.style.display='none';if(!ok&&taskId)resB.style.display='';
+          if(taskId)agTaskUpd(taskId,{status:finalStatus});
+          agBarDone(ok?'🏁 জুজুর কাজ সম্পন্ন':'কাজ শেষ — '+statusBn(finalStatus),ok);
+          toast(ok?'🏁 জুজুর কাজ শেষ — রিপোর্ট দেখো':'⚠ '+statusBn(finalStatus));
+        }
+      }
+    }
+    if(!gotDone){wsStep(card,'','🔚','স্ট্রিম শেষ');wsPill(card,'🔚 সংযোগ শেষ','bad');if(taskId)agTaskUpd(taskId,{status:'stopped'});stopB.style.display='none';if(taskId)resB.style.display='';agBarDone('স্ট্রিম শেষ — রিজিউম করা যাবে',false)}
+  }catch(err){
+    if(err&&err.name==='AbortError'){
+      wsStep(card,'','⏹','থামানো হয়েছে — চেকপয়েন্ট সেভ আছে, রিজিউম করা যাবে');
+      wsPill(card,'⏹ থামানো','stop');finalStatus='stopped';
+      agBarDone('কাজ থামানো হয়েছে — রিজিউম করা যাবে',false);
+    }else{
+      wsStep(card,'bad','⛔','সমস্যা: '+(err.message||err));
+      wsPill(card,'❌ সমস্যা','bad');agBarDone('❌ কাজ ব্যর্থ',false);
+    }
+    if(taskId)agTaskUpd(taskId,{status:finalStatus});
+    stopB.style.display='none';if(taskId)resB.style.display='';
+  }
+  agRunning=false;agAbort=null;agCardRef=null;scrollB();
+}
+
+/* --- এজেন্ট শিট (আনলক/সেটিংস এখানেই থাকে) --- */
+function agRender(){$('#agLock').style.display=agSess()?'none':'';$('#agMain').style.display=agSess()?'':'none';agBarIdle()}
 function openAgentSheet(){agRender();closeSheets();openSheet('#sAgent')}
 $('#mAgent').onclick=()=>openAgentSheet();
 $('#agUnlockBtn').onclick=async()=>{
@@ -1679,45 +1877,86 @@ $('#agUnlockBtn').onclick=async()=>{
   $('#agUnlockBtn').disabled=false;
 };
 $('#agCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('#agUnlockBtn').click()});
-$('#agSwitchRow').onclick=()=>{if(agRunning)return;agOn=!agOn;$('#agSw').classList.toggle('on',agOn);$('#agTaskBox').style.display=agOn?'':'none';toast(agOn?'⚡ এজেন্ট সক্রিয় — নির্দেশ লেখো':'এজেন্ট নিষ্ক্রিয়')};
+$('#agSwitchRow').onclick=()=>{if(agRunning)return;agOn=!agOn;$('#agSw').classList.toggle('on',agOn);$('#agTaskBox').style.display=agOn?'':'none';toast(agOn?'⚡ এজেন্ট সক্রিয় — নির্দেশ লেখো (কাজ এখন চ্যাটেই চলবে)':'এজেন্ট নিষ্ক্রিয়')};
 $('#agRun').onclick=()=>{if(!$('#agTask').value.trim())return toast('আগে কাজের নির্দেশ লেখো');$('#agConfirm').style.display='';$('#agRun').style.display='none'};
 $('#agNo').onclick=()=>{$('#agConfirm').style.display='none';$('#agRun').style.display=''};
-$('#agGo').onclick=runAgent;
-$('#agLogout').onclick=()=>{if(agRunning)return toast('আগে চলমান কাজ শেষ হতে দাও');localStorage.removeItem(AG_SESS);agOn=false;$('#agSw').classList.remove('on');$('#agTaskBox').style.display='none';$('#agSteps').innerHTML='';agRender();toast('🔒 লগআউট হয়েছে')};
-async function runAgent(){
-  const task=$('#agTask').value.trim();if(!task||agRunning)return;
-  agRunning=true;$('#agConfirm').style.display='none';$('#agRun').style.display='';$('#agRun').disabled=true;
-  $('#agSteps').innerHTML='';$('#agStepsLbl').style.display='';$('#agReportWrap').style.display='none';
-  agCard('think','🧠','কাজ শুরু হলো…',task.slice(0,160));
-  try{
-    const r=await fetch(API+'/api/agent',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+agSess()},body:JSON.stringify({task})});
-    if(r.status===401){localStorage.removeItem(AG_SESS);agRender();throw new Error('সেশন মেয়াদোত্তীর্ণ — আবার আনলক করো')}
-    if(!r.ok||!r.body)throw new Error('এজেন্ট শুরু করা যায়নি ('+r.status+')');
-    const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
-    while(true){
-      const {done,value}=await rd.read();if(done)break;
-      buf+=dec.decode(value,{stream:true});
-      const parts=buf.split('\n\n');buf=parts.pop();
-      for(const p of parts){
-        const line=p.split('\n').find(l=>l.startsWith('data: '));if(!line)continue;
-        let e;try{e=JSON.parse(line.slice(6))}catch{continue}
-        if(e.taskId)agCard('','🆔','টাস্ক আইডি সেভ হয়েছে',(e.taskId||'').slice(0,8)+'… — মাঝপথে ছিঁড়ে গেলেও রিজিউম সম্ভব');
-        else if(e.phase==='think')agCard('think','💭','স্টেপ '+e.step+' — ভাবছে…');
-        else if(e.phase==='tool')agCard('tool','🔧','স্টেপ '+e.step+' — '+e.tool,e.thought||'');
-        else if(e.phase==='result')agCard(e.ok?'ok':'bad',e.ok?'✅':'❌',e.tool+' — ফল',e.preview||'');
-        else if(e.checkpoint){}
-        else if(e.fail)agCard('bad','⛔','ব্যর্থ: '+e.fail,e.raw||'');
-        else if(e.done){agCard('done','🏁','সম্পন্ন — '+(e.steps||'?')+' স্টেপে');$('#agReportWrap').style.display='';$('#agReport').textContent=e.report||'';toast('🏁 জুজুর কাজ শেষ — রিপোর্ট দেখো')}
-      }
+$('#agGo').onclick=()=>{const t=$('#agTask').value.trim();if(!t||agRunning)return;$('#agTask').value='';$('#agConfirm').style.display='none';$('#agRun').style.display='';closeSheets();runAgent(t)};
+$('#agLogout').onclick=()=>{if(agRunning)return toast('আগে চলমান কাজ শেষ হতে দাও');localStorage.removeItem(AG_SESS);agOn=false;$('#agSw').classList.remove('on');$('#agTaskBox').style.display='none';agRender();toast('🔒 লগআউট হয়েছে')};
+const _agTasksBtn=$('#agTasksBtn');if(_agTasksBtn)_agTasksBtn.onclick=()=>{closeSheets();renderTaskList();openSheet('#sTasks')};
+
+/* --- টাস্ক প্যানেল + খোঁজ --- */
+function renderTaskList(){
+  const box=$('#taskList');if(!box)return;
+  const l=agTasks();
+  box.innerHTML=l.length?'':'<div class="agMsg">এখনো কোনো এজেন্ট টাস্ক নেই — উপরের ⚡ সুইচ চালু করে নির্দেশ দাও</div>';
+  l.forEach(t=>{
+    const d=document.createElement('div');d.className='taskItem';
+    d.innerHTML='<div class="tiTop"><span class="tiSt"></span><span class="tiTask"></span></div><div class="tiMeta"></div><div class="tiBtns"></div>';
+    const st=d.querySelector('.tiSt');st.textContent=statusBn(t.status);
+    st.className='tiSt '+(t.status==='done'?'ok':t.status==='running'?'run':'bad');
+    d.querySelector('.tiTask').textContent=t.task||'(টাস্ক টেক্সট নেই)';
+    d.querySelector('.tiMeta').textContent=relDate(t.ts)+(t.id?' · '+String(t.id).slice(0,8):'');
+    const b=d.querySelector('.tiBtns');
+    if(t.id&&t.status!=='done'&&t.status!=='running'){
+      const rb=document.createElement('button');rb.className='wsBtn';rb.textContent='↻ রিজিউম';
+      rb.onclick=()=>{closeSheets();runAgent(t.task,t.id)};b.appendChild(rb);
     }
-    if(!$('#agReportWrap').style.display||$('#agReportWrap').style.display==='none'){const st=$('#agSteps').lastChild;if(st&&st.className.indexOf('done')<0)agCard('','🔚','স্ট্রিম শেষ')}
-  }catch(err){agCard('bad','⛔','সমস্যা: '+(err.message||err))}
-  agRunning=false;$('#agRun').disabled=false;
+    const rt=document.createElement('button');rt.className='wsBtn';rt.textContent='🔁 নতুন করে';
+    rt.onclick=()=>{closeSheets();runAgent(t.task)};b.appendChild(rt);
+    box.appendChild(d);
+  });
 }
+(function(){
+  const si=$('#taskSearch');if(!si)return;
+  si.addEventListener('input',()=>{
+    const q=si.value.trim().toLowerCase();const res=$('#taskSearchRes');if(!res)return;
+    res.innerHTML='';
+    if(q.length<2){res.style.display='none';return}
+    res.style.display='';
+    let n=0;
+    agTasks().forEach(t=>{
+      if(n<12&&(t.task||'').toLowerCase().indexOf(q)>=0){
+        n++;const d=document.createElement('button');d.className='srItem';
+        d.textContent='📋 টাস্ক: '+(t.task||'').slice(0,90)+' — '+statusBn(t.status);
+        d.onclick=()=>{closeSheets();if(t.id&&t.status!=='done')runAgent(t.task,t.id)};
+        res.appendChild(d);
+      }
+    });
+    document.querySelectorAll('#msgs .row').forEach(row=>{
+      const txt=row.textContent||'';
+      const i2=txt.toLowerCase().indexOf(q);
+      if(i2>=0&&n<20){
+        n++;const d=document.createElement('button');d.className='srItem';
+        d.textContent='💬 …'+txt.slice(Math.max(0,i2-30),i2+70).replace(/\s+/g,' ')+'…';
+        d.onclick=()=>{closeSheets();row.scrollIntoView({behavior:'smooth',block:'center'});row.classList.add('flash');setTimeout(()=>row.classList.remove('flash'),1700)};
+        res.appendChild(d);
+      }
+    });
+    if(!n)res.innerHTML='<div class="agMsg">কিছু পাওয়া যায়নি</div>';
+  });
+})();
+
+/* --- ফুলস্ক্রিন কোড ওয়ার্কস্পেস --- */
+function openCodeFs(code,lang){
+  const ov=$('#codeFs');if(!ov)return;
+  $('#cfsTitle').textContent=lang||'কোড';
+  $('#cfsBody').textContent=code;
+  ov.classList.add('show');
+  const cp=$('#cfsCopy');if(cp)cp.onclick=()=>{try{navigator.clipboard.writeText(code).then(()=>toast('📋 কপি হয়েছে'))}catch(e){toast('কপি করা যায়নি')}};
+}
+(function(){
+  const x=$('#cfsX');if(x)x.onclick=()=>$('#codeFs').classList.remove('show');
+  const ov=$('#codeFs');if(ov)ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('show')});
+  document.addEventListener('click',e=>{
+    const f=e.target.closest?e.target.closest('.cbFull'):null;
+    if(f){const box=f.closest('.codeBox');if(box)openCodeFs((box.querySelector('code')||{}).textContent||'',(box.querySelector('.cbLang')||{}).textContent||'')}
+  });
+})();
 
 /* ============ init ============ */
 (async()=>{
   setGreet();renderSugs();renderQuick();
+  try{agBarIdle();renderTaskList()}catch(e){}
   try{
     cfg=await api('/api/config');
     const ml=$('#modelLabel');if(ml)ml.textContent=cfg.models[0]?'Auto':'—';
