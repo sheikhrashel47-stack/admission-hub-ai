@@ -273,6 +273,7 @@ async function* streamAnswer(keys, messages, model, mode, emit, signal, multimod
         return attempt;
       } catch (e) {
         if (ac.signal.aborted) throw e;
+        emit({ fail: { provider: m.pid, model: m.model, error: String(e && e.message || e).slice(0, 90) } });
       } finally {
         signal?.removeEventListener('abort', onAbort);
       }
