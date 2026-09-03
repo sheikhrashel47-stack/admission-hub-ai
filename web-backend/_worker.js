@@ -475,6 +475,27 @@ function parseSuggestions(ans) {
   const list = m[1].split(NL).map((x) => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 3);
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
+/* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1 };
+async function chatToolLoop(keys, env, msg) {
+  const t = String(msg || '').trim();
+  if (t.length < 6) return null;
+  if (/^(hi|hello|hey|সালাম|হাই|হ্যালো|কেমন আছো|শুভ|thanks|ধন্যবাদ)/i.test(t)) return null;
+  if (!/(গিটহাব|github|repo|রিপো|কতটি|কয়টি|লিস্ট|list|ফাইল|file|deploy|ডিপ্লয়|সাইট|site|website|url|খবর|search|খুঁজ|research|রিসার্চ|ইনবক্স|inbox|নোটিফ|status|স্ট্যাটাস|দেখো|check)/i.test(t)) return null;
+  const sys = 'তুমি জুজুর টুল-প্ল্যানার। শুধু read-only টুল চালানো যায়: gh.repos(args:{}), gh.read({path}), web.search({query}), web.read({url}), web.eye({url}), bu.health({}), verify.url({url})। ইউজার মেসেজ দেখে সর্বোচ্চ ২ ধাপের plan দাও। উত্তর শুধু JSON: {"plan":[{"tool":"gh.repos","args":{}}]} অথবা {"plan":[]}। ব্যাখ্যা লিখবে না।';
+  let out = '';
+  try { for await (const x of streamAnswer(keys, [{ role: 'system', content: sys }, { role: 'user', content: t }], 'auto', 'fast', () => {}, null, false)) out += x; } catch { return null; }
+  const j = safeJson(out);
+  const plan = (j && Array.isArray(j.plan)) ? j.plan.slice(0, 2) : [];
+  if (!plan.length) return null;
+  const notes = [];
+  for (const st of plan) {
+    const tool = String((st && st.tool) || '');
+    if (!CHAT_TOOLS[tool]) continue;
+    try { const r = await runAgentTool(env, keys, tool, (st && st.args) || {}, () => {}); notes.push(tool + ' → ' + JSON.stringify(r).slice(0, 1200)); } catch (e) { notes.push(tool + ' → ব্যর্থ: ' + String(e.message || e).slice(0, 120)); }
+  }
+  return notes.length ? notes.join('\n') : null;
+}
 const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' };
 const CF_ACC = 'abb783e456e51a5d338419de93d5e576';
 async function sha256hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
@@ -613,6 +634,7 @@ async function visionCritique(keys, b64png, question) {
   return 'vision ব্যর্থ (' + last + ')';
 }
 async function runAgentTool(env, keys, tool, args, emit) {
+  if (tool === 'gh.repos') { const j = await ghApi(keys, '/user/repos?per_page=100&sort=updated'); return { count: j.length, repos: j.slice(0, 40).map((r) => ({ name: r.name, priv: r.private, lang: r.language, up: (r.updated_at || '').slice(0, 10), topics: (r.topics || []).slice(0, 4) })) }; }
   if (tool === 'web.eye') {
     let bytes = null, source = 'thum.io (keyless)';
     try { const sr = await fetch('https://image.thum.io/get/width/1024/crop/768/noanimate/' + args.url); if (sr.ok) bytes = new Uint8Array(await sr.arrayBuffer()); } catch {}
@@ -728,7 +750,7 @@ export default {
               const j = safeJson(out);
               if (!j) { emit({ fail: 'মডেল সঠিক JSON দেয়নি', raw: out.slice(0, 200) }); state.status = 'badjson'; break; }
               state.history.push({ role: 'assistant', content: out.slice(0, 3000) });
-              if (j.final) { state.status = 'done'; state.report = j.final; emit({ done: true, report: j.final, steps: state.i }); break; }
+              if (j.final) { state.status = 'done'; state.report = j.final; await storePut(env, 'ctx:lasttask', JSON.stringify({ task: state.task, status: 'done', report: j.final, ts: Date.now() })); emit({ done: true, report: j.final, steps: state.i }); break; }
               const act = j.action || {};
               emit({ step: state.i, phase: 'tool', tool: act.tool, thought: (j.thought || '').slice(0, 200) });
               let res;
@@ -742,6 +764,7 @@ export default {
             if (state.status === 'running') state.status = 'maxsteps';
           } catch (e) { state.status = 'error'; state.error = String(e.message || e); emit({ error: state.error }); }
           await storePut(env, 'agent:task:' + state.id, JSON.stringify(state));
+          await storePut(env, 'ctx:lasttask', JSON.stringify({ task: state.task, status: state.status, report: state.report || '', ts: Date.now() }));
           emit({ done: true, status: state.status, id: state.id, report: state.report || null });
           ctrl.close();
         },
@@ -1074,11 +1097,13 @@ export default {
 
       msgs.push({ role: 'assistant', content: '', partial: true, ts: Date.now() });
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
+      const lt = await storeGetJson(env, 'ctx:lasttask', null);
       const summary = await ensureSummary(keys, env, c, data);
-      const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '');
+      const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') + (lt ? '\n\n## জুজুর সর্বশেষ কাজ (প্রসঙ্গ ধরে রাখো — follow-up হলে এর সাথে মিলিয়ে বুঝো)\n- নির্দেশ: ' + String(lt.task || '').slice(0, 300) + '\n- স্ট্যাটাস: ' + lt.status + '\n- ফলাসার: ' + String(lt.report || '').slice(0, 500) : '');
       let finalMsgs = [{ role: 'system', content: baseSys }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
       let hasMulti = !!(body.images && body.images.length);
       let extraText = '';
+      if (!mRe) { try { if (await ownerOk(env, req)) { const tn = await chatToolLoop(keys, env, msg); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
       const binParts = [];
       if (body.media && body.media.length) {
         const files = await kvGet(env, 'files', {});
