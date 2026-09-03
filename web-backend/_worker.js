@@ -65,15 +65,40 @@ async function loadKeys(env) {
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
-    if (!v) { try { v = await env.AH_KV.get('cfg:' + n); } catch {} }
+    if (!v) { v = await storeGet(env, 'cfg:' + n); }
     if (v) k[n] = v;
   }
   _keysCache = k;
   return k;
 }
 
-function kvGet(env, key, fallback) { return env.AH_KV.get(key, 'json').then((v) => v ?? fallback); }
-function kvSet(env, key, val) { return env.AH_KV.put(key, JSON.stringify(val)).catch(() => {}); } // quota-safe: লেখা ব্যর্থ হলে চ্যাট চলবে, সেভ পরে resume হবে
+function kvGet(env, key, fallback) { return storeGetJson(env, key, fallback); }
+function kvSet(env, key, val) { return storePut(env, key, JSON.stringify(val)).then(() => {}); }
+/* ---- একStorage: D1 আগে (100k writes/day), KV fallback ---- */
+async function storeGet(env, key) {
+  if (env.AH_DB) { try {
+    const r = await env.AH_DB.prepare('SELECT value, exp FROM kv WHERE key = ?1').bind(key).first();
+    if (r) { if (r.exp && r.exp < Date.now()) { env.AH_DB.prepare('DELETE FROM kv WHERE key = ?1').bind(key).catch(() => {}); return null; } return r.value; }
+    return null;
+  } catch {} }
+  try { return await env.AH_KV.get(key); } catch { return null; }
+}
+async function storeGetJson(env, key, fallback) {
+  const v = await storeGet(env, key);
+  if (v == null) return fallback;
+  try { return JSON.parse(v); } catch { return fallback; }
+}
+async function storePut(env, key, val, ttlSec) {
+  if (env.AH_DB) { try {
+    await env.AH_DB.prepare('INSERT OR REPLACE INTO kv(key, value, exp) VALUES (?1, ?2, ?3)').bind(key, val, ttlSec ? Date.now() + ttlSec * 1000 : 0).run();
+    return true;
+  } catch {} }
+  try { await env.AH_KV.put(key, val, ttlSec ? { expirationTtl: ttlSec } : undefined); return true; } catch { return false; }
+}
+async function storeDel(env, key) {
+  if (env.AH_DB) { try { await env.AH_DB.prepare('DELETE FROM kv WHERE key = ?1').bind(key).run(); return; } catch {} }
+  try { await env.AH_KV.delete(key); } catch {}
+}
 
 /* ---------- Google Drive backup (loadKeys প্যাটার্ন: env binding → KV cfg:GOOGLE_DRIVE_*_1) ---------- */
 const DRIVE_FOLDER_NAME = 'ADMISSION-HUB-AI-Backups';
@@ -85,7 +110,7 @@ async function loadDriveCfg(env) {
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
-    if (!v) { try { v = await env.AH_KV.get('cfg:' + n); } catch {} }
+    if (!v) { v = await storeGet(env, 'cfg:' + n); }
     if (v) c[n] = String(v).trim();
   }
   _driveCfgCache = (c.GOOGLE_DRIVE_CLIENT_ID_1 && c.GOOGLE_DRIVE_CLIENT_SECRET_1 && c.GOOGLE_DRIVE_REFRESH_TOKEN_1)
@@ -110,7 +135,7 @@ async function driveToken(env) {
   return _driveTok.token;
 }
 async function driveFolderId(env, token, force) {
-  if (!force) { try { const cached = await env.AH_KV.get('drive:folder_1'); if (cached) return cached; } catch {} }
+  if (!force) { const cached = await storeGet(env, 'drive:folder_1'); if (cached) return cached; }
   const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
   let id = null;
   const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1`, { headers: { Authorization: 'Bearer ' + token } });
@@ -123,7 +148,7 @@ async function driveFolderId(env, token, force) {
     if (!c.ok) throw new Error('Drive folder HTTP ' + c.status);
     id = (await c.json()).id;
   }
-  try { await env.AH_KV.put('drive:folder_1', id); } catch {}
+  await storePut(env, 'drive:folder_1', id);
   return id;
 }
 function driveMime(name) {
@@ -360,7 +385,7 @@ async function sha256hex(s) { const b = await crypto.subtle.digest('SHA-256', ne
 let _sessSecretCache = null;
 async function sessSecret(env) {
   if (_sessSecretCache) return _sessSecretCache;
-  const v = await env.AH_KV.get('cfg:WATCH_SECRET');
+  const v = await storeGet(env, 'cfg:WATCH_SECRET');
   if (!v) return null;
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(v), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   _sessSecretCache = key;
@@ -371,14 +396,11 @@ async function hmacB64(key, msg) {
   return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
 }
 async function ownerUnlock(env, code) {
-  const want = await env.AH_KV.get('owner:code_hash');
+  const want = await storeGet(env, 'owner:code_hash');
   if (!want) return { error: 'owner code সেট করা নেই' };
   if ((await sha256hex(String(code || ''))) !== want) return { error: 'ভুল কোড' };
   const sess = crypto.randomUUID();
-  try {
-    await env.AH_KV.put('sess:' + sess, '1', { expirationTtl: 7 * 86400 });
-    return { session: sess, ttlDays: 7 };
-  } catch {}
+  if (await storePut(env, 'sess:' + sess, '1', 7 * 86400)) return { session: sess, ttlDays: 7 };
   const key = await sessSecret(env);
   if (!key) return { error: 'session তৈরি করা যাচ্ছে না (KV + secret দুটোই নেই)' };
   const exp = Date.now() + 7 * 86400000;
@@ -397,7 +419,7 @@ async function ownerOk(env, req) {
     if (!key) return false;
     return (await hmacB64(key, 'sess:' + p[1])) === p[2];
   }
-  return !!(await env.AH_KV.get('sess:' + t));
+  return !!(await storeGet(env, 'sess:' + t));
 }
 async function ghApi(keys, path, opts = {}) {
   const r = await fetch('https://api.github.com' + path, { method: opts.method || 'GET', headers: { Authorization: `Bearer ${keys.GITHUB_PAT}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'admission-hub-agent' }, body: opts.body });
@@ -454,7 +476,7 @@ async function buKeys(env) {
   const list = []; const seen = new Set();
   const add = (i, v) => { if (v && !seen.has(v)) { seen.add(v); list.push({ i, key: v }); } };
   for (let i = 1; i <= 15; i++) { try { add(i, env['BU_KEY_' + i]); } catch {} }
-  for (let i = 1; i <= 15; i++) { try { const v = await env.AH_KV.get('cfg:BROWSER_USE_API_KEY_' + i); if (v) add(100 + i, v); } catch {} }
+  for (let i = 1; i <= 15; i++) { const v = await storeGet(env, 'cfg:BROWSER_USE_API_KEY_' + i); if (v) add(100 + i, v); }
   list.sort((a, b) => a.i - b.i);
   _buCache = { ts: now, list: list.slice(0, 15) };
   return _buCache.list;
@@ -585,9 +607,9 @@ export default {
       if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক unlock লাগবে' }, 401);
       const b = await req.json().catch(() => ({}));
       let state = null;
-      if (b.resume) state = await env.AH_KV.get('agent:task:' + b.resume, 'json').catch(() => null);
+      if (b.resume) state = await storeGetJson(env, 'agent:task:' + b.resume, null);
       if (!state) state = { id: crypto.randomUUID(), task: String(b.task || '').slice(0, 2000), history: [], i: 0, status: 'running', ts: Date.now() };
-      await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state)).catch(() => {});
+      await storePut(env, 'agent:task:' + state.id, JSON.stringify(state));
       const stream = new ReadableStream({
         async start(ctrl) {
           const enc = new TextEncoder();
@@ -610,12 +632,12 @@ export default {
               catch (e) { res = { error: String(e.message || e).slice(0, 200) }; }
               emit({ step: state.i, phase: 'result', tool: act.tool, ok: !res.error, preview: JSON.stringify(res).slice(0, 300) });
               state.history.push({ role: 'user', content: 'TOOL RESULT ' + act.tool + ': ' + JSON.stringify(res).slice(0, 4000) });
-              await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state)).catch(() => {});
+              await storePut(env, 'agent:task:' + state.id, JSON.stringify(state));
               emit({ checkpoint: state.id, step: state.i });
             }
             if (state.status === 'running') state.status = 'maxsteps';
           } catch (e) { state.status = 'error'; state.error = String(e.message || e); emit({ error: state.error }); }
-          await env.AH_KV.put('agent:task:' + state.id, JSON.stringify(state)).catch(() => {});
+          await storePut(env, 'agent:task:' + state.id, JSON.stringify(state));
           emit({ done: true, status: state.status, id: state.id, report: state.report || null });
           ctrl.close();
         },
@@ -631,10 +653,10 @@ export default {
       await chk('pwa_index', async () => { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); return { bytes: t.length }; });
       await chk('chat_e2e', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: 'ping', model: 'auto', mode: 'fast' }) }); const t = await r.text(); if (!/done":true/.test(t)) throw new Error('chat done নেই'); return {}; });
       await chk('drive', async () => { const r = await fetch('https://admission-hub-ai.pages.dev/api/storage'); const j = await r.json(); if (!(j.drive && j.drive.connected)) throw new Error('drive বিছিন্ন'); return {}; });
-      await env.AH_KV.put('watch:latest', JSON.stringify(rep2)).catch(() => {});
-      const log = (await env.AH_KV.get('watch:log', 'json').catch(() => null)) || [];
+      await storePut(env, 'watch:latest', JSON.stringify(rep2));
+      const log = (await storeGetJson(env, 'watch:log', null)) || [];
       log.unshift({ ts: rep2.ts, ok: rep2.checks.every((c) => c.ok), bad: rep2.checks.filter((c) => !c.ok).map((c) => c.name) });
-      await env.AH_KV.put('watch:log', JSON.stringify(log.slice(0, 30))).catch(() => {});
+      await storePut(env, 'watch:log', JSON.stringify(log.slice(0, 30)));
       return json(rep2);
     }
     if (method === 'POST' && path === '/api/owner/unlock') {
@@ -805,7 +827,7 @@ export default {
         }
         files[id] = rec;
         await kvSet(env, 'files', files);
-        await env.AH_KV.put('fileb:' + id, b64).catch(() => { throw new Error('স্টোরেজে লেখা যায়নি (আজকের ফ্রি কোটা শেষ) — ফাইল সেভ হয়নি, কাল আবার চেষ্টা করুন'); });
+        if (!(await storePut(env, 'fileb:' + id, b64))) throw new Error('স্টোরেজে লেখা যায়নি — ফাইল সেভ হয়নি, কিছুক্ষণ পরে চেষ্টা করুন');
         return json(rec);
       }
       const content = (body.content || '').slice(0, MAX_TEXT);
@@ -821,7 +843,7 @@ export default {
       }
       files[id] = rec;
       await kvSet(env, 'files', files);
-      await env.AH_KV.put('file:' + id, content).catch(() => { throw new Error('স্টোরেজে লেখা যায়নি (আজকের ফ্রি কোটা শেষ) — ফাইল সেভ হয়নি, কাল আবার চেষ্টা করুন'); });
+      if (!(await storePut(env, 'file:' + id, content))) throw new Error('স্টোরেজে লেখা যায়নি — ফাইল সেভ হয়নি, কিছুক্ষণ পরে চেষ্টা করুন');
       return json(rec);
     }
     if (method === 'GET' && path === '/api/storage') {
@@ -863,8 +885,8 @@ export default {
       const meta = files[mFile[1]];
       if (!meta) return json({ error: 'নেই' }, 404);
       const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
-      const b64 = isBin ? await env.AH_KV.get('fileb:' + mFile[1]) : null;
-      const content = isBin ? null : await env.AH_KV.get('file:' + mFile[1]);
+      const b64 = isBin ? await storeGet(env, 'fileb:' + mFile[1]) : null;
+      const content = isBin ? null : await storeGet(env, 'file:' + mFile[1]);
       if (method === 'GET' && !mFile[2]) {
         if (isBin && b64) {
           const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -874,7 +896,7 @@ export default {
       }
       if (method === 'DELETE' && !mFile[2]) {
         delete files[mFile[1]]; await kvSet(env, 'files', files);
-        await env.AH_KV.delete('file:' + mFile[1]); await env.AH_KV.delete('fileb:' + mFile[1]);
+        await storeDel(env, 'file:' + mFile[1]); await storeDel(env, 'fileb:' + mFile[1]);
         if (meta.drive?.fileId) { try { await driveDelete(env, meta.drive.fileId); } catch {} } // Drive কপিও মুছি (best-effort)
         return json({ ok: true });
       }
@@ -930,10 +952,10 @@ export default {
           if (!meta) continue;
           const isBin = meta.type === 'binary' || BIN_EXT.includes((meta.name.split('.').pop() || '').toLowerCase());
           if (isBin) {
-            const b64 = (await env.AH_KV.get('fileb:' + m.id)) || '';
+            const b64 = (await storeGet(env, 'fileb:' + m.id)) || '';
             if (b64) { binParts.push({ type: 'image_url', image_url: { url: `data:${meta.mime || 'application/pdf'};base64,${b64}`, mime_type: meta.mime || 'application/pdf' } }); hasMulti = true; }
           } else {
-            const txt = ((await env.AH_KV.get('file:' + m.id)) || '').slice(0, 50000);
+            const txt = ((await storeGet(env, 'file:' + m.id)) || '').slice(0, 50000);
             if (txt) extraText += '\n\n[সংযুক্ত ফাইল: ' + meta.name + ']\n' + txt + '\n';
           }
         }
