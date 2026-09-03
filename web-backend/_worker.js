@@ -507,7 +507,7 @@ const STYLE_SYS={
   critical:'\n[STYLE: শুধু নিশ্চিতকরণ/সতর্কবার্তা]'
 };
 const PRON_RE=/(ওটা|ওইটা|ঐটা|সেটা|এটা|that|it|আগেরটা|আগের টা|same|একই|আবার)/i;
-async function chatToolLoop(keys, env, msg, imode, intent) {
+async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   const t = String(msg || '').trim();
   if (t.length < 6) return null;
   if (intent === 'greeting') return null;
@@ -521,7 +521,12 @@ async function chatToolLoop(keys, env, msg, imode, intent) {
   if (webOk && um && /(পড়ো|read|খোলো|সাইট|site|website|page|লিংক|link)/i.test(t)) plan.push({ tool: 'web.read', args: { url: um[0] } });
   else if (webOk && um && /(স্ক্রিনশট|ছবি|eye|দেখো)/i.test(t)) plan.push({ tool: 'web.eye', args: { url: um[0] } });
   if (webOk && !plan.length && /(খবর|search|খুঁজ|খোজ|research|রিসার্চ|সাম্প্রতিক|latest|নিয়ম|ভর্তি)/i.test(t)) plan.push({ tool: 'web.search', args: { query: t.slice(0, 200) } });
+  if (!plan.length && PRON_RE.test(t)) {           /* 2.3 pronoun → আগের tool-প্রসঙ্গ inherit */
+    const ltp = await storeGetJson(env, 'ctx:lasttool', null);
+    if (ltp && Array.isArray(ltp.plan) && ltp.plan.length && (!ltp.chatId || ltp.chatId === chatId)) plan = ltp.plan.slice(0, 2);
+  }
   if (!plan.length) return null;
+  try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
   for (const st of plan.slice(0, 2)) {
     const tool = st.tool;
@@ -1162,7 +1167,7 @@ export default {
       let finalMsgs = [{ role: 'system', content: baseSys + sysAdd }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
       let hasMulti = !!(body.images && body.images.length);
       let extraText = '';
-      if (!mRe) { try { if (intent !== 'greeting' && imode !== 'chat' && (await ownerOk(env, req))) { const tn = await chatToolLoop(keys, env, String(body.message || ''), imode, intent); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
+      if (!mRe) { try { if (intent !== 'greeting' && imode !== 'chat' && (await ownerOk(env, req))) { const tn = await chatToolLoop(keys, env, String(body.message || ''), imode, intent, c.id); if (tn) extraText += '\n\n[জুজুর টুল-ফল — সত্যিকারের ডেটা, এটা দেখে উত্তর দাও]\n' + tn; } } catch {} }
       const binParts = [];
       if (body.media && body.media.length) {
         const files = await kvGet(env, 'files', {});
