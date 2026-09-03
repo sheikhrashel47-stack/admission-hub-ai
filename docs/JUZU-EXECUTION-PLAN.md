@@ -32,16 +32,16 @@
 
 ## 🟦 PHASE 1 — Workspace UI (popup বিদায়, persistent workspace)
 **লক্ষ্য:** Agent Control = main chat-এর ভেতরেই live workspace। ব্লুপ্রিন্ট রেফ: P1#1,43,44,46,113 (FOUNDATION RULE), P4#211-220।
-- [ ] 1.1 Agent activity sheet → **main conversation-এ live cards** (task চলার সময় chat-এই দেখা যাবে)
-- [ ] 1.2 **Header status bar**: current task, step n/m, session alive indicator
-- [ ] 1.3 **Progress bar + step states** (✓ done / ▶ running / ○ pending / ⚠ error)
-- [ ] 1.4 **Diff view UI** (before/after code, commit-এর আগে owner দেখতে পারবে)
-- [ ] 1.5 **Code workspace**: বড় output chat bubble-এ আটকাবে না — expandable/fullscreen
-- [ ] 1.6 **Task panel**: task list, stop/retry/resume বাটন, checkpoint থেকে resume
-- [ ] 1.7 Streaming markdown polish + zero-waste layout (P4#213-215)
-- [ ] 1.8 **Message/task search** (keyword দিয়ে পুরনো খোঁজা)
-- [ ] 1.9 Mobile-first QA (375px-এ overflow/clipping check)
-- [ ] 1.10 Deploy → gh-pages → live visual verify → owner demo
+- [x] 1.1 Agent activity sheet → **main conversation-এ live cards** (task চলার সময় chat-এই দেখা যাবে) — (2026-09-04, c074c7d)
+- [x] 1.2 **Header status bar** (`#agBar`): current task, step n/10, session-alive dot — (2026-09-04, c074c7d)
+- [x] 1.3 **Progress bar + step states** (wsProg + pill: run/ok/bad/stop) — (2026-09-04, c074c7d)
+- [x] 1.4 **Diff view UI** (diff-result এলে green/red/hunk রেন্ডার) — (2026-09-04, c074c7d)
+- [x] 1.5 **Code workspace**: প্রতি codeBox-এ ⛶ → fullscreen overlay + copy — (2026-09-04, c074c7d)
+- [x] 1.6 **Task panel** (`#sTasks`): list + status + ↻রিজিউম (server checkpoint) + 🔁নতুন করে; live stop card-এ — (2026-09-04, c074c7d)
+- [ ] 1.7 Streaming markdown polish + zero-waste layout (P4#213-215) 🟡 আংশিক — wsCard layout tight; streaming renderer পরের ধাপে
+- [x] 1.8 **Message/task search** (টাস্ক প্যানেলে 🔍 — task + বর্তমান conversation, jump+flash) — (2026-09-04, c074c7d)
+- [x] 1.9 Mobile-first QA — browserless 375x812 + 1280x800 screenshot: overflow/clipping নেই (qa-mobile.png, qa-desktop.png) — (2026-09-04)
+- [x] 1.10 Deploy → gh-pages `e8ae045` → live verify (HTTP 200, wsCard marker, sw v10) — (2026-09-04)
 
 ## 🟦 PHASE 2 — Intent Engine + Conversation Discipline
 **লক্ষ্য:** message বুঝে সঠিক পথে চালানো; greeting-এ কখনো tool নয়। রেফ: P1#2,90,92,3; P4#121-130,201।
