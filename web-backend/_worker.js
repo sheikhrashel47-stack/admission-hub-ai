@@ -342,6 +342,14 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' };
+let _pingCache = null;
+async function pingCached(keys) {
+  const now = Date.now();
+  if (_pingCache && now - _pingCache.ts < 60000) return _pingCache.list;
+  const list = await pingProviders(keys);
+  _pingCache = { ts: now, list };
+  return list;
+}
 async function pingProviders(keys) {
   // §45 সৎ health: model-list নয় — আসল ১-টোকেন completion দিয়ে পরীক্ষা (60s cache আছে)
   const out = []; const seen = new Set();
@@ -353,7 +361,7 @@ async function pingProviders(keys) {
     try {
       let ok = false;
       if (m.pid === 'gemini') ok = (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`)).ok;
-      else if (m.pid === 'openrouter') ok = (await fetch(`${PING_BASE.openrouter}/auth/key`, { headers: { Authorization: `Bearer ${key}` } })).ok;
+      else if (m.pid === 'openrouter') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000); const r = await fetch(`${PING_BASE.openrouter}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else if (m.pid === 'pollinations') { const r = await fetch('https://text.pollinations.ai/' + encodeURIComponent('ping')); ok = r.ok && (await r.text()).trim().length > 0; }
       else {
         const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000);
@@ -378,12 +386,14 @@ export default {
     if (method === 'GET' && path === '/api/health') return json({ ok: true });
 
     if (method === 'GET' && path === '/api/config') {
-      const models = MODELS.filter((m) => hasKey(keys, m.pid)).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
+      const healthy = await pingCached(keys).catch(() => []);
+      const okPids = new Set(healthy.filter((p) => p.ok).map((p) => p.pid));
+      const models = MODELS.filter((m) => hasKey(keys, m.pid) && (okPids.has(m.pid))).map((m) => ({ id: m.id, label: m.label, pid: m.pid }));
       return json({ models, features: { research: !!keys.TAVILY_API_KEY, files: true, memory: true, agent: false, github: false, deploy: false, image: true, driveBackup: !!(await loadDriveCfg(env)) } });
     }
 
     if (method === 'GET' && path === '/api/system') {
-      const providers = await pingProviders(keys).catch(() => []);
+      const providers = await pingCached(keys).catch(() => []);
       const n = providers.filter((p) => p.ok).length;
       const drv = await loadDriveCfg(env);
       return json({
