@@ -395,6 +395,14 @@ html.standalone #toolbar{padding-top:8px}
 html.standalone #drawer{padding-top:10px}
 html.standalone .cpHd{padding-top:10px}
 html.standalone #netBanner{top:6px}
+/* premium typography + gap kill */
+.msgA{font-size:15.8px;line-height:1.78;letter-spacing:.1px}
+.bubU{font-size:15.6px;line-height:1.62}
+#inp{font-size:16px}
+.msgA p:empty,.msgA div:empty{display:none}
+.msgA table{margin:8px 0}
+.codeBox:has(pre:empty){display:none}
+.who b{font-weight:800}
 /* Gemini-ref: soft bg + bottom color animation */
 html[data-theme="light"]{background:#fcfcfe}
 html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8fc 55%,#edf2fb 100%)}
@@ -809,7 +817,7 @@ function hl(code,lang){
 }
 function md(src){
   const cb=[];let h=esc(src);
-  window._CBRAW=window._CBRAW||[];h=h.replace(/```([\w+-]*)\n([\s\S]*?)\n```/g,(m,l,c)=>{cb.push({h:hl(c,l),l:l||'code',g:window._CBRAW.push(c)-1});return '\u0000C'+(cb.length-1)+'\u0000'});
+  window._CBRAW=window._CBRAW||[];h=h.replace(/```([\w+-]*)\n([\s\S]*?)\n```/g,(m,l,c)=>{c=fixOver(c);cb.push({h:hl(c,l),l:l||'code',g:window._CBRAW.push(c)-1});return '\u0000C'+(cb.length-1)+'\u0000'});
   h=h.replace(/`([^`\n]+)`/g,(m,c)=>'\u0000I'+c+'\u0000');
   h=h.replace(/^###### (.*)$/gm,'<h6>$1</h6>').replace(/^##### (.*)$/gm,'<h5>$1</h5>').replace(/^#### (.*)$/gm,'<h4>$1</h4>').replace(/^### (.*)$/gm,'<h3>$1</h3>').replace(/^## (.*)$/gm,'<h2>$1</h2>').replace(/^# (.*)$/gm,'<h1>$1</h1>');
   h=h.replace(/^---+$/gm,'<hr>');
@@ -831,6 +839,7 @@ function md(src){
 }
 
 /* streaming-safe markdown: খোলা fence/bold বন্ধ করে render — flicker/ভাঙা block নেই */
+function fixOver(c){if(c.indexOf('&lt;')<0||c.indexOf('<')>=0)return c;return c.split('&lt;').join('<').split('&gt;').join('>').split('&quot;').join(String.fromCharCode(34)).split('&#39;').join(String.fromCharCode(39)).split('&amp;').join('&')}
 function stripSug(t){return String(t).replace(/(?:\n|^)\[SUGGEST\][\s\S]*$/,'')}
 function mdLive(src){
   let t=stripSug(src);
@@ -1812,7 +1821,7 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
-window.__SWV='ahai-v20';
+window.__SWV='ahai-v21';
 function clog(m){try{fetch(apiBase()+'/api/clog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({m:String(m).slice(0,400)})}).catch(()=>{})}catch(e){}}
 window.addEventListener('error',e=>clog('ERR '+e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno));
 window.addEventListener('unhandledrejection',ev=>clog('REJ '+((ev.reason&&ev.reason.message)||ev.reason||'')));
@@ -1833,10 +1842,9 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   const vv=window.visualViewport;
   if(!vv)return;
   let prevH=vv.height;
-  vv.addEventListener('resize',()=>{
-    prevH=vv.height;
-    setTimeout(scrollB,120);
-  });
+  const fitComp=()=>{try{const kb=Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop));const cw=$('#compWrap');if(cw)cw.style.bottom=kb>0?kb+'px':''}catch(e){}};
+  vv.addEventListener('resize',()=>{fitComp();prevH=vv.height;setTimeout(scrollB,120)});
+  vv.addEventListener('scroll',()=>{fitComp()});
 })();
 
 /* ============ জুজু Agent Workspace (Phase 1) ============ */
