@@ -26,11 +26,13 @@ const MODELS = [
   { pid: 'together', id: 'tg', label: 'Together · Llama 3.3 70B Turbo', model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free', speed: 3, quality: 4, coding: 4 },
   { pid: 'openrouter', id: 'or', label: 'OpenRouter · Free Router', model: 'openrouter/free', speed: 3, quality: 4, coding: 4 },
   { pid: 'huggingface', id: 'hf', label: 'Hugging Face · Qwen2.5 72B', model: 'Qwen/Qwen2.5-72B-Instruct', speed: 2, quality: 3, coding: 3 },
+  { pid: 'ollama', id: 'o120', label: 'Ollama · GPT-OSS 120B', model: 'gpt-oss:120b', speed: 3, quality: 4, coding: 5 },
+  { pid: 'ollama', id: 'o20', label: 'Ollama · GPT-OSS 20B', model: 'gpt-oss:20b', speed: 4, quality: 3, coding: 4 },
   { pid: 'pollinations', id: 'polli', label: 'Pollinations · Free (key লাগে না)', model: 'openai', speed: 2, quality: 2, coding: 2 },
 ];
-const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY' };
+const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY', ollama: 'OLLAMA_API_KEY' };
 // টেক্সট চ্যাটের ফিক্সড fallback ক্রম (প্রথমটা সেরা/দ্রুততম)
-const FALLBACK_ORDER = ['groq', 'cerebras', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'openrouter', 'huggingface', 'pollinations'];
+const FALLBACK_ORDER = ['groq', 'cerebras', 'ollama', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'openrouter', 'huggingface', 'pollinations'];
 // key লাগে না এমন provider (pollinations) সবসময় "available" — বাকিরা key-নির্ভর
 const hasKey = (keys, pid) => (pid === 'pollinations' ? true : !!keys[KEYMAP[pid]]);
 const NL = '\n';
@@ -58,7 +60,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','TAVILY_API_KEY'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','TAVILY_API_KEY'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -262,7 +264,7 @@ async function* streamAnswer(keys, messages, model, mode, emit, signal, multimod
       try {
         emit({ attempt: { provider: m.pid, label: m.label, model: m.model } }); attempt = m;
         let got = false;
-        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1' }[m.pid];
+        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' }[m.pid];
         const it = m.pid === 'gemini' ? geminiStream(key, m.model, messages, ac.signal)
           : m.pid === 'pollinations' ? pollinationsStream(messages, ac.signal)
           : openaiStream(base, key, m.model, messages, ac.signal);
@@ -337,7 +339,7 @@ function parseSuggestions(ans) {
   const list = m[1].split(NL).map((x) => x.replace(/^[-*]\s*/, '').trim()).filter(Boolean).slice(0, 3);
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
-const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1' };
+const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' };
 async function pingProviders(keys) {
   // §45 সৎ health: model-list নয় — আসল ১-টোকেন completion দিয়ে পরীক্ষা (60s cache আছে)
   const out = []; const seen = new Set();
