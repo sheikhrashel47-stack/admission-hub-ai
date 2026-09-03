@@ -284,8 +284,9 @@ svg{width:20px;height:20px;display:block}
 #toast{position:fixed;left:50%;transform:translateX(-50%) translateY(24px);bottom:calc(88px + var(--safe-b));background:var(--toast-bg);color:var(--txt);border:1px solid var(--line2);font-size:13px;font-weight:600;padding:10px 16px;border-radius:999px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.25s;z-index:90;max-width:86vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-#scrim{position:fixed;inset:0;background:rgba(15,23,42,.4);opacity:0;pointer-events:none;transition:.25s;z-index:60}
+#scrim{position:fixed;inset:0;background:rgba(15,23,42,.4);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,visibility 0s linear .25s;z-index:60}
 #scrim.show{opacity:1;pointer-events:auto}
+#scrim.show{opacity:1;visibility:visible;transition:opacity .25s}
 [data-theme="dark"] #scrim{background:rgba(0,0,0,.55)}
 
 .dRow{display:flex;justify-content:space-between;gap:14px;padding:11px 10px;border-bottom:1px solid var(--line);font-size:13px}
@@ -379,6 +380,7 @@ svg{width:20px;height:20px;display:block}
 .agReport{background:var(--card2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 
 /* Gemini-ref: soft bg + bottom color animation */
+html[data-theme="light"]{background:#f7f8fc}
 html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8fc 55%,#edf2fb 100%)}
 #glow{position:fixed;left:50%;bottom:-14vh;width:170vw;height:48vh;transform:translateX(-50%);background:radial-gradient(50% 62% at 50% 100%,rgba(124,155,255,.30),rgba(147,120,255,.13) 55%,rgba(255,255,255,0) 78%);filter:blur(6px);pointer-events:none;z-index:1;animation:glowP 7s ease-in-out infinite alternate}
 @keyframes glowP{from{opacity:.5;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(-12px)}}
@@ -1788,7 +1790,10 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
+window.__SWV='ahai-v17';
 let _swRel=0;
+setInterval(()=>{try{fetch('sw.js?ts='+Date.now(),{cache:'no-store'}).then(r=>r.text()).then(t=>{if(t.indexOf(window.__SWV)<0){location.reload()}}).catch(()=>{})}catch(e){}},45000);
+if(navigator.serviceWorker&&navigator.serviceWorker.addEventListener){navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='JUJU_UPDATE'){location.reload()}})}
 if(navigator.serviceWorker){navigator.serviceWorker.addEventListener('controllerchange',()=>{const n=Date.now();if(n-_swRel>15000){_swRel=n;location.reload()}})}
   window.addEventListener('load',()=>{navigator.serviceWorker.register('./sw.js').catch(()=>{})});
 }
