@@ -445,13 +445,13 @@ export default {
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
        session ৭ দিন। Destructive টুল (delete) এই ভার্সনে নেই। */
     if (method === 'POST' && path === '/api/owner/unlock') {
-      const b = await request.json().catch(() => ({}));
+      const b = await req.json().catch(() => ({}));
       return json(await ownerUnlock(env, b.code));
     }
     if (path === '/api/tools') {
       if (method !== 'POST') return json({ error: 'POST লাগবে' }, 405);
-      if (!(await ownerOk(env, request))) return json({ error: '🔒 মালিক পরিচয় লাগবে — আগে /api/owner/unlock' }, 401);
-      const b = await request.json().catch(() => ({}));
+      if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক পরিচয় লাগবে — আগে /api/owner/unlock' }, 401);
+      const b = await req.json().catch(() => ({}));
       try { return json({ ok: true, tool: b.tool, result: await runTool(keys, b.tool, b.args || {}) }); }
       catch (e) { return json({ ok: false, tool: b.tool, error: String(e.message || e).slice(0, 200) }, 500); }
     }
