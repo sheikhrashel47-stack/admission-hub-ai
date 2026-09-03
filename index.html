@@ -377,6 +377,15 @@ svg{width:20px;height:20px;display:block}
 .agStep.done{border-left-color:var(--green);background:var(--green-t)}
 .agReport{background:var(--card2);border:1px solid var(--line2);border-radius:var(--rs);padding:12px;font-size:13.5px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
 
+/* iOS-edge + selection + msg popup */
+#toolbar{border-bottom:0}
+#compWrap{background:none;padding:8px 12px calc(8px + var(--safe-b))}
+#app{-webkit-user-select:none;user-select:none}
+#aiBody,.bubU,.wsReport,.wsSteps,.agReport,pre,code,.tiTask,.wsTask{-webkit-user-select:text;user-select:text}
+::selection{background:rgba(109,91,240,.22)}
+#msgPop{position:fixed;z-index:120;display:flex;gap:2px;background:rgba(22,18,34,.94);border-radius:999px;padding:4px;box-shadow:0 10px 26px rgba(0,0,0,.28);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#msgPop button{color:#fff;font-size:12.5px;font-weight:700;padding:8px 13px;border-radius:999px}
+#msgPop button:active{background:rgba(255,255,255,.14)}
 /* ===== Phase 1 — Agent Workspace ===== */
 #agBar{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--card2);border-bottom:1px solid var(--line);font-size:12px;color:var(--dim);z-index:29;position:relative}
 #agBar.hide{display:none}
@@ -855,6 +864,7 @@ function showHero(){
   h.style.display='';h.innerHTML='<div class="avx ai heroOrb"><span class="eyeL"></span><span class="eyeR"></span></div><div class="greet" id="greet"></div><h1 id="heroSub">আজ আপনাকে কী বানাতে সাহায্য করবো?</h1><div id="sugs"></div>';
   const qk=$('#quick');if(qk)qk.style.display='';
   const hw=$('#homeWrap');if(hw)hw.style.display='';
+  const hs2=$('#heroSub');if(hs2)hs2.textContent=heroLine();
   renderSugs();
 }
 function hideQuickHome(){const qk=$('#quick');if(qk)qk.style.display='none';const hw=$('#homeWrap');if(hw)hw.style.display='none'}
@@ -887,7 +897,9 @@ function renderSugs(){
     };
     box.appendChild(b)});
 }
-function setGreet(){const h=new Date().getHours();const g=h<5?'শুভ রাত্রি':h<12?'শুভ সকাল':h<16?'শুভ দুপুর':'শুভ সন্ধ্যা';$('#greet').innerHTML=g+', <span class="em">Owner</span> <span class="spark">✦</span>'}
+const HERO_LINES=['আজ আপনাকে কী বানাতে সাহায্য করতে পারি?','বলো ভাই, আজ কোন কাজটা একসাথে গুছিয়ে ফেলি?','তোমার আইডিয়া, আমার হাতপা — শুরু করি?','আজ কী নিয়ে ভাবছ — গল্প, নাকি প্রজেক্ট?','নতুন কিছু বানাবো, নাকি পুরনো কিছু ঠিক করবো?','ভাবনাটা বলো — পরিকল্পনা আমি সাজবো?','আজকের লক্ষ্য কী, বস?','কী খুঁজছ — উত্তর, আইডিয়া, নাকি পুরো অ্যাপ?'];
+function heroLine(){return HERO_LINES[Math.floor(Math.random()*HERO_LINES.length)]}
+function setGreet(){const h=new Date().getHours();const g=h<5?'শুভ রাত্রি':h<12?'শুভ সকাল':h<16?'শুভ দুপুর':'শুভ সন্ধ্যা';$('#greet').innerHTML=g+', <span class="em">Owner</span> <span class="spark">✦</span>';const hs=$('#heroSub');if(hs)hs.textContent=heroLine()}
 
 /* ============ chat send / stream ============ */
 async function go(text){
@@ -1040,45 +1052,37 @@ msgs.addEventListener('click',(e)=>{
 /* ============ long-press message menu ============ */
 function bindLongPress(el){
   let timer=null;
-  const start=e=>{timer=setTimeout(()=>{let sel='';try{sel=String(window.getSelection&&window.getSelection())}catch{};if(sel&&sel.trim().length)return;openMsgMenu(el);},520)};
+  const start=e=>{timer=setTimeout(()=>{let sel='';try{sel=String(window.getSelection&&window.getSelection())}catch{};if(sel&&sel.trim().length)return;openMsgMenu(el,e);},520)};
   const end=()=>{clearTimeout(timer);timer=null};
   el.addEventListener('touchstart',start,{passive:true});
   el.addEventListener('touchend',end);el.addEventListener('touchmove',end,{passive:true});
-  el.addEventListener('contextmenu',e=>{e.preventDefault();openMsgMenu(el)});
+  el.addEventListener('contextmenu',e=>{e.preventDefault();openMsgMenu(el,e)});
 }
 let msgMenuTarget=null;
-function openMsgMenu(el){
-  msgMenuTarget=el;
-  const meta=_msgMeta.get(el)||{};
-  const isUser=el.classList.contains('user');
-  const body=$('#msgActions');
-  let items='';
-  if(isUser){
-    items='<div class="secLbl">বার্তা</div>'+
-      mItem('copy','📋 কপি','')+
-      mItem('quote','↩️ রিপ্লাই / কোট','বার্তাটি উদ্ধৃত করে উত্তর')+
-      mItem('edit','✏️ এডিট করে আবার পাঠাও','কম্পোজারে বসবে')+
-      mItem('resend','🔄 পুনরায় পাঠাও','')+
-      mItem('share','📤 শেয়ার','');
-  }else{
-    const hasSrcs=(meta.srcs&&meta.srcs.length);
-    const hasCode=/```/.test(meta.content||'');
-    items='<div class="secLbl">উত্তর</div>'+
-      mItem('copy','📋 কপি','')+
-      mItem('quote','↩️ রিপ্লাই / কোট','উত্তরটি উদ্ধৃত করে প্রশ্ন')+
-      mItem('regen','🔄 Regenerate','')+
-      mItem('revise','✏️ রিভাইস করো','কম্পোজারে বসবে')+
-      mItem('share','📤 শেয়ার','');
-    if(hasCode)items+='<div class="secLbl">কোড</div>'+mItem('copycode','⌨️ কোড কপি','কোড ব্লক থেকে');
-    if(hasSrcs)items+='<div class="secLbl">রিসার্চ</div>'+mItem('srcs','🔗 সোর্স দেখো',meta.srcs.length+'টি সোর্স');
-    items+='<div class="secLbl">আরও</div>'+
-      mItem('tts','🔊 পড়ে শোনাও','')+
-      mItem('branch','🌿 Branch বানাও','আলাদা চ্যাটে')+
-      mItem('save','🔖 নোট আকারে সেভ','AI স্মৃতিতে');
-  }
-  body.innerHTML=items;
-  body.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{const a=b.dataset.act;doMsgAction(a,el)});
-  openSheet('#sMsg');
+function closeMsgMenu(){const m=$('#msgPop');if(m)m.remove()}
+function openMsgMenu(el,ev){
+  msgMenuTarget=el;closeMsgMenu();
+  const m=document.createElement('div');m.id='msgPop';
+  m.innerHTML='<button data-a="copy">কপি</button><button data-a="reply">রিপ্লাই</button><button data-a="share">শেয়ার</button>';
+  document.body.appendChild(m);
+  const r=el.getBoundingClientRect();
+  const cx=(ev&&(ev.clientX||((ev.touches||[])[0]||{}).clientX))||r.left+50;
+  const cy=(ev&&(ev.clientY||((ev.touches||[])[0]||{}).clientY))||r.top+30;
+  const x=Math.min(Math.max(10,cx-70),window.innerWidth-190);
+  const y=Math.max(10,cy-52);
+  m.style.left=x+'px';m.style.top=y+'px';
+  m.onclick=(e)=>{
+    const a2=e.target&&e.target.dataset?e.target.dataset.a:null;if(!a2)return;
+    const txt=(el.textContent||'').trim();
+    if(a2==='copy'){try{navigator.clipboard.writeText(txt).then(()=>toast('📋 কপি হয়েছে'))}catch(e2){toast('কপি যায়নি')}}
+    else if(a2==='reply'){setQuote(el.classList.contains('user')?'user':'ai',txt.slice(0,400))}
+    else if(a2==='share'){if(navigator.share){navigator.share({text:txt}).catch(()=>{})}else{try{navigator.clipboard.writeText(txt).then(()=>toast('📋 কপি হয়েছে'))}catch(e2){}}}
+    closeMsgMenu();
+  };
+  setTimeout(()=>{
+    const close=(e)=>{if(!m.contains(e.target)){closeMsgMenu();document.removeEventListener('touchstart',close,true);document.removeEventListener('scroll',close,true)}};
+    document.addEventListener('touchstart',close,true);document.addEventListener('scroll',close,true);
+  },60);
 }
 function mItem(act,label,sub){return '<button class="mItem" data-act="'+act+'"><span class="mi">'+label.slice(0,1)+'</span><div>'+label+(sub?'<small>'+sub+'</small>':'')+'</div></button>'}
 async function doMsgAction(a,el){
@@ -1745,15 +1749,8 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
   if(!vv)return;
   let prevH=vv.height;
   vv.addEventListener('resize',()=>{
-    const h=vv.height;
-    if(Math.abs(prevH-h)>120){
-      // keyboard toggled
-      document.documentElement.style.height=h+'px';
-      document.body.style.height=h+'px';
-      $('#app').style.height=h+'px';
-      setTimeout(scrollB,120);
-    }
-    prevH=h;
+    prevH=vv.height;
+    setTimeout(scrollB,120);
   });
 })();
 
@@ -1769,8 +1766,7 @@ function statusBn(st){return st==='done'?'✅ সম্পন্ন':st==='runni
 /* --- header status bar --- */
 function agBarIdle(){
   const b=$('#agBar');if(!b)return;
-  if(agSess()){b.classList.remove('hide','run');$('#agBarDot').className='agDot g';$('#agBarTxt').textContent='জুজু ওয়ার্কস্পেস সক্রিয় — সেশন চালু আছে';$('#agBarStop').style.display='none';$('#agBarProg').style.display='none'}
-  else b.classList.add('hide');
+  b.classList.add('hide');b.classList.remove('run');
 }
 function agBarRun(step){
   const b=$('#agBar');if(!b)return;b.classList.remove('hide');b.classList.add('run');
