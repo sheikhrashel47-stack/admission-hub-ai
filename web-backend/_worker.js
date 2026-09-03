@@ -371,7 +371,7 @@ async function ownerOk(env, req) {
   return !!(await env.AH_KV.get('sess:' + t));
 }
 async function ghApi(keys, path, opts = {}) {
-  const r = await fetch('https://api.github.com' + path, { method: opts.method || 'GET', headers: { Authorization: `Bearer ${keys.GITHUB_PAT}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' }, body: opts.body });
+  const r = await fetch('https://api.github.com' + path, { method: opts.method || 'GET', headers: { Authorization: `Bearer ${keys.GITHUB_PAT}`, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'admission-hub-agent' }, body: opts.body });
   const t = await r.text(); let j = {}; try { j = JSON.parse(t); } catch {}
   if (!r.ok) throw new Error('github HTTP ' + r.status + ': ' + String(j.message || '').slice(0, 80));
   return j;
