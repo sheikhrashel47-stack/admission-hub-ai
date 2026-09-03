@@ -113,6 +113,19 @@ async function filebGet(env, id) {
   if (v) return v;
   return await storeGet(env, 'fileb:' + id);
 }
+async function hydrateImgs(env, list) {
+  for (const m of list) {
+    if (Array.isArray(m.images)) {
+      const out = [];
+      for (const im of m.images) {
+        if (typeof im === 'string') { out.push(im); continue; }
+        if (im && im.r) { const b = await filebGet(env, im.r); if (b) out.push('data:' + (im.mime || 'image/png') + ';base64,' + b); }
+      }
+      m.images = out.length ? out : null;
+    }
+  }
+  return list;
+}
 async function filebDel(env, id) {
   if (env.AH_R2) { try { await env.AH_R2.delete('fileb:' + id); } catch {} }
   try { await env.AH_KV.delete('fileb:' + id); } catch {}
@@ -755,7 +768,7 @@ export default {
       }
       list = list.map((c) => ({ id: c.id, title: c.title, project: c.project || 'সাধারণ', pinned: !!c.pinned, archived: !!c.archived, createdAt: c.createdAt, updatedAt: c.updatedAt, n: (c.messages || []).filter((m) => m.role !== 'system').length }));
       list.sort((a, b) => b.updatedAt - a.updatedAt);
-      return json(list.slice(offset, offset + limit));
+      return json(await hydrateImgs(env, list.slice(offset, offset + limit)));
     }
     if (method === 'POST' && path === '/api/chats') {
       const data = await kvGet(env, 'chats', { chats: [] });
@@ -781,7 +794,7 @@ export default {
       const msgs = c.messages || [];
       const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') || '60', 10) || 60));
       const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
-      return json({ total: msgs.length, messages: msgs.slice(offset, offset + limit) });
+      return json({ total: msgs.length, messages: await hydrateImgs(env, msgs.slice(offset, offset + limit)) });
     }
     const mSearchMsg = path.match(/^\/api\/chats\/([\w-]+)\/search$/);
     if (mSearchMsg && method === 'GET') {
@@ -964,7 +977,19 @@ export default {
           c = { id: crypto.randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), project: (body.project || 'সাধারণ'), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
           data.chats.unshift(c);
         }
-        c.messages.push({ role: 'user', content: msg, ts: Date.now(), media: body.media || null, images: body.images || null });
+        let imgRefs = null;
+        if (body.images && body.images.length) {
+          imgRefs = [];
+          for (const im of body.images) {
+            const mm = DATAURL.exec(im || '');
+            if (!mm || mm[2].length > 4 * 1024 * 1024) continue;
+            const rid = crypto.randomUUID();
+            const where = await filebPut(env, rid, mm[2]);
+            if (where) imgRefs.push({ r: rid, mime: mm[1], store: where });
+          }
+          if (!imgRefs.length) imgRefs = null;
+        }
+        c.messages.push({ role: 'user', content: msg, ts: Date.now(), media: body.media || null, images: imgRefs });
         msgs = c.messages;
       }
 
