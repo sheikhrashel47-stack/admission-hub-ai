@@ -395,6 +395,9 @@ html.standalone #toolbar{padding-top:8px}
 html.standalone #drawer{padding-top:10px}
 html.standalone .cpHd{padding-top:10px}
 html.standalone #netBanner{top:6px}
+#modeRow{display:flex;gap:2px;justify-content:center;align-items:center;padding:0 0 6px;pointer-events:auto;flex-wrap:wrap}
+#modeRow button{font-size:10.5px;font-weight:700;color:var(--dim);padding:4px 9px;border-radius:999px;letter-spacing:.2px}
+#modeRow button.on{color:#6d5bf0;background:rgba(109,91,240,.10)}
 /* premium typography + gap kill */
 .msgA{font-size:15.8px;line-height:1.78;letter-spacing:.1px}
 .bubU{font-size:15.6px;line-height:1.62}
@@ -537,6 +540,7 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
 
   <div id="glow" aria-hidden="true"></div>
   <footer id="compWrap">
+    <div id="modeRow"><button data-m="auto">অটো</button><button data-m="chat">চ্যাট</button><button data-m="research">রিসার্চ</button><button data-m="coding">কোড</button><button data-m="agent">এজেন্ট</button><button data-m="mission">মিশন</button></div>
     <div id="comp">
       <button id="fabBtn" aria-label="টুলস">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -995,7 +999,7 @@ async function go(text){
   abort=new AbortController();let acc='';const sTarget=curId;
   try{
     const r=await fetch(API+'/api/chat',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},agSess()?{'Authorization':'Bearer '+agSess()}:{}),signal:abort.signal,
-      body:JSON.stringify({chatId:curId,message:payload,model,mode,web,project:currentProject||undefined,media:sendMedia,images:sendImages})});
+      body:JSON.stringify({chatId:curId,message:payload,model,mode,web,imode:(localStorage.getItem('juzuMode')||'auto'),project:currentProject||undefined,media:sendMedia,images:sendImages})});
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
     if(!r.ok||!r.body){let j={};try{j=await r.json()}catch{};throw new Error(j.error||'সংযোগ সমস্যা')}
     let stepsShown=false;
@@ -1796,6 +1800,9 @@ function agentModeSoftSheet(){
   $('#agSys').onclick=async()=>{closeSheets();try{const s=await api('/api/system');toast('🤖 Agent: '+s.services.find(x=>x.name==='Agent Engine').status)}catch(e){}};
   openSheet('#sMsg');
 }
+(function(){const mr=$('#modeRow');if(!mr)return;const set=(m)=>{try{localStorage.setItem('juzuMode',m)}catch(e){}$$('#modeRow button').forEach(b=>b.classList.toggle('on',b.dataset.m===m))};
+set(localStorage.getItem('juzuMode')||'auto');
+mr.addEventListener('click',e=>{const b=e.target.closest('button');if(b&&b.dataset.m)set(b.dataset.m)})})();
 $('#fabBtn').onclick=()=>openSheet('#sTools');
 
 /* tools sheet actions */
@@ -1821,7 +1828,7 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
-window.__SWV='ahai-v21';
+window.__SWV='ahai-v22';
 function clog(m){try{fetch(apiBase()+'/api/clog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({m:String(m).slice(0,400)})}).catch(()=>{})}catch(e){}}
 window.addEventListener('error',e=>clog('ERR '+e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno));
 window.addEventListener('unhandledrejection',ev=>clog('REJ '+((ev.reason&&ev.reason.message)||ev.reason||'')));
