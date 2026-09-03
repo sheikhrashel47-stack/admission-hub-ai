@@ -357,17 +357,46 @@ function parseSuggestions(ans) {
 const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' };
 const CF_ACC = 'abb783e456e51a5d338419de93d5e576';
 async function sha256hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+let _sessSecretCache = null;
+async function sessSecret(env) {
+  if (_sessSecretCache) return _sessSecretCache;
+  const v = await env.AH_KV.get('cfg:WATCH_SECRET');
+  if (!v) return null;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(v), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  _sessSecretCache = key;
+  return key;
+}
+async function hmacB64(key, msg) {
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg));
+  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/=+$/, '');
+}
 async function ownerUnlock(env, code) {
   const want = await env.AH_KV.get('owner:code_hash');
   if (!want) return { error: 'owner code সেট করা নেই' };
   if ((await sha256hex(String(code || ''))) !== want) return { error: 'ভুল কোড' };
   const sess = crypto.randomUUID();
-  await env.AH_KV.put('sess:' + sess, '1', { expirationTtl: 7 * 86400 });
-  return { session: sess, ttlDays: 7 };
+  try {
+    await env.AH_KV.put('sess:' + sess, '1', { expirationTtl: 7 * 86400 });
+    return { session: sess, ttlDays: 7 };
+  } catch {}
+  const key = await sessSecret(env);
+  if (!key) return { error: 'session তৈরি করা যাচ্ছে না (KV + secret দুটোই নেই)' };
+  const exp = Date.now() + 7 * 86400000;
+  const sig = await hmacB64(key, 'sess:' + exp);
+  return { session: 'st.' + exp + '.' + sig, ttlDays: 7, stateless: true };
 }
 async function ownerOk(env, req) {
   const t = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
   if (!t) return false;
+  if (t.startsWith('st.')) {
+    const p = t.split('.');
+    if (p.length !== 3) return false;
+    const exp = Number(p[1]);
+    if (!exp || exp < Date.now()) return false;
+    const key = await sessSecret(env);
+    if (!key) return false;
+    return (await hmacB64(key, 'sess:' + p[1])) === p[2];
+  }
   return !!(await env.AH_KV.get('sess:' + t));
 }
 async function ghApi(keys, path, opts = {}) {
