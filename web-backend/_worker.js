@@ -444,9 +444,11 @@ async function visionCritique(keys, b64png, question) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ contents: [{ parts: [{ text: question || 'ওয়েবপেজের স্ক্রিনশট দেখে বলো: পেজ ঠিকমতো লোড হয়েছে কিনা, UI/layout ভাঙা কিনা, দৃশ্যমান কোনো এরর আছে কিনা, মূল কনটেন্ট দেখা যাচ্ছে কিনা। সংক্ষেপে বাংলায় বলো, শেষে এক লাইনে JSON: {"ok":true/false,"note":"..."}' }, { inline_data: { mime_type: 'image/png', data: b64png } }] }] }),
   });
-  const j = await r.json().catch(() => ({}));
+  const raw = await r.text();
+  let j = {}; try { j = JSON.parse(raw); } catch {}
   const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
-  return t || 'vision খালি উত্তর';
+  if (t) return t;
+  return 'vision debug: HTTP ' + r.status + ' :: ' + raw.slice(0, 250);
 }
 async function runAgentTool(env, keys, tool, args, emit) {
   if (tool === 'web.eye') {
