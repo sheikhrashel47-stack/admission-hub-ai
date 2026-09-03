@@ -481,18 +481,18 @@ async function chatToolLoop(keys, env, msg) {
   const t = String(msg || '').trim();
   if (t.length < 6) return null;
   if (/^(hi|hello|hey|সালাম|হাই|হ্যালো|কেমন আছো|শুভ|thanks|ধন্যবাদ)/i.test(t)) return null;
-  if (!/(গিটহাব|github|repo|রিপো|কতটি|কয়টি|লিস্ট|list|ফাইল|file|deploy|ডিপ্লয়|সাইট|site|website|url|খবর|search|খুঁজ|research|রিসার্চ|ইনবক্স|inbox|নোটিফ|status|স্ট্যাটাস|দেখো|check)/i.test(t)) return null;
-  const sys = 'তুমি জুজুর টুল-প্ল্যানার। শুধু read-only টুল চালানো যায়: gh.repos(args:{}), gh.read({path}), web.search({query}), web.read({url}), web.eye({url}), bu.health({}), verify.url({url})। ইউজার মেসেজ দেখে সর্বোচ্চ ২ ধাপের plan দাও। উত্তর শুধু JSON: {"plan":[{"tool":"gh.repos","args":{}}]} অথবা {"plan":[]}। ব্যাখ্যা লিখবে না।';
-  let out = '';
-  try { for await (const x of streamAnswer(keys, [{ role: 'system', content: sys }, { role: 'user', content: t }], 'auto', 'fast', () => {}, null, false)) out += x; } catch { return null; }
-  const j = safeJson(out);
-  const plan = (j && Array.isArray(j.plan)) ? j.plan.slice(0, 2) : [];
+  const um = t.match(/https?:\/\/\S+/);
+  const plan = [];
+  if (/(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
+  if (um && /(পড়ো|read|খোলো|সাইট|site|website|page|লিংক|link)/i.test(t)) plan.push({ tool: 'web.read', args: { url: um[0] } });
+  else if (um && /(স্ক্রিনশট|ছবি|eye|দেখো)/i.test(t)) plan.push({ tool: 'web.eye', args: { url: um[0] } });
+  if (!plan.length && /(খবর|search|খুঁজ|খোজ|research|রিসার্চ|সাম্প্রতিক|latest|নিয়ম|ভর্তি)/i.test(t)) plan.push({ tool: 'web.search', args: { query: t.slice(0, 200) } });
   if (!plan.length) return null;
   const notes = [];
-  for (const st of plan) {
-    const tool = String((st && st.tool) || '');
+  for (const st of plan.slice(0, 2)) {
+    const tool = st.tool;
     if (!CHAT_TOOLS[tool]) continue;
-    try { const r = await runAgentTool(env, keys, tool, (st && st.args) || {}, () => {}); notes.push(tool + ' → ' + JSON.stringify(r).slice(0, 1200)); } catch (e) { notes.push(tool + ' → ব্যর্থ: ' + String(e.message || e).slice(0, 120)); }
+    try { const r = await runAgentTool(env, keys, tool, st.args || {}, () => {}); notes.push(tool + ' → ' + JSON.stringify(r).slice(0, 1500)); } catch (e) { notes.push(tool + ' → ব্যর্থ: ' + String(e.message || e).slice(0, 150)); }
   }
   return notes.length ? notes.join('\n') : null;
 }
