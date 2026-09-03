@@ -1,0 +1,45 @@
+# JUJU-PC1 — জুজুর ১ নম্বর ফ্রি কম্পিউটার (GitHub Actions Linux VM)
+# কার্ড লাগে না: public repo = unlimited minutes। 2-core / 7GB RAM / ubuntu-latest।
+# ব্যবহার: (১) GitHub UI → Actions → juju-pc1 → Run workflow, অথবা
+# (২) API: POST /repos/{owner}/{repo}/actions/workflows/juju-pc1.yml/dispatches
+#         body: {"ref":"main","inputs":{"cmd":"..."}}
+#     অথবা repository_dispatch {"event_type":"juju-pc1","client_payload":{"cmd":"..."}}
+# নিরাপত্তা: dispatch-এ PAT লাগে (server-side only); Phase 5-এ Safe Command Gateway যুক্ত হবে।
+name: juju-pc1
+on:
+  workflow_dispatch:
+    inputs:
+      cmd:
+        description: 'Command to run on JUJU-PC1'
+        required: false
+        default: 'uname -a && nproc && free -h | head -2'
+  repository_dispatch:
+    types: [juju-pc1]
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: JUJU-PC1 exec
+        env:
+          JUJU_CMD: ${{ github.event.inputs.cmd || github.event.client_payload.cmd || 'uname -a' }}
+        run: |
+          echo "::notice::JUJU-PC1 online — $(date -u +%FT%TZ)"
+          {
+            echo "== JUJU-PC1 =="
+            echo "host: $(uname -srm)"
+            echo "time: $(date -u +%FT%TZ)"
+            echo "== CMD =="
+            echo "$JUJU_CMD"
+            echo "== OUT =="
+            bash -c "$JUJU_CMD" 2>&1
+            echo "== EXIT: $? =="
+          } | tee juju-out.txt
+      - name: upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: juju-out
+          path: juju-out.txt
+          retention-days: 7
