@@ -115,6 +115,42 @@ async function filebGet(env, id) {
   if (v) return v;
   return await storeGet(env, 'fileb:' + id);
 }
+/* ---- Vault framework: Drive (private) + Telegram (unlimited) + Internet Archive (encrypted cold) ---- */
+async function backupKey(env) {
+  let k = await storeGet(env, 'cfg:BACKUP_KEY');
+  if (!k) { k = bytesToB64(crypto.getRandomValues(new Uint8Array(32))); await storePut(env, 'cfg:BACKUP_KEY', k); }
+  return k;
+}
+async function encBytes(env, u8) {
+  const key = await crypto.subtle.importKey('raw', b64ToBytes(await backupKey(env)), 'AES-GCM', false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, u8));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12);
+  return out;
+}
+async function vaultTelegram(env, name, bytes) {
+  const tok = await storeGet(env, 'cfg:TELEGRAM_BOT_TOKEN'); const ch = await storeGet(env, 'cfg:TELEGRAM_CHANNEL');
+  if (!tok || !ch) return null;
+  const fd = new FormData();
+  fd.append('chat_id', ch); fd.append('caption', name); fd.append('disable_notification', 'true');
+  fd.append('document', new Blob([bytes], { type: 'application/octet-stream' }), name);
+  const r = await fetch('https://api.telegram.org/bot' + tok + '/sendDocument', { method: 'POST', body: fd });
+  const j = await r.json().catch(() => ({}));
+  if (!j.ok) throw new Error('telegram: ' + String(j.description || r.status).slice(0, 80));
+  return { vault: 'telegram', id: String(j.result.message_id) };
+}
+async function vaultIA(env, name, bytes) {
+  const ak = await storeGet(env, 'cfg:IA_ACCESS_KEY'); const sk = await storeGet(env, 'cfg:IA_SECRET_KEY');
+  if (!ak || !sk) return null;
+  const ident = 'ahai-vault-' + new Date().toISOString().slice(0, 7);
+  const r = await fetch('https://s3.us.archive.org/' + ident + '/' + encodeURIComponent(name), {
+    method: 'PUT',
+    headers: { Authorization: 'LOW ' + ak + ':' + sk, 'x-archive-auto-make-bucket': 'yes', 'x-archive-meta-collection': 'opensource', 'x-archive-meta-mediatype': 'data' },
+    body: bytes,
+  });
+  if (!r.ok) throw new Error('ia HTTP ' + r.status);
+  return { vault: 'ia', id: ident + '/' + name };
+}
 async function hydrateImgs(env, list) {
   for (const m of list) {
     if (Array.isArray(m.images)) {
@@ -697,10 +733,17 @@ export default {
         const mem = await kvGet(env, 'memory', null);
         const payload = JSON.stringify({ ts: rep2.ts, chats, memory: mem });
         const name = 'backup-' + new Date(rep2.ts).toISOString().slice(0, 10) + '.json';
-        const d = await driveBackup(env, name, payload, 'application/json');
-        if (!d || !d.id) throw new Error('drive backup ব্যর্থ');
-        await storePut(env, 'backup:latest', JSON.stringify({ ts: rep2.ts, fileId: d.id, bytes: payload.length }));
-        return { bytes: payload.length, fileId: d.id };
+        const vaults = []; const errs = [];
+        const d = await driveBackup(env, name, payload, 'application/json').catch((e) => { errs.push('drive:' + String(e.message || e).slice(0, 50)); return null; });
+        if (d && d.id) vaults.push('drive');
+        try {
+          const enc = await encBytes(env, new TextEncoder().encode(payload));
+          const t = await vaultTelegram(env, name + '.enc', enc); if (t) vaults.push('telegram');
+          const ia = await vaultIA(env, name + '.enc', enc); if (ia) vaults.push('ia');
+        } catch (e) { errs.push('enc/vault:' + String(e.message || e).slice(0, 50)); }
+        if (!vaults.length) throw new Error('কোনো vault-এ যায়নি — ' + (errs[0] || 'অজানা'));
+        await storePut(env, 'backup:latest', JSON.stringify({ ts: rep2.ts, vaults, bytes: payload.length, errs }));
+        return { bytes: payload.length, vaults };
       });
       await storePut(env, 'watch:latest', JSON.stringify(rep2));
       const log = (await storeGetJson(env, 'watch:log', null)) || [];
