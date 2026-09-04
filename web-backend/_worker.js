@@ -802,6 +802,9 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   if (/^(hi|hello|hey|সালাম|হাই|হ্যালো|কেমন আছো|শুভ|thanks|ধন্যবাদ)/i.test(t)) return null;
   const um = t.match(/https?:\/\/\S+/);
   let plan = [];
+  if (!plan.length && /(ভুলে যাও|মনে রেখো না|forget)/i.test(t)) plan.push({ tool: 'mem.forget', args: { q: t.slice(0, 200) } });
+  if (!plan.length && /(মনে রেখো|রেখে দাও|শিখে রাখো|remember this|মনে রাখবে)/i.test(t)) { const mm4 = t.replace(/^.*?(মনে রেখো|রেখে দাও|শিখে রাখো|remember this|মনে রাখবে)[,:।]?\s*/i, ''); plan.push({ tool: 'mem.save', args: { text: (mm4 || t).slice(0, 300), kind: /(পছন্দ|preference|ভালো লাগে)/i.test(t) ? 'preference' : /(সিদ্ধান্ত|decision|ঠিক করলাম)/i.test(t) ? 'decision' : 'fact' } }); }
+  if (!plan.length && /(আগে কী বলেছি|আমার পছন্দ কী|what did i (say|tell)|পুরনো সিদ্ধান্ত|তুমি কি মনে রেখেছ|কী মনে আছে)/i.test(t)) plan.push({ tool: 'mem.search', args: { q: t.slice(0, 200) } });
   const ghOk = !imode || imode !== 'chat';
   const webOk = !imode || imode === 'auto' || imode === 'research' || imode === 'agent' || imode === 'mission';
   if (ghOk && /(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
@@ -816,9 +819,6 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   if (!plan.length && /(কোথায়|where)/i.test(t) && /(কোড|ফাংশন|function|ফাইল|file|route)/i.test(t)) plan.push({ tool: 'twin.search', args: { query: t.slice(0, 120) } });
   if (!plan.length && /(প্রভাব|impact)/i.test(t)) { const mm2 = t.match(/[\w/.-]+\.(js|html|css|md)/i); plan.push({ tool: 'twin.impact', args: { path: mm2 ? mm2[0] : 'web/index.html' } }); }
   if (!plan.length && /(কোন কমিট|which commit|কবে থেকে)/i.test(t)) { const mm3 = t.match(/[\w/.-]+\.(js|html|css|md)/i); plan.push({ tool: 'twin.time', args: { path: mm3 ? mm3[0] : '', kw: t.slice(0, 60) } }); }
-  if (!plan.length && /(ভুলে যাও|মনে রেখো না|forget)/i.test(t)) plan.push({ tool: 'mem.forget', args: { q: t.slice(0, 200) } });
-  if (!plan.length && /(মনে রেখো|রেখে দাও|শিখে রাখো|remember this|মনে রাখবে)/i.test(t)) { const mm4 = t.replace(/^.*?(মনে রেখো|রেখে দাও|শিখে রাখো|remember this|মনে রাখবে)[,:।]?\s*/i, ''); plan.push({ tool: 'mem.save', args: { text: (mm4 || t).slice(0, 300), kind: /(পছন্দ|preference|ভালো লাগে)/i.test(t) ? 'preference' : /(সিদ্ধান্ত|decision|ঠিক করলাম)/i.test(t) ? 'decision' : 'fact' } }); }
-  if (!plan.length && /(আগে কী বলেছি|আমার পছন্দ কী|what did i (say|tell)|পুরনো সিদ্ধান্ত|তুমি কি মনে রেখেছ|কী মনে আছে)/i.test(t)) plan.push({ tool: 'mem.search', args: { q: t.slice(0, 200) } });
   if (!plan.length) return null;
   try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
