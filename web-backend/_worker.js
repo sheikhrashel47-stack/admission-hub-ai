@@ -1071,7 +1071,7 @@ async function runTool(keys, tool, args) {
     case 'gh.repos': { const j = await ghApi(keys, '/user/repos?per_page=100&sort=updated'); return { count: j.length, repos: j.map((x) => ({ name: x.name, private: x.private, updated: x.updated_at })) }; }
     case 'gh.read': { const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}${args.ref ? '?ref=' + args.ref : ''}`); return { path: j.path, size: j.size, text: new TextDecoder().decode(Uint8Array.from(atob(String(j.content || '').replace(/\n/g, '')), (c) => c.charCodeAt(0))).slice(0, 20000) }; }
     case 'gh.commit': {
-      let sha; try { sha = (await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`)).sha; } catch {}
+      let sha; try { sha = (await ghApi(keys, `/repos/${args.repo}/contents/${args.path}?ref=${encodeURIComponent(args.branch || 'main')}`)).sha; } catch {}
       const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`, { method: 'PUT', body: JSON.stringify({ message: args.message || 'agent update', content: btoa(unescape(encodeURIComponent(args.content))), sha, branch: args.branch }) });
       return { committed: true, sha: j.content && j.content.sha, url: j.content && j.content.html_url };
     }
@@ -1577,7 +1577,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v34';
+  const AGENT_VERSION = 'p10-v35';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1872,7 +1872,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v34' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v35' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
