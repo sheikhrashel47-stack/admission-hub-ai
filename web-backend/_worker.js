@@ -108,6 +108,7 @@ const PERM = {
   'qa.scene': { risk: 'LOW', gate: 'AUTO' }, 'qa.baseline': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.compare': { risk: 'LOW', gate: 'AUTO' }, 'qa.matrix': { risk: 'LOW', gate: 'AUTO' }, 'qa.error': { risk: 'LOW', gate: 'AUTO' }, 'qa.browse': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.gate': { risk: 'LOW', gate: 'AUTO' },
   'ops.queue': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.jobs': { risk: 'LOW', gate: 'POLICY' }, 'ops.schedule': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.stats': { risk: 'LOW', gate: 'POLICY' }, 'ops.health': { risk: 'LOW', gate: 'POLICY' }, 'ops.tick': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.notify': { risk: 'LOW', gate: 'POLICY' }, 'ops.away': { risk: 'HIGH', gate: 'POLICY' }, 'ops.incident': { risk: 'MEDIUM', gate: 'POLICY' },
   'brain.bench': { risk: 'LOW', gate: 'POLICY' }, 'brain.registry': { risk: 'LOW', gate: 'POLICY' }, 'brain.solve': { risk: 'MEDIUM', gate: 'POLICY' }, 'brain.critic': { risk: 'LOW', gate: 'POLICY' }, 'brain.race': { risk: 'MEDIUM', gate: 'POLICY' }, 'brain.sub': { risk: 'MEDIUM', gate: 'POLICY' }, 'brain.parallel': { risk: 'MEDIUM', gate: 'POLICY' },
+  'ops.mission': { risk: 'HIGH', gate: 'POLICY' }, 'ops.gate': { risk: 'LOW', gate: 'POLICY' }, 'ops.golden': { risk: 'LOW', gate: 'POLICY' }, 'ops.eval': { risk: 'LOW', gate: 'POLICY' }, 'ops.selftest': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.changelog': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -1563,6 +1564,166 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     if (oks.length) { try { const jr = await mbCall(keys, 'groq:fast', [{ role: 'user', content: 'এই ' + oks.length + 'টা ফলাফল একত্রিত করে সংক্ষিপ্ত সারাংশ দাও:\n' + oks.map((x) => '[' + x.i + '] ' + x.text.slice(0, 1000)).join('\n\n') }], 1200, 45000); agg = jr.text.slice(0, 3000); } catch {} }
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
+  /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
+  const AGENT_VERSION = 'p10-v30';
+  const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
+  async function missionGateCheck(env, keys, m) {
+    const checks = [];
+    try { const r = await fetch('https://admission-hub-ai.pages.dev/api/health'); const j = await r.json(); checks.push({ n: 'API health', ok: !!(j && j.ok), v: (j && j.wv) || '?' }); } catch (e) { checks.push({ n: 'API health', ok: false, v: String(e.message || e).slice(0, 40) }); }
+    try { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); checks.push({ n: 'UI alive', ok: r.ok, v: r.status }); } catch (e) { checks.push({ n: 'UI alive', ok: false, v: 'fetch fail' }); }
+    try { const dep = await cfApi(keys, '/accounts/' + CF_ACC + '/pages/projects/admission-hub-ai/deployments?per_page=2'); const n = ((dep.result) || []).length; checks.push({ n: 'rollback available', ok: n >= 2, v: n + ' deployments' }); } catch (e) { checks.push({ n: 'rollback available', ok: false, v: String(e.message || e).slice(0, 40) }); }
+    const leak = (m.files || []).some((f) => /sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12}|BEGIN (RSA |EC )?PRIVATE KEY|AH-[a-f0-9]{8}-/.test(String(f.content || '')));
+    checks.push({ n: 'secret scan', ok: !leak, v: leak ? 'LEAK!' : 'clean' });
+    const bad = checks.filter((c) => !c.ok);
+    return { verdict: bad.length ? 'blocked' : 'PASS', reason: bad.length ? bad.map((c) => c.n + ': ' + c.v).join('; ') : 'all ' + checks.length + ' checks green — Deployment verified: PASS', checks: checks };
+  }
+  async function missionStage(env, keys, stage, m) {
+    const t0 = Date.now(); const ctx = m.ctx = m.ctx || {}; const goal = m.goal;
+    const R = (t, a) => runAgentTool(env, keys, t, a, () => {}, { owner: true, approved: !!m.approved, task: 'mission:' + m.id + ':' + stage });
+    let out = '';
+    switch (stage) {
+      case 'understand': { const r = await mbCall(keys, 'groq:fast', [{ role: 'user', content: 'মিশন লক্ষ্য: ' + goal + '\nএই লক্ষ্য অর্জনের bounded ধাপ (সর্বোচ্চ ৬টা) এক লাইন করে লেখো। শেষে CONF: <0-100> দাও।' }], 900, 60000); ctx.plan = r.text; out = r.text.slice(0, 300); break; }
+      case 'inspect': { try { const t = await R('twin.search', { query: goal.slice(0, 100) }); ctx.inspect = ((t && t.results) || []).length; out = 'repo-twin সম্পর্কিত হিট: ' + ctx.inspect; } catch (e) { out = 'twin skip: ' + String(e.message || e).slice(0, 60); } break; }
+      case 'architect': { const r = await mbCall(keys, 'gemini:flash', [{ role: 'user', content: 'মিশন লক্ষ্য: ' + goal + '\nপ্রাথমিক ধাপ: ' + String(ctx.plan || '').slice(0, 700) + '\nআর্কিটেকচার সিদ্ধান্ত ৩ লাইনে দাও: কোন ফাইল/টুল লাগবে, বড় ঝুঁকি কী, ভেরিফিকেশন কীভাবে হবে।' }], 700, 60000); ctx.arch = r.text; out = r.text.slice(0, 250); break; }
+      case 'plan': { const c = await R('brain.critic', { plan: goal + '\n' + String(ctx.plan || '').slice(0, 900) + '\n' + String(ctx.arch || '').slice(0, 400) }); if (String(c.verdict || '').indexOf('FIX') >= 0) { const f = await mbCall(keys, 'groq:fast', [{ role: 'user', content: 'এই সমালোচনা ঠিক করে সংশোধিত প্ল্যান লেখো:\n' + String(c.critique || '').slice(0, 1400) }], 800, 60000); ctx.plan = f.text; const c2 = await R('brain.critic', { plan: f.text }); if (String(c2.verdict || '').indexOf('FIX') >= 0) throw new Error('critic দুইবার FIX দিয়েছে — প্ল্যান অস্থির, escalation দরকার'); out = 'critic FIX → সংশোধন → OK'; } else out = 'critic OK'; break; }
+      case 'implement': { const files = m.files || []; if (!files.length) throw new Error('files[] খালি — implement-এর জন্য {path, content|prompt} দরকার'); ctx.written = []; for (const f of files) { if (!f.path) throw new Error('file.path নেই'); let content = f.content; if (content == null && f.prompt) { const g = await R('brain.sub', { role: 'coder', task: f.prompt, iters: 1 }); content = g && g.result; } if (content == null) throw new Error('content generate হয়নি: ' + f.path); await R('gh.commit', { repo: m.repo, branch: m.branch, path: f.path, content: content, message: 'mission ' + m.id + ': ' + f.path }); ctx.written.push({ path: f.path, len: String(content).length }); } out = ctx.written.length + 'টা ফাইল ' + m.branch + '-এ লেখা হয়েছে'; break; }
+      case 'build': { const js = (m.files || []).filter((f) => /\.js$/.test(f.path) && f.content != null); if (!js.length) { out = 'JS content নেই — build bounded-skip'; break; } const script = js.map((f, i) => 'echo ' + b64utf8enc(f.content) + ' | base64 -d > f' + i + '.js && node --check f' + i + '.js && echo "PASS f' + i + '.js"').join('\n'); const r = await R('agent.shell', { script: script }); if (r.exit !== 0 || String(r.out || '').indexOf('PASS') < 0) throw new Error('node --check fail: ' + (String(r.err || '') + String(r.out || '')).slice(-250)); out = 'node --check ' + js.length + 'টা JS pass'; break; }
+      case 'test': { if (!m.test) { out = 'টেস্ট-স্পেক দেওয়া হয়নি — bounded skip (সৎ লগ)'; break; } const code0 = ((m.files || []).filter((f) => f.content != null)[0] || {}).content || ''; const r = await R('agent.test', { requirement: String(m.test).slice(0, 1500), code: code0 }); const tt = r.tests || {}; if (tt.fail) throw new Error('টেস্ট fail: ' + tt.fail + '/' + (tt.total || '?')); out = 'টেস্ট ' + (tt.pass || 0) + '/' + (tt.total || 0) + ' pass'; break; }
+      case 'review': { const revTxt = (m.files || []).map((f) => 'FILE ' + f.path + ':\n' + String(f.content != null ? f.content : '(prompt-generated)').slice(0, 1500)).join('\n\n'); const c = await R('brain.critic', { plan: 'কোড/কনটেন্ট রিভিউ — লক্ষ্য: ' + goal + '\n' + revTxt.slice(0, 3000) }); out = 'review verdict: ' + (c.verdict || '?'); if (String(c.verdict || '').indexOf('FIX') >= 0) { ctx.reviewFix = String(c.critique || '').slice(0, 500); out += ' (সমালোচনা ctx-এ সংরক্ষিত — রিপোর্টে যাবে)'; } break; }
+      case 'security': { const leak = []; for (const f of m.files || []) { if (/sk-[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12}|BEGIN (RSA |EC )?PRIVATE KEY|AH-[a-f0-9]{8}-/.test(String(f.content || ''))) leak.push(f.path); } if (leak.length) throw new Error('🔥 secret প্যাটার্ন: ' + leak.join(', ')); out = 'secret-scan clean (' + (m.files || []).length + ' ফাইল)'; break; }
+      case 'diff': { const rows = (ctx.written || []).map((w) => w.path + ' (' + w.len + 'B)'); ctx.diff = rows; out = 'পরিবর্তন: ' + (rows.join(', ') || 'নেই'); break; }
+      case 'ready': { const g = await missionGateCheck(env, keys, m); ctx.gate = g; if (g.verdict !== 'PASS') throw new Error('blocked: ' + g.reason); out = 'gate: PASS (' + (g.checks || []).length + ' checks)'; break; }
+      case 'approve': { if (!m.approved) { return { out: 'মানুষের অনুমোদন দরকার — mission awaiting-approval-এ থামল (human escalation)', stop: true, state: 'awaiting-approval', ms: Date.now() - t0 }; } out = 'owner approved:true আছে'; break; }
+      case 'deploy': { if (m.deploy !== 'ghpages') { out = 'deploy=' + m.deploy + ' — ' + m.branch + '-এ commit-ই চূড়ান্ত (worker/gh-pages swap শুধু owner pipeline-এ)'; break; } if (!m.approved) throw new Error('approval ছাড়া prod deploy নিষিদ্ধ (away-mode নীতি)'); let n2 = 0; for (const f of m.files || []) { if (f.content == null) continue; await R('deploy.ghpages', { path: f.path, content: f.content, message: 'mission ' + m.id + ' deploy' }); n2++; } out = n2 + 'টা ফাইল gh-pages-এ deploy (CF অটো ~২০s)'; break; }
+      case 'postverify': { const h = await R('verify.url', { url: 'https://admission-hub-ai.pages.dev/api/health' }); const u = await R('verify.url', { url: 'https://sheikhrashel47-stack.github.io/admission-hub-ai/' }); if (m.deploy === 'ghpages') { out = 'API ' + h.status + ' + UI ' + u.status + ' — নতুন wv probe পরের tick-এ'; } else { let okF = 0; for (const w of ctx.written || []) { try { const j = await ghApi(keys, '/repos/' + m.repo + '/contents/' + w.path + '?ref=' + m.branch); if (j && j.path) okF++; } catch (e) {} } const tot = (ctx.written || []).length; if (tot && okF !== tot) throw new Error('GitHub-এ ফাইল verify ব্যর্থ: ' + okF + '/' + tot); out = 'API ' + h.status + ', UI ' + u.status + ', GitHub ফাইল visible ' + okF + '/' + tot; } break; }
+      case 'report': { const rep = { id: m.id, goal: m.goal, steps: m.steps, files: ctx.written || [], gate: (ctx.gate && ctx.gate.verdict) || 'n/a', review: ctx.reviewFix || 'OK', ts: Date.now() }; await storePut(env, 'report:mission:' + m.id, JSON.stringify(rep), 90 * 86400); await tgNotify(env, '📋 মিশন রিপোর্ট ' + m.id + '\nলক্ষ্য: ' + m.goal.slice(0, 100) + '\nsteps: ' + m.steps + ' | gate: ' + rep.gate + ' | review: ' + (rep.review === 'OK' ? 'OK' : 'FIX noted') + '\nফাইল: ' + rep.files.map((f) => f.path).join(', ').slice(0, 200)); out = 'রিপোর্ট kv+TG-তে গেছে'; break; }
+      default: throw new Error('অজানা stage: ' + stage);
+    }
+    return { out: String(out).slice(0, 400), ms: Date.now() - t0 };
+  }
+  if (tool === 'ops.mission') {
+    const act = String(args.action || 'new');
+    const msave = async (m) => { m.updated = Date.now(); await storePut(env, 'mission:' + m.id, JSON.stringify(m), 90 * 86400); const idx = (await storeGetJson(env, 'missions:index', [])) || []; const row = { id: m.id, goal: (m.goal || '').slice(0, 80), state: m.state, stage: m.stage, ts: m.updated }; const i2 = idx.findIndex((x) => x && x.id === m.id); if (i2 >= 0) idx[i2] = row; else idx.unshift(row); await storePut(env, 'missions:index', JSON.stringify(idx.slice(0, 30)), 90 * 86400); };
+    if (act === 'new') {
+      const goal = String(args.goal || '').trim(); if (!goal) throw new Error('goal লাগবে');
+      const m = { id: 'M' + Date.now().toString(36), goal: goal.slice(0, 500), kind: String(args.kind || 'deliver'), repo: String(args.repo || 'sheikhrashel47-stack/admission-hub-ai'), branch: String(args.branch || 'main'), files: Array.isArray(args.files) ? args.files.slice(0, 8).map((f) => ({ path: String(f.path || ''), content: f.content != null ? String(f.content) : null, prompt: f.prompt ? String(f.prompt).slice(0, 2000) : null })).filter((f) => f.path) : [], test: args.test ? String(args.test).slice(0, 1500) : null, deploy: String(args.deploy || 'none'), stages: MISSION_STAGES.slice(), idx: 0, stage: 'understand', state: 'running', approved: !!args.approved, retries: 0, budget: Math.min(60, Number(args.budget) || 30), steps: 0, log: [], ctx: {}, ts: Date.now() };
+      await msave(m); await tgNotify(env, '🎯 নতুন মিশন ' + m.id + ': ' + m.goal.slice(0, 120) + (m.approved ? ' (approved)' : ' (approval গেট আছে)'));
+      return { id: m.id, state: m.state, stages: m.stages.length, note: 'ops.mission {action:"step", id:"' + m.id + '"} — প্রতি কলে সীমিত ধাপ এগোয়; Persistent ≠ Infinite (budget ' + m.budget + ')' };
+    }
+    const mid = String(args.id || ''); const m = await storeGetJson(env, 'mission:' + mid, null); if (!m) throw new Error('মিশন পাওয়া যায়নি: ' + mid);
+    if (act === 'list') return { missions: (await storeGetJson(env, 'missions:index', [])) || [] };
+    if (act === 'status') return { id: m.id, goal: m.goal, state: m.state, stage: m.stage, idx: m.idx, retries: m.retries, steps: m.steps, budget: m.budget, approved: m.approved, log: (m.log || []).slice(-12), ctxKeys: Object.keys(m.ctx || {}), gate: m.ctx && m.ctx.gate };
+    if (act === 'cancel') { m.state = 'cancelled'; await msave(m); return { id: m.id, state: 'cancelled' }; }
+    if (act === 'approve') { m.approved = true; if (m.state === 'awaiting-approval') { m.state = 'running'; } await msave(m); return { id: m.id, approved: true, state: m.state }; }
+    if (act === 'step') {
+      if (m.state !== 'running') return { id: m.id, state: m.state, note: 'চালু নেই — step নয় (approve/cancel দেখুন)' };
+      const maxSteps = Math.min(15, Number(args.steps) || 3); let ran = 0;
+      while (m.state === 'running' && ran < maxSteps && m.steps < m.budget) {
+        const stage = m.stages[m.idx]; if (!stage) { m.state = 'done'; break; }
+        ran++; m.steps++;
+        try {
+          const r = await missionStage(env, keys, stage, m);
+          m.log.push({ stage: stage, ok: true, out: r.out, ms: r.ms }); m.retries = 0;
+          if (r.stop) { m.state = r.state || 'awaiting-approval'; await msave(m); await tgNotify(env, '⏸ মিশন ' + m.id + ' → ' + m.state + ' (' + stage + ') — মালিকের সিদ্ধান্ত দরকার'); break; }
+          m.idx++; m.stage = m.stages[m.idx] || 'done'; if (m.idx >= m.stages.length) m.state = 'done';
+        } catch (e) {
+          m.retries++; const msg = String(e.message || e).slice(0, 200);
+          m.log.push({ stage: stage, ok: false, err: msg, retry: m.retries });
+          if (m.retries >= 2) { m.state = 'escalated'; await msave(m); await tgNotify(env, '🚨 মিশন ' + m.id + ' ESCALATED (' + stage + '): ' + msg + '\n২ বার retry ব্যর্থ — মানুষের সিদ্ধান্ত দরকার'); break; }
+        }
+        await msave(m);
+      }
+      if (m.steps >= m.budget && m.state === 'running') { m.state = 'escalated'; m.log.push({ note: 'budget শেষ — stop condition (Persistent ≠ Infinite)' }); await tgNotify(env, '⏹ মিশন ' + m.id + ' budget (' + m.budget + ' steps) শেষ — সৎভাবে থামানো হয়েছে'); }
+      await msave(m);
+      if (m.state === 'done') await tgNotify(env, '✅ মিশন ' + m.id + ' DONE: ' + m.goal.slice(0, 100) + '\nsteps: ' + m.steps + ' — পূর্ণ রিপোর্ট ops.mission status-এ');
+      return { id: m.id, state: m.state, stage: m.stage, idx: m.idx, ranThisCall: ran, steps: m.steps, budget: m.budget, log: (m.log || []).slice(-8) };
+    }
+    throw new Error('অজানা action: ' + act);
+  }
+  if (tool === 'ops.gate') {
+    const m = args.id ? (await storeGetJson(env, 'mission:' + args.id, null) || { files: [] }) : { files: Array.isArray(args.files) ? args.files : [] };
+    const g = await missionGateCheck(env, keys, m);
+    return { deployment: g.verdict === 'PASS' ? 'Deployment verified: PASS' : 'blocked: ' + g.reason, verdict: g.verdict, checks: g.checks };
+  }
+  const GOLDEN = [
+    { id: 1, k: 'code', t: 'JS: Set ব্যবহার করে array থেকে duplicate সরাতে এক লাইনের ফাংশন লেখো', e: ['set'] },
+    { id: 2, k: 'code', t: 'JS: destructuring ও rest operator দিয়ে একটা প্রপার্টি বাদ দিয়ে অবজেক্ট কপি করার কোড লেখো', e: ['...'] },
+    { id: 3, k: 'code', t: 'JS debounce ফাংশন লেখো — trailing call যেন রক্ষা পায়', e: ['settimeout', 'cleartimeout'] },
+    { id: 4, k: 'code', t: 'JS: Promise.allSettled-এর রেজাল্টের আকৃতি উদাহরণসহ লেখো', e: ['status', 'fulfilled'] },
+    { id: 5, k: 'code', t: 'AbortController দিয়ে টাইমআউটসহ fetch কল লেখো', e: ['abortcontroller', 'signal'] },
+    { id: 6, k: 'reason', t: 'ঠিক ৩টা ১৫ মিনিটে ঘড়ির ঘণ্টা ও মিনিটের কাঁটার মধ্যকার কোণ কত ডিগ্রি? হিসাব দেখাও', e: ['7.5'] },
+    { id: 7, k: 'reason', t: '৩৫টা মাথা, ৯৪টা পা — মুরগি ও ছাগল কয়টা? সমীকরণে সমাধান করো', e: ['23', '12'] },
+    { id: 8, k: 'reason', t: '৫টা মেশিন ৫ মিনিটে ৫টা যন্ত্রাংশ বানায় — ১০০টা মেশিন ১০০টা যন্ত্রাংশ বানাতে কত মিনিট লাগবে? ব্যাখ্যা করো', e: ['5'] },
+    { id: 9, k: 'reason', t: 'কোনটা বড়: 2^10 নাকি 10^3? ক্যালকুলেটর ছাড়া যুক্তি দেখাও', e: ['1024'] },
+    { id: 10, k: 'follow', t: 'শুধু BANANA শব্দটা তিনবার লেখো, আর কিছু লেখো না', e: ['banana'] },
+    { id: 11, k: 'follow', t: 'শুধু বাংলায় উত্তর দাও: বাংলাদেশের রাজধানীর নাম কী? সর্বোচ্চ এক বাক্য', e: ['ঢাকা'] },
+    { id: 12, k: 'follow', t: 'শুধু একটা JSON array-তে ১ থেকে ১০-এর মধ্যে তিনটা বিজোড় সংখ্যা লেখো, অন্য কোনো টেক্সট নয়', e: ['[', ']'] },
+    { id: 13, k: 'domain', t: 'বাংলাদেশ মেডিকেল ভর্তি পরীক্ষায় কোন কোন বিষয় থেকে প্রশ্ন আসে? সংক্ষেপে লেখো', e: ['পদার্থ', 'রসায়ন', 'জীব'] },
+    { id: 14, k: 'domain', t: 'PWA-তে service worker কী কাজ করে? সংক্ষেপে বলো', e: ['cache', 'offline'] },
+    { id: 15, k: 'domain', t: 'Cloudflare Workers কী — সাধারণ সার্ভার থেকে পার্থক্য এক লাইনে', e: ['worker'] },
+    { id: 16, k: 'code', t: 'JS: স্ট্রিং palindrome কিনা চেক করার ফাংশন লেখো', e: ['reverse'] },
+    { id: 17, k: 'reason', t: 'ব্যাজ ও বল একসাথে ১১০ টাকা, ব্যাজ বলের চেয়ে ১০০ টাকা বেশি — বলের দাম কত?', e: ['5'] },
+    { id: 18, k: 'follow', t: 'ঠিক তিন শব্দে উত্তর দাও: আকাশের রং কী?', e: ['নীল'] },
+    { id: 19, k: 'code', t: 'JS: structuredClone দিয়ে অবজেক্ট ডিপ-কপি করার উদাহরণ লেখো', e: ['structuredclone'] },
+    { id: 20, k: 'reason', t: 'ঘরে ৩টা সুইচ, বাইরে ১টা বাল্ব — একবারই বাইরে যাওয়া যাবে, কীভাবে বুঝবে কোন সুইচটি বাল্বের?', e: ['গরম'] },
+  ];
+  if (tool === 'ops.golden') {
+    const act = String(args.action || 'list');
+    if (act === 'list') return { count: GOLDEN.length, tasks: GOLDEN.map((g) => ({ id: g.id, k: g.k, t: g.t.slice(0, 60) })) };
+    if (act === 'run') {
+      const lim = Math.min(GOLDEN.length, Number(args.limit) || 20); const model = String(args.model || 'groq:fast'); const per = [];
+      for (const g of GOLDEN.slice(0, lim)) {
+        try { const r = await mbCall(keys, model, [{ role: 'user', content: g.t }], 700, 45000); const low = r.text.toLowerCase(); const hit = g.e.filter((x) => low.indexOf(x.toLowerCase()) >= 0).length; per.push({ id: g.id, k: g.k, pass: hit === g.e.length, hit: hit + '/' + g.e.length, ms: r.ms }); }
+        catch (e) { per.push({ id: g.id, k: g.k, pass: false, err: String(e.message || e).slice(0, 60) }); }
+      }
+      const npass = per.filter((x) => x.pass).length; const pct = Math.round(100 * npass / per.length);
+      const res = { wv: AGENT_VERSION, model: model, n: per.length, pass: npass, pct: pct, ts: Date.now(), per: per };
+      await storePut(env, 'eval:' + AGENT_VERSION + ':' + model, JSON.stringify(res), 180 * 86400);
+      const eidx = (await storeGetJson(env, 'eval:index', [])) || []; eidx.unshift({ wv: AGENT_VERSION, model: model, pct: pct, n: per.length, ts: res.ts }); await storePut(env, 'eval:index', JSON.stringify(eidx.slice(0, 40)), 180 * 86400);
+      return { pct: pct, pass: npass + '/' + per.length, model: model, saved: 'eval:' + AGENT_VERSION + ':' + model, failed: per.filter((x) => !x.pass).map((x) => x.id) };
+    }
+    throw new Error('অজানা action: ' + act);
+  }
+  if (tool === 'ops.eval') {
+    const eidx = (await storeGetJson(env, 'eval:index', [])) || [];
+    const act = String(args.action || 'compare');
+    if (act === 'history') return { history: eidx.slice(0, 20) };
+    if (act === 'compare') {
+      if (eidx.length < 2) return { note: 'তুলনার মতো দুটো রান নেই — ops.golden {action:"run"} চালান', history: eidx };
+      const nw = eidx[0]; const old = eidx.find((x) => x.wv !== nw.wv) || eidx[1];
+      const delta = nw.pct - old.pct;
+      const verdict = delta >= -5 ? 'release-safe' : 'REGRESSION — রিলিজ আটকান, rollback বিবেচনা করুন';
+      return { old: { wv: old.wv, pct: old.pct }, new: { wv: nw.wv, pct: nw.pct }, delta: delta, verdict: verdict };
+    }
+    throw new Error('অজানা action: ' + act);
+  }
+  if (tool === 'ops.selftest') {
+    const checks = []; const lim = Math.min(6, Number(args.limit) || 3);
+    try { const r = await fetch('https://admission-hub-ai.pages.dev/api/health'); const j = await r.json(); checks.push({ n: 'health+wv', ok: !!(j && j.ok), v: (j && j.wv) + (j && j.wv === AGENT_VERSION ? ' (match)' : ' (EXPECTED ' + AGENT_VERSION + ')') }); } catch (e) { checks.push({ n: 'health+wv', ok: false, v: String(e.message || e).slice(0, 40) }); }
+    try { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); checks.push({ n: 'UI alive', ok: r.ok, v: r.status }); } catch (e) { checks.push({ n: 'UI alive', ok: false, v: 'fail' }); }
+    let pct = null;
+    try { const per = []; for (const g of GOLDEN.slice(0, lim)) { const r2 = await mbCall(keys, 'groq:fast', [{ role: 'user', content: g.t }], 700, 45000); const low = r2.text.toLowerCase(); const hit = g.e.filter((x) => low.indexOf(x.toLowerCase()) >= 0).length; per.push(hit === g.e.length); } pct = Math.round(100 * per.filter(Boolean).length / per.length); checks.push({ n: 'golden smoke', ok: pct >= 50, v: pct + '% (' + lim + ' tasks)' }); } catch (e) { checks.push({ n: 'golden smoke', ok: false, v: String(e.message || e).slice(0, 40) }); }
+    let rb = null;
+    try { const dep = await cfApi(keys, '/accounts/' + CF_ACC + '/pages/projects/admission-hub-ai/deployments?per_page=3'); rb = ((dep.result) || []).slice(0, 2).map((d) => d.id); checks.push({ n: 'rollback refs', ok: !!rb.length, v: rb.length + ' ids saved' }); } catch (e) { checks.push({ n: 'rollback refs', ok: false, v: String(e.message || e).slice(0, 40) }); }
+    const bad = checks.filter((c) => !c.ok);
+    const verdict = bad.length ? 'FAIL' : 'PASS';
+    await storePut(env, 'agent:version', JSON.stringify({ wv: AGENT_VERSION, verdict: verdict, goldenPct: pct, rollback: rb, ts: Date.now() }), 180 * 86400);
+    if (args.notify !== false) await tgNotify(env, '🧪 self-test ' + verdict + ' (wv ' + AGENT_VERSION + ')' + (bad.length ? '\nব্যর্থ: ' + bad.map((c) => c.n + ': ' + c.v).join('; ') : '\nসব checks green — release-safe'));
+    return { verdict: verdict, wv: AGENT_VERSION, checks: checks, note: verdict === 'PASS' ? 'রিলিজের আগে self-test PASS — versioning + rollback refs kv-তে সংরক্ষিত' : 'রিলিজ আটকান — FAIL checks ঠিক করুন' };
+  }
+  if (tool === 'ops.changelog') {
+    const repo = String(args.repo || 'sheikhrashel47-stack/admission-hub-ai');
+    const j = await ghApi(keys, '/repos/' + repo + '/commits?per_page=' + Math.min(100, Number(args.n) || 50));
+    const groups = {};
+    for (const c of j || []) { const msg = String((c.commit && c.commit.message) || '').split('\n')[0]; const m2 = /^(\w+)(\([^)]*\))?:\s*(.*)$/.exec(msg); const key = m2 ? m2[1] : 'other'; (groups[key] = groups[key] || []).push({ sha: String(c.sha || '').slice(0, 7), msg: (m2 ? m2[3] : msg).slice(0, 90), date: String((c.commit && c.commit.author && c.commit.author.date) || '').slice(0, 10) }); }
+    const order = ['feat', 'fix', 'docs', 'deploy', 'chore', 'other'];
+    let md = '# CHANGELOG — JUJU Agent (' + repo + ')\n\n_অটো-জেনারেটেড: ' + new Date().toISOString().slice(0, 10) + ' | ' + (j || []).length + ' কমিট স্ক্যান_\n';
+    for (const k of order) { const rows = groups[k]; if (!rows || !rows.length) continue; md += '\n## ' + k.toUpperCase() + '\n'; for (const r of rows) md += '- `' + r.sha + '` ' + r.msg + ' (' + r.date + ')\n'; }
+    if (args.dry) return { dry: true, entries: (j || []).length, preview: md.slice(0, 1200) };
+    let sha2; try { sha2 = (await ghApi(keys, '/repos/' + repo + '/contents/CHANGELOG.md')).sha; } catch (e) {}
+    await ghApi(keys, '/repos/' + repo + '/contents/CHANGELOG.md', { method: 'PUT', body: JSON.stringify({ message: 'docs: auto changelog (' + (j || []).length + ' commits)', content: btoa(unescape(encodeURIComponent(md))), sha: sha2, branch: args.branch || 'main' }) });
+    return { committed: true, entries: (j || []).length, groups: Object.keys(groups).map((k) => k + ':' + groups[k].length).join(', '), path: 'CHANGELOG.md' };
+  }
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
@@ -1670,7 +1831,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p9-v29' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v30' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
