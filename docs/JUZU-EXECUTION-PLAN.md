@@ -94,16 +94,16 @@
 - [x] 4.8 **Git Time-Machine** (`twin.time`): commits?path= + per-commit files/message keyword scan → hit flags. Live: kw='firewall' → শুধু Phase 3 commit 0ce46dbc hit ✅
 - [x] 4.9 Deployed gh-pages `e9f6cb96` — 6 twin live tests + chat-router passed (2026-09-04)
 
-## 🟦 PHASE 5 — Sandbox + Test Engine (GitHub Actions = $0 CI)
+## 🟦 PHASE 5 — Sandbox + Test Engine (GitHub Actions = $0 CI) ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** CORE tier-এর শেষ ফাঁক — code execution + testing। রেফ: P1#13-16,50; P2 Part H/L; P4#80,91-96,188,189।
-- [ ] 5.1 **GH Actions workflow** (agent-runner): repository_dispatch-এ চলে, result artifact-এ রাখে
-- [ ] 5.2 **agent.shell tool**: command → Actions run → output retrieve (১২০s budget)
-- [ ] 5.3 **Safe Command Gateway**: safe→auto, unknown→inspect, destructive→approval, dangerous→block (P4#190)
-- [ ] 5.4 **Test generator**: requirement → positive/negative/edge tests (P4#91,94)
-- [ ] 5.5 **Test runner + result analyzer** (P4#81)
-- [ ] 5.6 **Build-Test-Repair loop**: bounded retry (max 3), অসীম random edit নয় (P4#96)
-- [ ] 5.7 **Artifact + environment health check** (P4#188,189)
-- [ ] 5.8 Deploy → live test (ছোট script চালিয়ে প্রমাণ)
+- [x] 5.1 **GH Actions workflow** `agent-runner.yml`: repository_dispatch[agent-run] → checkout + `timeout 100 bash run.sh` → result POST `/api/runner/result` (random run-key auth). Live: run 33839382805 ✅
+- [x] 5.2 **agent.shell**: dispatch → D1 poll (5s×150s) → {exit,out,err,run,ms}. Live: `echo+node 40+2` → 10s round-trip, node v22.23.2 ✅
+- [x] 5.3 **Safe Command Gateway** `cmdGate()`: per-line classify; BLOCK (rm -rf /, mkfs, dd, fork-bomb…) → 🔥; APPROVAL (git push, --force, curl|sh, sudo…) → approved:true লাগে; SAFE→auto; unknown→INSPECT flag. Live: দুটো deny + audit এন্ট্রি ✅
+- [x] 5.4 **Test generator** `agent.test`: requirement (+code, pre-saved as ./candidate.<ext>) → gemText LLM bash test script (max 8, PASS/FAIL lines). Live: 8 tests generated ✅
+- [x] 5.5 **Test runner + analyzer**: sandbox-এ রান + `analyzeTests()` PASS/FAIL parse → {total,passed,failed,names}. Live: 8/8 pass in 10s ✅
+- [x] 5.6 **Build-Test-Repair** `agent.repair`: max 3 রাউন্ড (run tests → LLM fix → rerun). Live: ভাঙা add(a,b)=a-b → it1: 7 fail → it2: 1 fail (float precision) → it3: 8/8 pass, fixed:true ✅
+- [x] 5.7 **agent.envcheck**: sandbox env report (node v22/python3.12/npm/git/4cpu/16GB) + prod health from inside + exec-ok/py-ok + result-POST loop = artifact proof. Live ok:true ✅
+- [x] 5.8 Deployed gh-pages `3f3c1d75` (wv p5-v25) — 8/8 live tests passed (2026-09-04). Fix history: CF 1010 (urllib UA → browser UA), cx TDZ, gemini-only gemText → multi-provider fallback
 
 ## 🟦 PHASE 6 — Memory Engine Pro (structured, cross-model)
 **লক্ষ্য:** "Model remembers context; Juzu remembers relationship" (P4#150 golden rule)। রেফ: P4#101-149; P2 Part E; P3#20।
