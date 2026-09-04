@@ -27,6 +27,8 @@ const MODELS = [
   { pid: 'deepseek', id: 'dsk', label: 'DeepSeek · Chat', model: 'deepseek-chat', speed: 4, quality: 4, coding: 5, hide: 1 },
   { pid: 'nvidia', id: 'nv', label: 'NVIDIA NIM · DeepSeek-R1', model: 'deepseek-ai/deepseek-r1', speed: 3, quality: 4, coding: 4, hide: 1 },
   { pid: 'xai', id: 'grok', label: 'xAI · Grok 4 Fast', model: 'grok-4-fast-reasoning', speed: 4, quality: 4, coding: 4, hide: 1 },
+  { pid: 'zai', id: 'glm52', label: 'Z.ai · GLM 5.2 (1M ctx)', model: 'glm-5.2', speed: 3, quality: 5, coding: 5, hide: 1 },
+  { pid: 'zai', id: 'glmf', label: 'Z.ai · GLM 4.7 Flash (free)', model: 'glm-4.7-flash', speed: 5, quality: 3, coding: 4, hide: 1 },
   { pid: 'sambanova', id: 'snova', label: 'SambaNova · Llama 3.3 70B', model: 'Meta-Llama-3.3-70B-Instruct', speed: 3, quality: 4, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
@@ -43,9 +45,9 @@ const MODELS = [
   { pid: 'ollama', id: 'o20', label: 'Ollama · GPT-OSS 20B', model: 'gpt-oss:20b', speed: 4, quality: 3, coding: 4 },
   { pid: 'pollinations', id: 'polli', label: 'Pollinations · Free (key লাগে না)', model: 'openai', speed: 2, quality: 2, coding: 2 },
 ];
-const KEYMAP = { deepseek: 'DEEPSEEK_API_KEY', nvidia: 'NVIDIA_API_KEY', xai: 'XAI_API_KEY', cfai: 'CF_GLOBAL_KEY', groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY', ollama: 'OLLAMA_API_KEY' };
+const KEYMAP = { zai: 'ZAI_API_KEY', deepseek: 'DEEPSEEK_API_KEY', nvidia: 'NVIDIA_API_KEY', xai: 'XAI_API_KEY', cfai: 'CF_GLOBAL_KEY', groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY', ollama: 'OLLAMA_API_KEY' };
 // টেক্সট চ্যাটের ফিক্সড fallback ক্রম (প্রথমটা সেরা/দ্রুততম)
-const FALLBACK_ORDER = ['groq', 'cerebras', 'cfai', 'ollama', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'deepseek', 'nvidia', 'xai', 'openrouter', 'huggingface', 'pollinations'];
+const FALLBACK_ORDER = ['groq', 'cerebras', 'cfai', 'ollama', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'deepseek', 'nvidia', 'xai', 'zai', 'openrouter', 'huggingface', 'pollinations'];
 // key লাগে না এমন provider (pollinations) সবসময় "available" — বাকিরা key-নির্ভর
 const hasKey = (keys, pid) => (pid === 'pollinations' ? true : !!keys[KEYMAP[pid]]);
 const NL = '\n';
@@ -73,7 +75,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','ZAI_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -491,7 +493,7 @@ async function* streamAnswer(keys, messages, model, mode, emit, signal, multimod
       try {
         emit({ attempt: { provider: m.pid, label: m.label, model: m.model } }); attempt = m;
         let got = false;
-        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1', deepseek: 'https://api.deepseek.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', xai: 'https://api.x.ai/v1' }[m.pid];
+        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1', deepseek: 'https://api.deepseek.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', xai: 'https://api.x.ai/v1', zai: 'https://api.z.ai/api/paas/v4' }[m.pid];
         const it = m.pid === 'gemini' ? geminiStream(key, m.model, messages, ac.signal)
           : m.pid === 'cfai' ? cfaiStream(keys, m.model, messages, ac.signal)
           : m.pid === 'pollinations' ? pollinationsStream(messages, ac.signal)
@@ -1050,7 +1052,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   }
   return notes.length ? notes.join('\n') : null;
 }
-const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1', deepseek: 'https://api.deepseek.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', xai: 'https://api.x.ai/v1', cfai: 'https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/v1' };
+const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1', deepseek: 'https://api.deepseek.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', xai: 'https://api.x.ai/v1', zai: 'https://api.z.ai/api/paas/v4', cfai: 'https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/v1' };
 const CF_ACC = 'abb783e456e51a5d338419de93d5e576';
 async function sha256hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
 let _sessSecretCache = null;
@@ -1615,7 +1617,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v38';
+  const AGENT_VERSION = 'p10-v39';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1911,7 +1913,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v38' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v39' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
