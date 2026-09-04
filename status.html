@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<title>জুজু অপস ড্যাশবোর্ড</title>
+<style>
+:root{
+  --bg:#0b0b12;
+  --accent:#7c5cff;
+  --card:#15151f;
+  --text:#e0e0e0;
+  --success:#4caf50;
+  --error:#f44336;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,sans-serif;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  min-height:100vh;
+  padding:1rem;
+}
+.card{
+  background:var(--card);
+  border-radius:12px;
+  padding:1.5rem;
+  max-width:600px;
+  width:100%;
+  box-shadow:0 4px 12px rgba(0,0,0,.4);
+}
+h1{
+  text-align:center;
+  margin-bottom:1rem;
+  color:var(--accent);
+}
+.status{
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  padding:.3rem .6rem;
+  border-radius:8px;
+  font-size:.9rem;
+  font-weight:600;
+}
+.success{background:var(--success);}
+.error{background:var(--error);}
+.chip{
+  display:inline-block;
+  background:rgba(124,92,255,.15);
+  color:var(--accent);
+  padding:.3rem .8rem;
+  border-radius:16px;
+  margin:0.3rem;
+  font-size:.85rem;
+}
+.controls{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:1rem;
+}
+button{
+  background:var(--accent);
+  border:none;
+  color:#fff;
+  padding:.5rem 1rem;
+  border-radius:8px;
+  cursor:pointer;
+}
+button:hover{opacity:.9;}
+@media(max-width:480px){
+  .card{padding:1rem;}
+  h1{font-size:1.4rem;}
+}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>জুজু অপস ড্যাশবোর্ড</h1>
+  <div id="healthStatus" class="status error">API ডাউন</div>
+  <div id="modelsSection" style="margin-top:1rem;display:none;">
+    <strong>মডেলস:</strong>
+    <div id="modelChips"></div>
+  </div>
+  <div class="controls">
+    <button id="refreshBtn">রিফ্রেশ</button>
+    <div id="lastUpdate"></div>
+  </div>
+</div>
+<script>
+const healthEl=document.getElementById('healthStatus');
+const modelsSec=document.getElementById('modelsSection');
+const chipsDiv=document.getElementById('modelChips');
+const lastEl=document.getElementById('lastUpdate');
+const refreshBtn=document.getElementById('refreshBtn');
+
+async function fetchHealth(){
+  try{
+    const r=await fetch('https://admission-hub-ai.pages.dev/api/health');
+    if(!r.ok) throw new Error();
+    const d=await r.json();
+    healthEl.textContent=`API LIVE • v${d.version||'?'}`;
+    healthEl.className='status success';
+  }catch{
+    healthEl.textContent='API ডাউন';
+    healthEl.className='status error';
+  }
+}
+async function fetchConfig(){
+  try{
+    const r=await fetch('https://admission-hub-ai.pages.dev/api/config');
+    if(!r.ok) throw new Error();
+    const d=await r.json();
+    if(d.models && d.models.length){
+      chipsDiv.innerHTML='';
+      d.models.forEach(m=>{
+        const span=document.createElement('span');
+        span.className='chip';
+        span.textContent=m.id||'—';
+        chipsDiv.appendChild(span);
+      });
+      modelsSec.style.display='block';
+    }else{
+      modelsSec.style.display='none';
+    }
+  }catch{
+    modelsSec.style.display='none';
+  }
+}
+function updateTime(){
+  const now=new Date();
+  lastEl.textContent=now.toLocaleString('bn-BD');
+}
+async function loadAll(){
+  await Promise.all([fetchHealth(),fetchConfig()]);
+  updateTime();
+}
+refreshBtn.onclick=loadAll;
+loadAll();
+</script>
+</body>
+</html>
