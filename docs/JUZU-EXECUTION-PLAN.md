@@ -71,16 +71,16 @@
 - [x] 2.7 Adaptive response length + tone match: STYLE_SYS[intent] + TONE (তুই/ভাই vs আপনি) system-addendum — (2026-09-04, 0b37a30)
 - [x] 2.8 Deploy → gh-pages 4d93162 → live test: greeting✅ follow-up✅ mode-gate✅ clarify✅ critical✅ health wv=p2-v22 — (2026-09-04)
 
-## 🟦 PHASE 3 — Security Firewall + Audit + Error Memory
+## 🟦 PHASE 3 — Security Firewall + Audit + Error Memory — COMPLETE (2026-09-04)
 **লক্ষ্য:** full access-কে controlled করা; capability কমবে না। রেফ: P1#48-56,129-135; P2 Part M; P3#17; P4#190,246-249।
-- [ ] 3.1 **Permission matrix** (tool × action → AUTO / POLICY / APPROVAL / BLOCK) — code-এ table
-- [ ] 3.2 **Git Safety Firewall**: read/branch/edit/test=auto, commit/push=policy(বর্তমানে approval), merge=approval, delete/force/rewrite=never
-- [ ] 3.3 **Action Risk Classification**: LOW/MEDIUM/HIGH/CRITICAL → risk অনুযায়ী gate
-- [ ] 3.4 **Secret redaction layer**: chat/report/log-এ key pattern ধরা পড়লে mask
-- [ ] 3.5 **Prompt-injection defense**: system > owner > tool-result hierarchy, untrusted content label
-- [ ] 3.6 **Audit log** (D1 `audit:*`): TIME/TASK/TOOL/ACTION/RESULT/APPROVAL — UI-তে দেখা যাবে
-- [ ] 3.7 **Error memory** (D1): error→cause→fix; নতুন error-এ আগে check
-- [ ] 3.8 Deploy → test (redaction + audit live demo)
+- [x] 3.1 **Permission matrix** (tool × action → AUTO / POLICY / APPROVAL / BLOCK) — PERM table + permFor() default — (2026-09-04, b9ff1cd)
+- [x] 3.2 **Git Safety Firewall**: read/branch=auto, edit/test/commit/push=POLICY(owner), merge=APPROVAL, delete/force/rewrite=BLOCK — runAgentTool gate-এ enforce; live: gh.delete→'চিরকাল নিষিদ্ধ', gh.merge→DENIED — (2026-09-04, e2d2389)
+- [x] 3.3 **Action Risk Classification**: প্রতি PERM entry-তে risk + gateAllows(); audit-এ risk লগ — (2026-09-04, b9ff1cd)
+- [x] 3.4 **Secret redaction layer**: redactSecrets() (gh pat/aws/sk-/Bearer/hex40) — user msg+title+answer save, clog, client display (md/mdLive/bubU); live: ghp_… → [REDACTED:gh_token] — (2026-09-04, e2d2389)
+- [x] 3.5 **Prompt-injection defense**: SYSTEM-এ hierarchy rule + tool/web/file content [UNTRUSTED … END] label — (2026-09-04, b9ff1cd)
+- [x] 3.6 **Audit log**: audit:* (D1, 30d) + GET /api/audit (owner-gated) + ডট-মেনু → 'অডিট লগ' শীট UI — (2026-09-04, b9ff1cd)
+- [x] 3.7 **Error memory**: errmem:<sig> {n,cause,fix}; chat catch-এ auto-record + পুরনো হলে hint append — (2026-09-04, b9ff1cd)
+- [x] 3.8 Deploy → gh-pages e2d2389 (+title-fix) → live: BLOCK✅ APPROVAL-DENIED✅ CALL-logged✅ redaction✅ health wv=p3-v24 — (2026-09-04)
 
 ## 🟦 PHASE 4 — Repo Digital Twin + Code Intelligence
 **লক্ষ্য:** "জুজু project-এর structure মুখস্থ জানে"। রেফ: P3#1,2,7; P2 Part D; P4#51-57,42; P1#24,12,31।
