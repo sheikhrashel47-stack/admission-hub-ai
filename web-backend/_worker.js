@@ -104,6 +104,7 @@ const PERM = {
   'verify.url': { risk: 'LOW', gate: 'AUTO' }, 'bu.health': { risk: 'LOW', gate: 'AUTO' },
   'twin.index': { risk: 'LOW', gate: 'AUTO' }, 'twin.search': { risk: 'LOW', gate: 'AUTO' }, 'twin.map': { risk: 'LOW', gate: 'AUTO' }, 'twin.impact': { risk: 'LOW', gate: 'AUTO' }, 'twin.time': { risk: 'LOW', gate: 'AUTO' },
   'agent.shell': { risk: 'HIGH', gate: 'POLICY' }, 'agent.test': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.repair': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.envcheck': { risk: 'LOW', gate: 'POLICY' },
+  'mem.save': { risk: 'LOW', gate: 'AUTO' }, 'mem.search': { risk: 'LOW', gate: 'AUTO' }, 'mem.forget': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.correct': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.audit': { risk: 'LOW', gate: 'POLICY' }, 'mem.export': { risk: 'LOW', gate: 'POLICY' }, 'mem.syncmd': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -533,7 +534,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -693,6 +694,77 @@ function analyzeTests(run) {
   }
   return { total: pass.length + fail.length, passed: pass.length, failed: fail.length, pass, fail };
 }
+/* ===== Phase 6 — Memory Engine Pro (structured, cross-model) ===== */
+let memReady = false;
+async function memEnsure(env) {
+  if (memReady || !env.AH_DB) return;
+  try {
+    await env.AH_DB.prepare("CREATE TABLE IF NOT EXISTS mem (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, text TEXT NOT NULL, conf REAL DEFAULT 0.8, src TEXT DEFAULT '', ts INTEGER NOT NULL, exp INTEGER DEFAULT 0, sup INTEGER DEFAULT 0, h TEXT DEFAULT '')").run();
+    memReady = true;
+  } catch {}
+}
+async function memHash(kind, text) {
+  const b = new TextEncoder().encode(kind + '|' + String(text).toLowerCase().replace(/\s+/g, ' ').trim());
+  const d = await crypto.subtle.digest('SHA-256', b);
+  return Array.from(new Uint8Array(d)).map((x) => x.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+const MEM_KINDS = ['fact', 'decision', 'preference', 'episode', 'error'];
+async function memInsert(env, m) {
+  await memEnsure(env); if (!env.AH_DB) return { error: 'D1 নেই' };
+  const kind = MEM_KINDS.includes(m.kind) ? m.kind : 'fact';
+  const text = redactSecrets(String(m.text || '')).trim().slice(0, 500);
+  if (!text) return { error: 'text নেই' };
+  const h = await memHash(kind, text);
+  try { const dup = await env.AH_DB.prepare('SELECT id FROM mem WHERE h = ?1 AND sup = 0').bind(h).first(); if (dup) return { skipped: 'duplicate', id: dup.id }; } catch {}
+  const tok = text.toLowerCase().split(/[\s,;।'"()\[\]]+/).filter((w) => w.length > 3).slice(0, 3);
+  let conflict = null;
+  if (tok.length >= 2) {
+    try {
+      const likes = tok.map((_, i) => 'text LIKE ?' + (i + 2)).join(' AND ');
+      const rows = await env.AH_DB.prepare('SELECT id, text FROM mem WHERE kind = ?1 AND sup = 0 AND ' + likes + ' ORDER BY ts DESC LIMIT 1').bind(kind, ...tok.map((w) => '%' + w + '%')).all();
+      const cand = (rows.results || [])[0];
+      if (cand && cand.id) conflict = cand;
+    } catch {}
+  }
+  const exp = m.exp ? (Date.parse(m.exp) || 0) : 0;
+  const r = await env.AH_DB.prepare('INSERT INTO mem (kind, text, conf, src, ts, exp, sup, h) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7)').bind(kind, text, Math.min(1, Math.max(0, Number(m.conf) || 0.8)), String(m.src || '').slice(0, 60), Date.now(), exp, h).run();
+  const id = Number((r.meta || {}).last_row_id) || 0;
+  if (conflict && id) { try { await env.AH_DB.prepare('UPDATE mem SET sup = ?1 WHERE id = ?2').bind(id, conflict.id).run(); } catch {} }
+  return { id, kind, conflict: conflict ? { id: conflict.id, superseded: true, text: String(conflict.text).slice(0, 120) } : null };
+}
+async function memSearch(env, q, kind, limit) {
+  await memEnsure(env); if (!env.AH_DB) return [];
+  const now = Date.now();
+  let rows;
+  try {
+    rows = kind ? await env.AH_DB.prepare('SELECT id, kind, text, conf, src, ts, exp FROM mem WHERE sup = 0 AND (exp = 0 OR exp > ?1) AND kind = ?2 ORDER BY ts DESC LIMIT 400').bind(now, kind).all()
+      : await env.AH_DB.prepare('SELECT id, kind, text, conf, src, ts, exp FROM mem WHERE sup = 0 AND (exp = 0 OR exp > ?1) ORDER BY ts DESC LIMIT 400').bind(now).all();
+  } catch { return []; }
+  const toks = String(q || '').toLowerCase().split(/[\s,;।?'"()]+/).filter((w) => w.length > 2);
+  const out = [];
+  for (const r of (rows.results || [])) {
+    const t = String(r.text).toLowerCase();
+    let score = 0;
+    for (const w of toks) if (t.includes(w)) score += 2;
+    if (!score && toks.length) continue;
+    score += (Number(r.conf) || 0.5) * 2;
+    score += (30 * 86400000) / (30 * 86400000 + (now - Number(r.ts)));
+    out.push({ id: r.id, kind: r.kind, text: r.text, conf: r.conf, src: r.src, ts: r.ts, exp: r.exp || 0, score: Math.round(score * 100) / 100 });
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, Math.min(50, Number(limit) || 8));
+}
+async function memRelevant(env, msg, n) { return await memSearch(env, msg, null, n || 4); }
+async function memExtract(env, keys, chatId, msgs) {
+  const convo = msgs.map((m) => m.role + ': ' + String(m.content || '').slice(0, 300)).join('\n').slice(0, 6000);
+  const t = await gemText(keys, 'Extract durable long-term memories from this conversation. Reply ONLY a JSON array (no markdown, no explanation): [{"kind":"fact|decision|preference|episode|error","text":"short one-line memory","conf":0.9,"exp":"YYYY-MM-DD if time-bound else omit"}]. Rules: only owner preferences, decisions, project facts, mistakes+lessons worth remembering for months; max 5 items; skip greetings/small talk/one-off questions; if nothing is worth saving reply [].\n\n' + convo, 1200);
+  let arr = [];
+  try { arr = JSON.parse(stripFences(t)); } catch { const mm = String(t).match(/\[[\s\S]*\]/); if (mm) { try { arr = JSON.parse(mm[0]); } catch {} } }
+  if (!Array.isArray(arr)) return { saved: 0 };
+  const res = [];
+  for (const it of arr.slice(0, 5)) { if (it && it.text) res.push(await memInsert(env, { kind: it.kind, text: it.text, conf: it.conf, exp: it.exp, src: 'chat:' + String(chatId || '').slice(0, 8) })); }
+  return { saved: res.filter((x) => x && x.id).length, details: res };
+}
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
@@ -744,6 +816,9 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   if (!plan.length && /(কোথায়|where)/i.test(t) && /(কোড|ফাংশন|function|ফাইল|file|route)/i.test(t)) plan.push({ tool: 'twin.search', args: { query: t.slice(0, 120) } });
   if (!plan.length && /(প্রভাব|impact)/i.test(t)) { const mm2 = t.match(/[\w/.-]+\.(js|html|css|md)/i); plan.push({ tool: 'twin.impact', args: { path: mm2 ? mm2[0] : 'web/index.html' } }); }
   if (!plan.length && /(কোন কমিট|which commit|কবে থেকে)/i.test(t)) { const mm3 = t.match(/[\w/.-]+\.(js|html|css|md)/i); plan.push({ tool: 'twin.time', args: { path: mm3 ? mm3[0] : '', kw: t.slice(0, 60) } }); }
+  if (!plan.length && /(ভুলে যাও|মনে রেখো না|forget)/i.test(t)) plan.push({ tool: 'mem.forget', args: { q: t.slice(0, 200) } });
+  if (!plan.length && /(মনে রেখো|রেখে দাও|শিখে রাখো|remember this|মনে রাখবে)/i.test(t)) { const mm4 = t.replace(/^.*?(মনে রেখো|রেখে দাও|শিখে রাখো|remember this|মনে রাখবে)[,:।]?\s*/i, ''); plan.push({ tool: 'mem.save', args: { text: (mm4 || t).slice(0, 300), kind: /(পছন্দ|preference|ভালো লাগে)/i.test(t) ? 'preference' : /(সিদ্ধান্ত|decision|ঠিক করলাম)/i.test(t) ? 'decision' : 'fact' } }); }
+  if (!plan.length && /(আগে কী বলেছি|আমার পছন্দ কী|what did i (say|tell)|পুরনো সিদ্ধান্ত|তুমি কি মনে রেখেছ|কী মনে আছে)/i.test(t)) plan.push({ tool: 'mem.search', args: { q: t.slice(0, 200) } });
   if (!plan.length) return null;
   try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
@@ -952,6 +1027,70 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     const ok = run.out.includes('exec-ok 42') && run.out.includes('py-ok 1024') && run.out.includes('"ok":true');
     return { ok: ok, exit: run.exit, run: run.run, ms: run.ms, env: run.out.slice(0, 2200) };
   }
+  if (tool === 'mem.save') return await memInsert(env, { kind: args.kind, text: args.text, conf: args.conf, exp: args.exp, src: args.src || ('tool:' + String((ctx && ctx.task) || 'api').slice(0, 40)) });
+  if (tool === 'mem.search') return { q: args.q || args.query || '', hits: await memSearch(env, args.q || args.query || '', args.kind, args.limit || 8) };
+  if (tool === 'mem.forget') {
+    await memEnsure(env); if (!env.AH_DB) return { error: 'D1 নেই' };
+    if (args.id) { await env.AH_DB.prepare('UPDATE mem SET sup = -1 WHERE id = ?1').bind(Number(args.id)).run(); return { forgotten: 1, ids: [Number(args.id)] }; }
+    const hits = await memSearch(env, args.q || args.text || '', args.kind, 5);
+    const ids = hits.filter((x) => x.score >= 3).slice(0, args.all ? 5 : 1);
+    for (const x of ids) await env.AH_DB.prepare('UPDATE mem SET sup = -1 WHERE id = ?1').bind(x.id).run();
+    return { forgotten: ids.length, ids: ids.map((x) => x.id), texts: ids.map((x) => String(x.text).slice(0, 80)) };
+  }
+  if (tool === 'mem.correct') {
+    await memEnsure(env); if (!env.AH_DB) return { error: 'D1 নেই' };
+    const newText = redactSecrets(String(args.text || '')).trim();
+    if (!newText) return { error: 'নতুন text লাগবে' };
+    let old = null;
+    if (args.id) { try { old = await env.AH_DB.prepare('SELECT id, kind, text FROM mem WHERE id = ?1 AND sup = 0').bind(Number(args.id)).first(); } catch {} }
+    else { const hits = await memSearch(env, args.q || newText, args.kind, 1); old = hits[0] ? { id: hits[0].id, kind: hits[0].kind, text: hits[0].text } : null; }
+    if (old) {
+      const ins = await memInsert(env, { kind: old.kind, text: newText, conf: 1, src: 'corrected:' + old.id });
+      if (ins.id) { try { await env.AH_DB.prepare('UPDATE mem SET sup = ?1 WHERE id = ?2').bind(ins.id, old.id).run(); } catch {} }
+      return { corrected: old.id, newId: ins.id || null, was: String(old.text).slice(0, 120), now: newText.slice(0, 120) };
+    }
+    const ins2 = await memInsert(env, { kind: args.kind, text: newText, conf: 1, src: 'correct' });
+    return { corrected: null, newId: ins2.id || null, note: 'পুরোনো মিল না পেয়ে নতুন হিসেবে সেভ হলো' };
+  }
+  if (tool === 'mem.audit') {
+    let rows = [];
+    try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'memaudit:%' ORDER BY key DESC LIMIT 40").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch { return { raw: String(x.value).slice(0, 120) }; } }); } catch {}
+    const ids = [...new Set(rows.flatMap((x) => x.ids || []))].slice(0, 30);
+    let mems = [];
+    if (ids.length && env.AH_DB) { try { mems = ((await env.AH_DB.prepare('SELECT id, kind, text FROM mem WHERE id IN (' + ids.map(() => '?').join(',') + ')').bind(...ids).all()).results || []); } catch {} }
+    return { uses: rows.slice(0, Number(args.limit) || 15), memories: mems };
+  }
+  if (tool === 'mem.export') {
+    await memEnsure(env); if (!env.AH_DB) return { error: 'D1 নেই' };
+    const rows = ((await env.AH_DB.prepare('SELECT id, kind, text, conf, src, ts FROM mem WHERE sup = 0 ORDER BY kind, ts DESC LIMIT 500').all()).results || []);
+    const by = {};
+    for (const r of rows) (by[r.kind] = by[r.kind] || []).push(r);
+    let md = '# JUJU MEMORY DB EXPORT — ' + new Date().toISOString().slice(0, 16) + '\n';
+    for (const k of Object.keys(by)) { md += '\n## ' + k + ' (' + by[k].length + ')\n'; for (const r of by[k]) md += '- #' + r.id + ' ' + r.text + ' [conf ' + r.conf + ', ' + new Date(r.ts).toISOString().slice(0, 10) + ', ' + (r.src || '?') + ']\n'; }
+    return { count: rows.length, md: md.slice(0, 40000) };
+  }
+  if (tool === 'mem.syncmd') {
+    let content = String(args.content || '');
+    if (!content && args.path) content = (await storeGet(env, 'twin:' + TWIN_REPO + ':src:' + args.path)) || '';
+    if (!content) throw new Error('content বা twin-cached path লাগবে');
+    content = redactSecrets(content);
+    const lines = content.split('\n');
+    let scanned = 0, inserted = 0, skipped = 0;
+    for (const raw of lines) {
+      const l = raw.replace(/^\s*(?:[-*•]|\d+\.)\s+/, '').trim();
+      if (/^\s*(#|\||`|>)/.test(raw)) continue;
+      if (l.length < 25 || l.length > 400) continue;
+      scanned++;
+      if (scanned > 400) break;
+      let kind = 'fact';
+      if (/LESSON|ভুল ছিল|error|bug|ব্যর্থ|dead end|failed because/i.test(l)) kind = 'error';
+      else if (/সিদ্ধান্ত|decision|owner (ordered|said|banned|wants|told)|ঠিক করা/i.test(l)) kind = 'decision';
+      else if (/পছন্দ|preference|ভালো লাগে|owner likes/i.test(l)) kind = 'preference';
+      const r = await memInsert(env, { kind: kind, text: l, conf: 0.9, src: 'md:' + String(args.path || 'upload').slice(0, 40) });
+      if (r && r.id) inserted++; else skipped++;
+    }
+    return { scanned: scanned, inserted: inserted, skipped: skipped };
+  }
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
@@ -1040,7 +1179,7 @@ async function pingProviders(keys) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     const path = url.pathname;
     const method = req.method;
@@ -1059,7 +1198,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p5-v25' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p6-v26' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -1446,6 +1585,8 @@ export default {
       const stPrev = stChat || (await storeGetJson(env, 'ctx:state', null));
       const imode = (body.imode && MODE_SYS[body.imode]) ? body.imode : ((stChat && stChat.mode) || 'auto');
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
+      let memHits = [];
+      try { if (mem.enabled && intent !== 'greeting' && !mRe) memHits = await memRelevant(env, imsg, 4); } catch {}
       const lt = await storeGetJson(env, 'ctx:lasttask', null);
       const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') + (lt ? '\n\n## জুজুর সর্বশেষ কাজ (প্রসঙ্গ ধরে রাখো — follow-up হলে এর সাথে মিলিয়ে বুঝো)\n- নির্দেশ: ' + String(lt.task || '').slice(0, 300) + '\n- স্ট্যাটাস: ' + lt.status + '\n- ফলাসার: ' + String(lt.report || '').slice(0, 500) : '');
@@ -1462,6 +1603,10 @@ export default {
         const yesNow = /^(হ্যাঁ|হ্যা|yes|confirm|ঠিক আছে|ok|okay)$/i.test(imsg.trim());
         if (yesNow && pend === '1') { sysAdd += '\n[CRITICAL: approved] owner নিশ্চিত করেছেন — সাবধানে পথ দেখাও।'; await storePut(env, 'ctx:pendcrit', '0', 60); }
         else { sysAdd += '\n[RULE:critical] ঝুঁকিপূর্ণ action — কোনো কাজ না করে শুধু নিশ্চিতকরণ চাও ("নিশ্চিত হলে হ্যাঁ লিখো")।'; await storePut(env, 'ctx:pendcrit', '1', 600); }
+      }
+      if (memHits.length) {
+        sysAdd += '\n\n## দীর্ঘমেয়াদি স্মৃতি (structured DB — সব model শেয়ার করে)\n' + memHits.map((x) => '- [' + x.kind + ' #' + x.id + '] ' + x.text).join('\n') + '\n(প্রাসঙ্গিক হলে ব্যবহার করো; ভুল/পুরোনো মনে হলে মালিককে বলো)';
+        try { await storePut(env, 'memaudit:' + Date.now() + ':' + Math.random().toString(36).slice(2, 6), JSON.stringify({ chatId: c.id, q: imsg.slice(0, 100), ids: memHits.map((x) => x.id), ts: Date.now() }), 30 * 86400); } catch {}
       }
       if (intent === 'greeting') sysAdd += '\n[RULE:greeting] কোনো tool/তথ্য/সাজেশন নয় — ১-২ লাইনের উষ্ণ উত্তর দাও।';
       let finalMsgs = [{ role: 'system', content: baseSys + sysAdd }, ...msgs.filter((m) => m.role !== 'system' && !(m.partial && !m.content)).slice(-24)];
@@ -1541,8 +1686,9 @@ export default {
             u.byModel[kk] = u.byModel[kk] || { requests: 0, tokens: 0 };
             u.byModel[kk].requests += 1; u.byModel[kk].tokens += meta.tokens;
             await kvSet(env, 'chats', data); // এক লেখাতেই history+usage — অর্ধেক কোটা খরচ
+            try { if (mem.enabled && c.messages.length >= 10 && c.messages.length % 10 === 0) { const ex = memExtract(env, keys, c.id, c.messages.slice(-12)).catch(() => {}); if (ctx && ctx.waitUntil) ctx.waitUntil(ex); else await ex; } } catch {}
             try { const stt = JSON.stringify({ topic: imsg.slice(0, 140), intent: intent, mode: imode, pending: /\?\s*$/.test(answer) ? 'question' : null, ts: Date.now() }); await storePut(env, 'ctx:state:' + c.id, stt, 30 * 86400); await storePut(env, 'ctx:state', stt, 30 * 86400); } catch (e) {}
-            emit({ done: true, id: c.id, meta, sources: effWeb ? (await kvGet(env, 'lastSources', [])) : [], suggestions: parsed.list });
+            emit({ done: true, id: c.id, memUsed: memHits.map((x) => x.id), meta, sources: effWeb ? (await kvGet(env, 'lastSources', [])) : [], suggestions: parsed.list });
           } catch (e) {
             try { const pv = await errMemNote(env, String(e.message || e)); if (pv && (pv.cause || pv.fix)) e.message = String(e.message || e) + ' — আগেও ' + pv.n + 'বার: কারণ ' + (pv.cause || '?') + '; ফিক্স ' + (pv.fix || 'চলছে'); } catch (e2) {}
             try {
