@@ -1186,7 +1186,7 @@ export default {
         const msg = (body.message || '').trim();
         if (!msg) return json({ error: 'খালি' }, 400);
         if (!c) {
-          c = { id: crypto.randomUUID(), title: msg.slice(0, 42) + (msg.length > 42 ? '…' : ''), project: (body.project || 'সাধারণ'), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
+          c = { id: crypto.randomUUID(), title: redactSecrets(msg).slice(0, 42) + (redactSecrets(msg).length > 42 ? '…' : ''), project: (body.project || 'সাধারণ'), pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now(), messages: [] };
           data.chats.unshift(c);
         }
         let imgRefs = null;
