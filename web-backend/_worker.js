@@ -1577,7 +1577,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v33';
+  const AGENT_VERSION = 'p10-v34';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1621,7 +1621,12 @@ if (tool === 'brain.critic') {
           ctx.written.push({ path: f.path, len: merged.length, mode: 'bugfix', win: win.length + '→' + fixed.length });
           continue;
         }
-        let content = f.content; if (content == null && f.prompt) { const g = await R('brain.sub', { role: 'coder', task: f.prompt, iters: 1 }); content = g && g.result; } if (content == null) throw new Error('content generate হয়নি: ' + f.path); await R('gh.commit', { repo: m.repo, branch: m.branch, path: f.path, content: content, message: 'mission ' + m.id + ': ' + f.path }); ctx.written.push({ path: f.path, len: String(content).length }); } out = ctx.written.length + 'টা ফাইল ' + m.branch + '-এ লেখা হয়েছে'; break; }
+        let content = f.content; if (content == null && f.prompt) {
+            const g = await R('brain.sub', { role: 'coder', task: f.prompt + '\nগুরুত্বপূর্ণ: কোনো ব্যাখ্যা, ভূমিকা বা উপসংহার লিখো না — আউটপুটের প্রথম লাইন থেকে শেষ লাইন পর্যন্ত শুধু ফাইলের আসল কনটেন্ট।', iters: 1 });
+            let gen = String((g && g.result) || '');
+            const fm2 = gen.match(/```[a-zA-Z]*\n([\s\S]*?)```/); if (fm2 && fm2[1].trim().length > 200) gen = fm2[1];
+            content = stripFences(gen);
+          } if (content == null) throw new Error('content generate হয়নি: ' + f.path); await R('gh.commit', { repo: m.repo, branch: m.branch, path: f.path, content: content, message: 'mission ' + m.id + ': ' + f.path }); ctx.written.push({ path: f.path, len: String(content).length }); } out = ctx.written.length + 'টা ফাইল ' + m.branch + '-এ লেখা হয়েছে'; break; }
       case 'build': { const js = (m.files || []).filter((f) => /\.js$/.test(f.path) && f.content != null); if (!js.length) { out = 'JS content নেই — build bounded-skip'; break; } const script = js.map((f, i) => 'echo ' + b64utf8enc(f.content) + ' | base64 -d > f' + i + '.js && node --check f' + i + '.js && echo "PASS f' + i + '.js"').join('\n'); const r = await R('agent.shell', { script: script }); if (r.exit !== 0 || String(r.out || '').indexOf('PASS') < 0) throw new Error('node --check fail: ' + (String(r.err || '') + String(r.out || '')).slice(-250)); out = 'node --check ' + js.length + 'টা JS pass'; break; }
       case 'test': { if (!m.test) { out = 'টেস্ট-স্পেক দেওয়া হয়নি — bounded skip (সৎ লগ)'; break; } const code0 = ((m.files || []).filter((f) => f.content != null)[0] || {}).content || ''; const r = await R('agent.test', { requirement: String(m.test).slice(0, 1500), code: code0 }); const tt = r.tests || {}; if (tt.fail) throw new Error('টেস্ট fail: ' + tt.fail + '/' + (tt.total || '?')); out = 'টেস্ট ' + (tt.pass || 0) + '/' + (tt.total || 0) + ' pass'; break; }
       case 'review': { const revTxt = (m.files || []).map((f) => 'FILE ' + f.path + ':\n' + String(f.content != null ? f.content : '(prompt-generated)').slice(0, 1500)).join('\n\n'); const c = await R('brain.critic', { model: 'groq:fast', plan: 'কোড/কনটেন্ট রিভিউ — লক্ষ্য: ' + goal + '\n' + revTxt.slice(0, 3000) }); out = 'review verdict: ' + (c.verdict || '?'); if (String(c.verdict || '').indexOf('FIX') >= 0) { ctx.reviewFix = String(c.critique || '').slice(0, 500); out += ' (সমালোচনা ctx-এ সংরক্ষিত — রিপোর্টে যাবে)'; } break; }
@@ -1867,7 +1872,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v33' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v34' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
