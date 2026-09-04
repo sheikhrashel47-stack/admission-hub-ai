@@ -129,17 +129,17 @@
 - [x] 7.8 **qa.gate**: per URL desktop+iphone load/layout check → overall PASS/BLOCK. Live: app PASS-checks, pages.dev 404-page → **verdict BLOCK** (দুই check-ই fail ধরেছে) ✅
 - [x] 7.9 Deployed gh-pages `9288e550` (wv p7-v27) — ২০+ screenshot, ৫+ পেজ টেস্ট: app (gh.io, ৪ viewport), pages.dev 404-page, time.is, example.com, /no-page। নোট: gdrive-token tool পেজ gh-pages output-এ নেই (404) — repo-তে একমাত্র SPA-ই main page ✅
 
-## 🟦 PHASE 8 — Background Ops (queue + scheduler + notify + observability)
+## 🟦 PHASE 8 — Background Ops (queue + scheduler + notify + observability) ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** owner offline থাকলেও জুজু কাজ করে, খবর দেয়। রেফ: P1#36-38,72,84,85,109,126; P3#8,19; P4#191-199,242,245; P2 BG-BJ,AC।
-- [ ] 8.1 **Job queue** (D1): task priority CRITICAL/HIGH/NORMAL/LOW/BACKGROUND (P4#194,195)
-- [ ] 8.2 **Background worker**: cron-driven (watchman-এর পাশে), queued task চালায় (P4#197)
-- [ ] 8.3 **Scheduler pro**: one-time + recurring + conditional task (P1#72)
-- [ ] 8.4 **Telegram notification engine**: completed/approval-needed/failed/deploy-failed (P4#242,245)
-- [ ] 8.5 **Health score**: project + agent — daily report "আজকের top ৩ সমস্যা" (P3#8)
-- [ ] 8.6 **Observability**: per-task latency/tools/failures/retries/token-estimate (P2 AC)
-- [ ] 8.7 **Incident Commander mode**: freeze→collect→compare deployment→recover→report (P3#19)
-- [ ] 8.8 **Away-mode policy**: pre-approved mission হলে owner-অনুপস্থিতিতে পুরো কাজ; production deploy ছাড়া সব নিজে থেকে; প্রতিটি কিছুর Telegram report (owner দাবি #3)
-- [ ] 8.9 Deploy → test (queued task + Telegram notify + away-mode প্রমাণ)
+- [x] 8.1 **Job queue** (D1 `jobs` table): 5 priority + status(queued/running/done/failed/approval) + tries/maxtries retry + mission tag + notify flag. Live: job#1 queued→done ✅
+- [x] 8.2 **Background worker**: `GET /api/ops/tick` (X-Watch) + নতুন `juju-heartbeat.yml` cron */30min + watchman drain (90s budget) + ops.tick tool। 60s tick-lock। Live: heartbeat workflow run success + drain job#1 bu.health done + TG notify ✅
+- [x] 8.3 **Scheduler pro** (D1 `sched`): once@ISO / every@min / daily@HH:MM(UTC) + conditional {tool,args,expect}। Live: once@+90s ঠিক সময়ে fire, cond-demo → 'cond-ok' → job ran ✅
+- [x] 8.4 **tgNotify**: ✅done/❌failed/🔁retry/🔐approval/🌙away/🏠return/🩺daily-health/🚨incident — সব event-এ Telegram channel-এ রিপোর্ট। Live: sent:true ×7+ ✅
+- [x] 8.5 **opsHealth**: API+UI reachability (25 each), watchman 7-run history (5/run), 24h job failures (3/fail), queue backlog → score + top3; watchman-এর সাথে দৈনিক TG রিপোর্ট। Live: 100/100 (clean), drill-এ 85/100 (৫টা test-fail job গুনেছে — সৎ স্কোরিং) ✅
+- [x] 8.6 **tasklog + ops.stats**: প্রতি job-এ {tool,ms,ok,err,tryn,tokens}; stats → window/total/ok/fails/tokensEst/byTool{avgMs,fails,retries}। Live: 8 runs, retry ধরা পড়েছে ✅
+- [x] 8.7 **ops.incident**: freeze (ops:freeze, CRITICAL ছাড়া drain বন্ধ) → collect (health/score/watch/audit/jobs) → compare (শেষ ৩ Pages deployment status) → recover (rollback শুধু approved:true-তে) → unfreeze + TG 🚨 + D1 report। Live drill: compare 3×success, recover gated ✅
+- [x] 8.8 **ops.away**: {on,hours≤72,missions[]} → mission-tagged job-এ auto-approval; **prod-deploy (cf.pages.deploy/rollback) কখনোই অটো নয় — explicit approved:true ছাড়া status='approval' + TG 🔐** (interactive tick-এও — প্রথম সংস্করণে hole ছিল, ধরে ফিক্স করা); প্রতিটি job-এর TG রিপোর্ট। Live: away-mode-এ gh.merge mission job gate পেরিয়ে রান করেছে (fake PR → harmless 404), prod job approval-এ আটকেছে ✅
+- [x] 8.9 Deployed gh-pages `38b9a6ef` (wv p8-v28) + heartbeat cron — queue/tick/scheduler/cond/away/prod-gate/incident/stats/TG সব লাইভ প্রমাণিত (2026-09-04) ✅
 
 ## 🟦 PHASE 9 — Multi-Brain + Advanced Reasoning
 **লক্ষ্য:** কঠিন কাজে একাধিক brain। রেফ: P2 Part A/B/Q-S,AA-AB,BM-BN; P3#14,15; P4#202-210।
