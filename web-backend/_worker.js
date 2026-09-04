@@ -107,6 +107,7 @@ const PERM = {
   'mem.save': { risk: 'LOW', gate: 'AUTO' }, 'mem.search': { risk: 'LOW', gate: 'AUTO' }, 'mem.forget': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.correct': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.audit': { risk: 'LOW', gate: 'POLICY' }, 'mem.export': { risk: 'LOW', gate: 'POLICY' }, 'mem.syncmd': { risk: 'MEDIUM', gate: 'POLICY' },
   'qa.scene': { risk: 'LOW', gate: 'AUTO' }, 'qa.baseline': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.compare': { risk: 'LOW', gate: 'AUTO' }, 'qa.matrix': { risk: 'LOW', gate: 'AUTO' }, 'qa.error': { risk: 'LOW', gate: 'AUTO' }, 'qa.browse': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.gate': { risk: 'LOW', gate: 'AUTO' },
   'ops.queue': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.jobs': { risk: 'LOW', gate: 'POLICY' }, 'ops.schedule': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.stats': { risk: 'LOW', gate: 'POLICY' }, 'ops.health': { risk: 'LOW', gate: 'POLICY' }, 'ops.tick': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.notify': { risk: 'LOW', gate: 'POLICY' }, 'ops.away': { risk: 'HIGH', gate: 'POLICY' }, 'ops.incident': { risk: 'MEDIUM', gate: 'POLICY' },
+  'brain.bench': { risk: 'LOW', gate: 'POLICY' }, 'brain.registry': { risk: 'LOW', gate: 'POLICY' }, 'brain.solve': { risk: 'MEDIUM', gate: 'POLICY' }, 'brain.critic': { risk: 'LOW', gate: 'POLICY' }, 'brain.race': { risk: 'MEDIUM', gate: 'POLICY' }, 'brain.sub': { risk: 'MEDIUM', gate: 'POLICY' }, 'brain.parallel': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -915,6 +916,37 @@ async function opsHealth(env, keys) {
   if (score < 0) score = 0;
   return { score: score, top3: problems.slice(0, 3), ts: Date.now() };
 }
+/* ===== Phase 9 — Multi-Brain + Advanced Reasoning ===== */
+const BRAIN_CASCADE = ['groq:fast', 'deepinfra:di', 'cerebras:cere', 'gemini:flash'];
+function mbModel(ref) { const pp = String(ref).split(':'); return MODELS.find((m) => m.pid === pp[0] && (!pp[1] || m.id === pp[1])) || null; }
+async function mbCall(keys, ref, messages, maxTok, timeoutMs) {
+  const m = mbModel(ref); if (!m) throw new Error('model নেই: ' + ref);
+  const t0 = Date.now();
+  const ac = new AbortController(); const to = setTimeout(() => ac.abort(), timeoutMs || 45000);
+  try {
+    if (m.pid === 'gemini') {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m.model + ':generateContent?key=' + keys.GEMINI_API_KEY, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: messages.map((x) => ({ role: x.role === 'assistant' ? 'model' : 'user', parts: [{ text: String(x.content) }] })), generationConfig: { temperature: 0.3, maxOutputTokens: maxTok || 1500 } }) });
+      const j = await r.json().catch(() => ({}));
+      const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp2) => pp2.text || '').join('');
+      if (!t.trim()) throw new Error(m.pid + ' HTTP ' + r.status);
+      return { ref: ref, text: t, ms: Date.now() - t0 };
+    }
+    const key = keys[KEYMAP[m.pid]]; if (!key) throw new Error(m.pid + ' key নেই');
+    if (!PING_BASE[m.pid]) throw new Error(m.pid + ' endpoint নেই');
+    const r = await fetch(PING_BASE[m.pid] + '/chat/completions', { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: m.model, stream: false, temperature: 0.3, max_tokens: maxTok || 1500, messages: messages }) });
+    const j = await r.json().catch(() => ({}));
+    const t = (((j.choices || [])[0] || {}).message || {}).content || '';
+    if (!String(t).trim()) throw new Error(m.pid + ' HTTP ' + r.status);
+    return { ref: ref, text: String(t), ms: Date.now() - t0 };
+  } finally { clearTimeout(to); }
+}
+function confOf(text) { const m = String(text).match(/CONF:\s*(\d{1,3})/i); return m ? Math.min(100, Number(m[1])) : null; }
+async function brainRegistry(env) { return (await storeGetJson(env, 'brain:registry', null)) || { models: {}, updated: 0 }; }
+async function brainSave(env, reg) { reg.updated = Date.now(); await storePut(env, 'brain:registry', JSON.stringify(reg), 90 * 86400); }
+function brainOrder(reg) {
+  const sc = (r) => { const m = (reg.models || {})[r]; if (m && m.bench) return m.bench.score * 1000000 - m.bench.ms; const mm = mbModel(r) || {}; return (mm.quality || 3) * 300000; };
+  return BRAIN_CASCADE.slice().sort((a, b) => sc(b) - sc(a));
+}
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
@@ -1421,6 +1453,116 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     await tgNotify(env, '🚨 JUJU Incident: ' + reason.slice(0, 120) + '\nscore: ' + ((rep.collect.healthScore || {}).score || '?') + '/100, top3: ' + JSON.stringify((rep.collect.healthScore || {}).top3 || []) + '\ndeployments: ' + JSON.stringify((rep.compare || []).map ? (rep.compare || []).map((x) => x.short + ':' + x.status) : rep.compare).slice(0, 200) + '\nrecover: ' + JSON.stringify(rep.recover) + '\nfreeze: ' + (rep.unfrozen ? 'তোলা হয়েছে' : 'বহাল'));
     return rep;
   }
+  if (tool === 'brain.bench') {
+    const tasks = [
+      { name: 'code', p: [{ role: 'user', content: 'Write a JS function sum3(a,b,c) that returns the sum of three numbers. Reply with ONLY the function code, nothing else.' }], check: (t) => /function|=>/.test(t) && /a\s*\+\s*b\s*\+\s*c/.test(t.replace(/\s+/g, ' ')) },
+      { name: 'reason', p: [{ role: 'user', content: 'রহিমের ৫টা আপেল ছিল, ২টা খেল, ৩টা কিনল। এখন কয়টা আছে? শুধু ইংরেজি সংখ্যায় উত্তর দাও, আর কিছু লেখো না।' }], check: (t) => /\b6\b/.test(t) && t.length < 60 },
+      { name: 'follow', p: [{ role: 'user', content: 'Reply with exactly the single word BANANA and nothing else.' }], check: (t) => /banana/i.test(t) && t.trim().length < 40 }
+    ];
+    const refs = (Array.isArray(args.models) && args.models.length ? args.models : BRAIN_CASCADE).slice(0, 6);
+    const reg = await brainRegistry(env);
+    const out = [];
+    for (const ref of refs) {
+      const row = { ref: ref, score: 0, tasks: {}, ms: 0, err: null };
+      for (const tk of tasks) {
+        try { const r = await mbCall(keys, ref, tk.p, 200, 30000); row.tasks[tk.name] = tk.check(r.text) ? 1 : 0; row.ms += r.ms; }
+        catch (e) { row.tasks[tk.name] = 0; row.err = String(e.message || e).slice(0, 60); }
+      }
+      row.score = Object.keys(row.tasks).reduce((a, k) => a + row.tasks[k], 0);
+      reg.models[ref] = Object.assign(reg.models[ref] || {}, { ref: ref, label: (mbModel(ref) || {}).label || ref, bench: { score: row.score, ms: row.ms, tasks: row.tasks, ts: Date.now() } });
+      out.push(row);
+    }
+    await brainSave(env, reg);
+    return { benched: out.length, results: out, cascadeNow: brainOrder(reg) };
+  }
+  if (tool === 'brain.registry') {
+    const reg = await brainRegistry(env);
+    return { updated: reg.updated, order: brainOrder(reg), models: reg.models };
+  }
+  if (tool === 'brain.solve') {
+    const task = String(args.task || ''); if (!task) throw new Error('task লাগবে');
+    const reg = await brainRegistry(env);
+    const order = brainOrder(reg);
+    const minConf = Number(args.minConf) || 75;
+    const maxSteps = Math.min(order.length, Number(args.maxSteps) || 3);
+    const trail = []; let best = null;
+    for (let i = 0; i < maxSteps; i++) {
+      const ref = order[i];
+      try {
+        const r = await mbCall(keys, ref, [{ role: 'system', content: 'তুমি একজন দক্ষ সমাধানকারী। সঠিক, যাচাইযোগ্য উত্তর দাও।' }, { role: 'user', content: task.slice(0, 6000) + '\n\nশেষ লাইনে ঠিক এভাবে লেখো: CONF: <0-100> (উত্তর নিয়ে তোমার আত্মবিশ্বাস)' }], 2000, 60000);
+        const conf = confOf(r.text);
+        trail.push({ ref: ref, conf: conf, ms: r.ms });
+        if (!best || (conf || 0) > (best.conf || 0)) best = { ref: ref, conf: conf, text: r.text.replace(/\n?\s*CONF:\s*\d{1,3}\s*$/i, '').trim(), ms: r.ms };
+        if (conf !== null && conf >= minConf) break;
+      } catch (e) { trail.push({ ref: ref, err: String(e.message || e).slice(0, 60) }); }
+    }
+    let gate = 'PARTIAL';
+    if (best && (best.conf || 0) >= minConf) gate = 'COMPLETE';
+    else if (best) {
+      try {
+        const revRef = order.find((x) => x !== best.ref) || order[0];
+        const rev = await mbCall(keys, revRef, [{ role: 'user', content: 'প্রশ্ন: ' + task.slice(0, 2000) + '\n\nপ্রস্তাবিত উত্তর: ' + best.text.slice(0, 3000) + '\n\nউত্তরটি কি প্রশ্নের সম্পূর্ণ ও সঠিক সমাধান? শেষে ঠিক এভাবে লেখো:\nVERDICT: COMPLETE বা PARTIAL\nকারণ: <এক লাইন>' }], 600, 45000);
+        const vm = rev.text.match(/VERDICT:\s*(COMPLETE|PARTIAL)/i);
+        if (vm) gate = vm[1].toUpperCase();
+        trail.push({ reviewer: revRef, verdict: gate, why: rev.text.slice(-140), ms: rev.ms });
+      } catch (e) { trail.push({ reviewer: true, err: String(e.message || e).slice(0, 60) }); }
+    }
+    return { answer: best ? best.text.slice(0, 6000) : null, via: best && best.ref, conf: best && best.conf, gate: gate, cascade: trail };
+  }
+  if (tool === 'brain.critic') {
+    const plan = String(args.plan || args.task || ''); if (!plan) throw new Error('plan লাগবে');
+    const ref = String(args.model || 'groq:lite');
+    const r = await mbCall(keys, ref, [{ role: 'system', content: 'তুমি একজন কঠোর কিন্তু ন্যায্য প্ল্যান-সমালোচক।' }, { role: 'user', content: 'এই প্ল্যান/কাজ পরীক্ষা করো: ঝুঁকি, ফাঁক, ভুল ধারণা বের করো এবং ১টা বিকল্প পদ্ধতি প্রস্তাব দাও। শেষে ঠিক এভাবে লেখো:\nVERDICT: OK বা FIX\n\nপ্ল্যান:\n' + plan.slice(0, 6000) }], 1200, 45000);
+    const vm = r.text.match(/VERDICT:\s*(OK|FIX)/i);
+    return { verdict: vm ? vm[1].toUpperCase() : 'UNKNOWN', model: ref, critique: r.text.slice(0, 4000), ms: r.ms };
+  }
+  if (tool === 'brain.race') {
+    const task = String(args.task || ''); if (!task) throw new Error('task লাগবে');
+    const refs = (Array.isArray(args.models) && args.models.length >= 2 ? args.models : ['groq:fast', 'deepinfra:di', 'cerebras:cere']).slice(0, 3);
+    const sols = await Promise.all(refs.map(async (ref) => { try { const r = await mbCall(keys, ref, [{ role: 'user', content: task.slice(0, 4000) }], 2500, 90000); return { ref: ref, text: r.text, ms: r.ms }; } catch (e) { return { ref: ref, err: String(e.message || e).slice(0, 80) }; } }));
+    const ok = sols.filter((x) => x.text);
+    if (ok.length < 2) return { winner: null, note: '২টার কম সমাধান এসেছে', sols: sols.map((x) => ({ ref: x.ref, err: x.err || null })) };
+    const labels = ['A', 'B', 'C'];
+    const prompt = 'নিচে একই কাজের ' + ok.length + 'টা সমাধান (' + labels.slice(0, ok.length).join(', ') + ')। সেরাটি বাছো — সঠিকতা, সম্পূর্ণতা, কোড হলে কোয়ালিটি বিচার করে। শেষে ঠিক এভাবে লেখো:\nWINNER: <letter>\nকারণ: <এক লাইন>\n\nকাজ: ' + task.slice(0, 1500) + '\n\n' + ok.map((x, i) => '=== ' + labels[i] + ' ===\n' + x.text.slice(0, 2500)).join('\n\n');
+    let judgeRef = 'gemini:flash'; let jt;
+    try { jt = await mbCall(keys, judgeRef, [{ role: 'user', content: prompt }], 500, 60000); }
+    catch { judgeRef = 'groq:fast'; jt = await mbCall(keys, judgeRef, [{ role: 'user', content: prompt }], 500, 60000); }
+    const wm = jt.text.match(/WINNER:\s*([ABC])/i);
+    const wIdx = wm ? labels.indexOf(wm[1].toUpperCase()) : -1;
+    const winner = wIdx >= 0 ? ok[wIdx] : null;
+    const reg = await brainRegistry(env);
+    if (winner) { for (const x of ok) { const e = reg.models[x.ref] = reg.models[x.ref] || {}; e.races = (e.races || 0) + 1; if (x === winner) e.wins = (e.wins || 0) + 1; } await brainSave(env, reg); }
+    return { winner: winner && winner.ref, judge: judgeRef, verdict: jt.text.slice(-300), solutions: ok.map((x) => ({ ref: x.ref, ms: x.ms, len: x.text.length })) };
+  }
+  if (tool === 'brain.sub') {
+    const task = String(args.task || '');
+    const role = ['research', 'coder', 'qa'].indexOf(String(args.role)) >= 0 ? String(args.role) : 'coder';
+    if (!task) throw new Error('task লাগবে');
+    const SYS = { research: 'তুমি রিসার্চ স্পেশালিস্ট সাব-এজেন্ট। তথ্য খোঁজো, যাচাই করো, সূত্রসহ সারসংক্ষেপ দাও।', coder: 'তুমি কোডার স্পেশালিস্ট সাব-এজেন্ট। পরিষ্কার, কার্যকর কোড লেখো; নিজের কোড নিজে রিভিউ করে শুধরে দাও।', qa: 'তুমি QA স্পেশালিস্ট সাব-এজেন্ট। টেস্ট কেস, edge case ও সমস্যা বের করো; PASS/FAIL চেকলিস্ট দাও।' };
+    const iters = Math.min(3, Number(args.iters) || 2);
+    let draft = ''; const log = [];
+    for (let it = 1; it <= iters; it++) {
+      const msgs = it === 1 ? [{ role: 'system', content: SYS[role] }, { role: 'user', content: task.slice(0, 4000) }]
+        : [{ role: 'system', content: SYS[role] }, { role: 'user', content: 'আগের ড্রাফট সমালোচনা করে উন্নত করো — পুরো উন্নত সংস্করণ দাও।\n\nড্রাফট:\n' + draft.slice(0, 5000) }];
+      try { const r = await mbCall(keys, String(args.model || 'groq:fast'), msgs, 3000, 75000); draft = r.text; log.push({ it: it, ms: r.ms, len: r.text.length }); }
+      catch (e) { log.push({ it: it, err: String(e.message || e).slice(0, 60) }); break; }
+    }
+    return { role: role, iterations: log.length, log: log, result: draft.slice(0, 8000) };
+  }
+  if (tool === 'brain.parallel') {
+    const tasks = (Array.isArray(args.tasks) ? args.tasks : []).map(String).filter(Boolean).slice(0, 5);
+    if (!tasks.length) throw new Error('tasks[] লাগবে');
+    const t0 = Date.now();
+    const res = await Promise.all(tasks.map(async (tk, i) => {
+      const ref = (Array.isArray(args.models) && args.models.length ? args.models[i % args.models.length] : 'groq:fast');
+      try { const r = await mbCall(keys, ref, [{ role: 'user', content: tk.slice(0, 3000) }], 1500, 75000); return { i: i, ref: ref, ok: true, text: r.text.slice(0, 2500), ms: r.ms }; }
+      catch (e) { return { i: i, ref: ref, ok: false, err: String(e.message || e).slice(0, 80) }; }
+    }));
+    let agg = '';
+    const oks = res.filter((x) => x.ok);
+    if (oks.length) { try { const jr = await mbCall(keys, 'groq:fast', [{ role: 'user', content: 'এই ' + oks.length + 'টা ফলাফল একত্রিত করে সংক্ষিপ্ত সারাংশ দাও:\n' + oks.map((x) => '[' + x.i + '] ' + x.text.slice(0, 1000)).join('\n\n') }], 1200, 45000); agg = jr.text.slice(0, 3000); } catch {} }
+    return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
+  }
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
@@ -1528,7 +1670,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p8-v28' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p9-v29' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
