@@ -1510,14 +1510,26 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     }
     return { answer: best ? best.text.slice(0, 6000) : null, via: best && best.ref, conf: best && best.conf, gate: gate, cascade: trail };
   }
-  if (tool === 'brain.critic') {
+if (tool === 'brain.critic') {
     const plan = String(args.plan || args.task || ''); if (!plan) throw new Error('plan লাগবে');
-    const ref = String(args.model || 'groq:lite');
-    const r = await mbCall(keys, ref, [{ role: 'system', content: 'তুমি একজন কঠোর কিন্তু ন্যায্য প্ল্যান-সমালোচক।' }, { role: 'user', content: 'এই প্ল্যান/কাজ পরীক্ষা করো: ঝুঁকি, ফাঁক, ভুল ধারণা বের করো এবং ১টা বিকল্প পদ্ধতি প্রস্তাব দাও। শেষে ঠিক এভাবে লেখো:\nVERDICT: OK বা FIX\n\nপ্ল্যান:\n' + plan.slice(0, 6000) }], 1200, 45000);
+    const candidates = [String(args.model || 'groq:lite'), 'groq:fast', 'gemini:flash'];
+    const models = [...new Set(candidates)];
+    let r;
+    let usedModel;
+    let lastError;
+    for (const m of models) {
+      try {
+        r = await mbCall(keys, m, [{ role: 'system', content: 'তুমি একজন কঠোর কিন্তু ন্যায্য প্ল্যান-সমালোচক।' }, { role: 'user', content: 'এই প্ল্যান/কাজ পরীক্ষা করো: ঝুঁকি, ফাঁক, ভুল ধারণা বের করো এবং ১টা বিকল্প পদ্ধতি প্রস্তাব দাও। শেষে ঠিক এভাবে লেখো:\nVERDICT: OK বা FIX\n\nপ্ল্যান:\n' + plan.slice(0, 6000) }], 1200, 45000);
+        usedModel = m;
+        break;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    if (!r) throw lastError;
     const vm = r.text.match(/VERDICT:\s*(OK|FIX)/i);
-    return { verdict: vm ? vm[1].toUpperCase() : 'UNKNOWN', model: ref, critique: r.text.slice(0, 4000), ms: r.ms };
-  }
-  if (tool === 'brain.race') {
+    return { verdict: vm ? vm[1].toUpperCase() : 'UNKNOWN', model: usedModel, critique: r.text.slice(0, 4000), ms: r.ms };
+  }  if (tool === 'brain.race') {
     const task = String(args.task || ''); if (!task) throw new Error('task লাগবে');
     const refs = (Array.isArray(args.models) && args.models.length >= 2 ? args.models : ['groq:fast', 'deepinfra:di', 'cerebras:cere']).slice(0, 3);
     const sols = await Promise.all(refs.map(async (ref) => { try { const r = await mbCall(keys, ref, [{ role: 'user', content: task.slice(0, 4000) }], 2500, 90000); return { ref: ref, text: r.text, ms: r.ms }; } catch (e) { return { ref: ref, err: String(e.message || e).slice(0, 80) }; } }));
