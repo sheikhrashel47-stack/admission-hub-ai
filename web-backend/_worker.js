@@ -775,13 +775,17 @@ const QA_DEVICES = {
   desktop: { w: 1280, h: 800, label: 'Desktop (1280×800)' }
 };
 function imgMime(bytes) { return (bytes[0] === 0xFF && bytes[1] === 0xD8) ? 'image/jpeg' : 'image/png'; }
-async function shotGrab(env, url, w, h) {
+async function shotGrab(env, url, w, h, engine) {
   let bytes = null, source = 'thum.io';
-  try { const r = await fetch('https://image.thum.io/get/width/' + w + '/crop/' + h + '/noanimate/' + url); if (r.ok) bytes = new Uint8Array(await r.arrayBuffer()); } catch {}
-  if (!bytes || bytes.length < 500) {
+  const grabBL = async () => {
     const bt = await storeGet(env, 'cfg:BROWSERLESS_API_KEY');
-    if (bt) { try { const r = await fetch('https://production-sfo.browserless.io/screenshot?token=' + bt, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url, viewport: { width: w, height: h } }) }); if (r.ok) { bytes = new Uint8Array(await r.arrayBuffer()); source = 'browserless.io'; } } catch {} }
-  }
+    if (!bt) return null;
+    try { const r = await fetch('https://production-sfo.browserless.io/screenshot?token=' + bt, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url, viewport: { width: w, height: h } }) }); if (r.ok) { const bb = new Uint8Array(await r.arrayBuffer()); if (bb.length >= 500) return bb; } } catch {}
+    return null;
+  };
+  if (engine === 'browserless') { bytes = await grabBL(); source = 'browserless.io'; }
+  else { try { const r = await fetch('https://image.thum.io/get/width/' + w + '/crop/' + h + '/noanimate/' + url); if (r.ok) bytes = new Uint8Array(await r.arrayBuffer()); } catch {} }
+  if (!bytes || bytes.length < 500) { const bb = await grabBL(); if (bb) { bytes = bb; source = 'browserless.io'; } }
   if (!bytes || bytes.length < 500) throw new Error('screenshot তোলা যায়নি (thum.io + browserless দুটোই ব্যর্থ)');
   return { bytes, source };
 }
@@ -1147,7 +1151,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     for (const u of urls) for (const dn of devs) {
       const dev = QA_DEVICES[dn] || QA_DEVICES.desktop;
       try {
-        const shot = await shotGrab(env, String(u), dev.w, dev.h);
+        const shot = await shotGrab(env, String(u), dev.w, dev.h, args.engine);
         const b64 = bytesToB64(shot.bytes);
         const sha = await sha256hex(b64);
         const key = 'qab' + (await sha256hex(String(u) + '|' + dn)).slice(0, 16);
@@ -1164,7 +1168,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     const key = 'qab' + (await sha256hex(u + '|' + dn)).slice(0, 16);
     const base = await storeGetJson(env, 'qa:base:' + key, null);
     if (!base) throw new Error('baseline নেই — আগে qa.baseline চালাও');
-    const shot = await shotGrab(env, u, dev.w, dev.h);
+    const shot = await shotGrab(env, u, dev.w, dev.h, args.engine);
     const b64new = bytesToB64(shot.bytes);
     const shaNew = await sha256hex(b64new);
     if (shaNew === base.sha) return { url: u, device: dn, identical: true, score: 100, verdict: 'PASS' };
