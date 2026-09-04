@@ -903,11 +903,13 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     if (!requirement) throw new Error('requirement লাগবে');
     let code = String(args.code || '');
     if (!code && args.path) code = (await storeGet(env, 'twin:' + TWIN_REPO + ':src:' + args.path)) || '';
-    const spec = await gemText(keys, 'You are a test engineer. Write ONLY a bash script (no markdown fences, no explanation) that tests this requirement with positive, negative and edge cases. Max 8 tests, total runtime under 60 seconds. Sandbox = ubuntu-latest with node, python3, curl; the repo checkout is the parent directory (..). Every test must print exactly one line starting with "PASS <name>" or "FAIL <name> — reason". Script must exit 0.\nRequirement: ' + requirement.slice(0, 3000) + (code ? '\nCode under test:\n' + code.slice(0, 10000) : ''), 3500);
-    const script = stripFences(spec);
+    const ext = (/\.(\w+)$/.exec(String(args.path || '')) || [null, 'js'])[1];
+    const spec = await gemText(keys, 'You are a test engineer. Write ONLY a bash script (no markdown fences, no explanation) that tests this requirement with positive, negative and edge cases. Max 8 tests, total runtime under 60 seconds. Sandbox = ubuntu-latest with node, python3, curl. IMPORTANT: if code under test is given below, it is ALREADY pre-saved as ./candidate.' + ext + ' in the current directory — test that file, never read repo files by path (repo root is .. if you truly need it). Every test must print exactly one line starting with "PASS <name>" or "FAIL <name> — reason". The script must always exit 0 even when tests fail.\nRequirement: ' + requirement.slice(0, 3000) + (code ? '\nCode under test (pre-saved as ./candidate.' + ext + '):\n' + code.slice(0, 10000) : ''), 3500);
+    let script = stripFences(spec);
+    if (code) script = 'echo ' + b64utf8enc(code) + ' | base64 -d > candidate.' + ext + '\n' + script;
     const run = await runSandbox(env, keys, script, args.repo);
     const an = analyzeTests(run);
-    return { requirement: requirement.slice(0, 200), genLen: script.length, exit: run.exit, run: run.run, ms: run.ms, tests: an, outTail: run.out.slice(-1200), err: run.err.slice(0, 600) };
+    return { requirement: requirement.slice(0, 200), genLen: script.length, exit: run.exit, run: run.run, ms: run.ms, tests: an, note: an.total ? undefined : 'টেস্ট আউটপুটে PASS/FAIL লাইন পাওয়া যায়নি — err দেখুন', outTail: run.out.slice(-1200), err: run.err.slice(0, 600) };
   }
   if (tool === 'agent.repair') {
     let code = String(args.code || '');
