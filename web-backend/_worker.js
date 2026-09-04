@@ -1565,7 +1565,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v30';
+  const AGENT_VERSION = 'p10-v31';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1586,7 +1586,28 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
       case 'inspect': { try { const t = await R('twin.search', { query: goal.slice(0, 100) }); ctx.inspect = ((t && t.results) || []).length; out = 'repo-twin সম্পর্কিত হিট: ' + ctx.inspect; } catch (e) { out = 'twin skip: ' + String(e.message || e).slice(0, 60); } break; }
       case 'architect': { const r = await mbCall(keys, 'gemini:flash', [{ role: 'user', content: 'মিশন লক্ষ্য: ' + goal + '\nপ্রাথমিক ধাপ: ' + String(ctx.plan || '').slice(0, 700) + '\nআর্কিটেকচার সিদ্ধান্ত ৩ লাইনে দাও: কোন ফাইল/টুল লাগবে, বড় ঝুঁকি কী, ভেরিফিকেশন কীভাবে হবে।' }], 700, 60000); ctx.arch = r.text; out = r.text.slice(0, 250); break; }
       case 'plan': { const c = await R('brain.critic', { plan: goal + '\n' + String(ctx.plan || '').slice(0, 900) + '\n' + String(ctx.arch || '').slice(0, 400) }); if (String(c.verdict || '').indexOf('FIX') >= 0) { const f = await mbCall(keys, 'groq:fast', [{ role: 'user', content: 'এই সমালোচনা ঠিক করে সংশোধিত প্ল্যান লেখো:\n' + String(c.critique || '').slice(0, 1400) }], 800, 60000); ctx.plan = f.text; const c2 = await R('brain.critic', { plan: f.text }); if (String(c2.verdict || '').indexOf('FIX') >= 0) throw new Error('critic দুইবার FIX দিয়েছে — প্ল্যান অস্থির, escalation দরকার'); out = 'critic FIX → সংশোধন → OK'; } else out = 'critic OK'; break; }
-      case 'implement': { const files = m.files || []; if (!files.length) throw new Error('files[] খালি — implement-এর জন্য {path, content|prompt} দরকার'); ctx.written = []; for (const f of files) { if (!f.path) throw new Error('file.path নেই'); let content = f.content; if (content == null && f.prompt) { const g = await R('brain.sub', { role: 'coder', task: f.prompt, iters: 1 }); content = g && g.result; } if (content == null) throw new Error('content generate হয়নি: ' + f.path); await R('gh.commit', { repo: m.repo, branch: m.branch, path: f.path, content: content, message: 'mission ' + m.id + ': ' + f.path }); ctx.written.push({ path: f.path, len: String(content).length }); } out = ctx.written.length + 'টা ফাইল ' + m.branch + '-এ লেখা হয়েছে'; break; }
+      case 'implement': { const files = m.files || []; if (!files.length) throw new Error('files[] খালি — implement-এর জন্য {path, content|prompt} দরকার'); ctx.written = []; for (const f of files) { if (!f.path) throw new Error('file.path নেই');
+        if (f.anchor && f.bug) {
+          const cur = await ghApi(keys, '/repos/' + m.repo + '/contents/' + f.path + '?ref=' + m.branch);
+          const txt = new TextDecoder().decode(Uint8Array.from(atob(String(cur.content || '').replace(/\n/g, '')), (c) => c.charCodeAt(0)));
+          const ai = txt.indexOf(f.anchor);
+          if (ai < 0) throw new Error('anchor পাওয়া যায়নি: ' + f.anchor.slice(0, 40));
+          const start = txt.lastIndexOf('\n', ai) + 1;
+          let end = txt.indexOf('\n  }\n', ai); end = end > 0 ? end + 5 : Math.min(txt.length, ai + 3200);
+          if (end - start > 3200) end = start + 3200;
+          const win = txt.slice(start, end);
+          const fr = await R('brain.sub', { role: 'coder', iters: 2, task: 'নিচের কোড-উইন্ডোতে বর্ণিত বাগ ফিক্স করো। শুধু ফিক্স করা পুরো উইন্ডো ফেরত দাও — markdown fence বা ব্যাখ্যা নয়; উইন্ডোর বাকি সব লাইন হুবহু অক্ষত রাখো; সিনট্যাক্স বৈধ রাখো।\nবাগ: ' + String(f.bug).slice(0, 1200) + '\nউইন্ডো (' + win.length + ' chars):\n' + win });
+          const fixed = stripFences(String(fr.result || ''));
+          if (!fixed || fixed.length < win.length * 0.4 || fixed.length > win.length * 3) throw new Error('fix আউটপুট অস্বাভাবিক (' + fixed.length + 'B vs উইন্ডো ' + win.length + 'B) — নিরাপত্তায় বাতিল');
+          if (fixed.indexOf('```') >= 0) throw new Error('fix আউটপুটে fence মিশেছে — বাতিল');
+          if (fixed === win) throw new Error('coder উইন্ডো অপরিবর্তিত ফেরত দিয়েছে');
+          const merged = txt.slice(0, start) + fixed + txt.slice(end);
+          if (Math.abs(merged.length - txt.length) > 4000) throw new Error('merged ফাইলের আকার সন্দেহজনক — বাতিল');
+          await R('gh.commit', { repo: m.repo, branch: m.branch, path: f.path, content: merged, message: 'mission ' + m.id + ' BUGFIX: ' + String(f.bug).slice(0, 60) });
+          ctx.written.push({ path: f.path, len: merged.length, mode: 'bugfix', win: win.length + '→' + fixed.length });
+          continue;
+        }
+        let content = f.content; if (content == null && f.prompt) { const g = await R('brain.sub', { role: 'coder', task: f.prompt, iters: 1 }); content = g && g.result; } if (content == null) throw new Error('content generate হয়নি: ' + f.path); await R('gh.commit', { repo: m.repo, branch: m.branch, path: f.path, content: content, message: 'mission ' + m.id + ': ' + f.path }); ctx.written.push({ path: f.path, len: String(content).length }); } out = ctx.written.length + 'টা ফাইল ' + m.branch + '-এ লেখা হয়েছে'; break; }
       case 'build': { const js = (m.files || []).filter((f) => /\.js$/.test(f.path) && f.content != null); if (!js.length) { out = 'JS content নেই — build bounded-skip'; break; } const script = js.map((f, i) => 'echo ' + b64utf8enc(f.content) + ' | base64 -d > f' + i + '.js && node --check f' + i + '.js && echo "PASS f' + i + '.js"').join('\n'); const r = await R('agent.shell', { script: script }); if (r.exit !== 0 || String(r.out || '').indexOf('PASS') < 0) throw new Error('node --check fail: ' + (String(r.err || '') + String(r.out || '')).slice(-250)); out = 'node --check ' + js.length + 'টা JS pass'; break; }
       case 'test': { if (!m.test) { out = 'টেস্ট-স্পেক দেওয়া হয়নি — bounded skip (সৎ লগ)'; break; } const code0 = ((m.files || []).filter((f) => f.content != null)[0] || {}).content || ''; const r = await R('agent.test', { requirement: String(m.test).slice(0, 1500), code: code0 }); const tt = r.tests || {}; if (tt.fail) throw new Error('টেস্ট fail: ' + tt.fail + '/' + (tt.total || '?')); out = 'টেস্ট ' + (tt.pass || 0) + '/' + (tt.total || 0) + ' pass'; break; }
       case 'review': { const revTxt = (m.files || []).map((f) => 'FILE ' + f.path + ':\n' + String(f.content != null ? f.content : '(prompt-generated)').slice(0, 1500)).join('\n\n'); const c = await R('brain.critic', { plan: 'কোড/কনটেন্ট রিভিউ — লক্ষ্য: ' + goal + '\n' + revTxt.slice(0, 3000) }); out = 'review verdict: ' + (c.verdict || '?'); if (String(c.verdict || '').indexOf('FIX') >= 0) { ctx.reviewFix = String(c.critique || '').slice(0, 500); out += ' (সমালোচনা ctx-এ সংরক্ষিত — রিপোর্টে যাবে)'; } break; }
@@ -1606,7 +1627,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     const msave = async (m) => { m.updated = Date.now(); await storePut(env, 'mission:' + m.id, JSON.stringify(m), 90 * 86400); const idx = (await storeGetJson(env, 'missions:index', [])) || []; const row = { id: m.id, goal: (m.goal || '').slice(0, 80), state: m.state, stage: m.stage, ts: m.updated }; const i2 = idx.findIndex((x) => x && x.id === m.id); if (i2 >= 0) idx[i2] = row; else idx.unshift(row); await storePut(env, 'missions:index', JSON.stringify(idx.slice(0, 30)), 90 * 86400); };
     if (act === 'new') {
       const goal = String(args.goal || '').trim(); if (!goal) throw new Error('goal লাগবে');
-      const m = { id: 'M' + Date.now().toString(36), goal: goal.slice(0, 500), kind: String(args.kind || 'deliver'), repo: String(args.repo || 'sheikhrashel47-stack/admission-hub-ai'), branch: String(args.branch || 'main'), files: Array.isArray(args.files) ? args.files.slice(0, 8).map((f) => ({ path: String(f.path || ''), content: f.content != null ? String(f.content) : null, prompt: f.prompt ? String(f.prompt).slice(0, 2000) : null })).filter((f) => f.path) : [], test: args.test ? String(args.test).slice(0, 1500) : null, deploy: String(args.deploy || 'none'), stages: MISSION_STAGES.slice(), idx: 0, stage: 'understand', state: 'running', approved: !!args.approved, retries: 0, budget: Math.min(60, Number(args.budget) || 30), steps: 0, log: [], ctx: {}, ts: Date.now() };
+      const m = { id: 'M' + Date.now().toString(36), goal: goal.slice(0, 500), kind: String(args.kind || 'deliver'), repo: String(args.repo || 'sheikhrashel47-stack/admission-hub-ai'), branch: String(args.branch || 'main'), files: Array.isArray(args.files) ? args.files.slice(0, 8).map((f) => ({ path: String(f.path || ''), content: f.content != null ? String(f.content) : null, prompt: f.prompt ? String(f.prompt).slice(0, 2500) : null, anchor: f.anchor ? String(f.anchor).slice(0, 120) : null, bug: f.bug ? String(f.bug).slice(0, 1500) : null })).filter((f) => f.path) : [], test: args.test ? String(args.test).slice(0, 1500) : null, deploy: String(args.deploy || 'none'), stages: MISSION_STAGES.slice(), idx: 0, stage: 'understand', state: 'running', approved: !!args.approved, retries: 0, budget: Math.min(60, Number(args.budget) || 30), steps: 0, log: [], ctx: {}, ts: Date.now() };
       await msave(m); await tgNotify(env, '🎯 নতুন মিশন ' + m.id + ': ' + m.goal.slice(0, 120) + (m.approved ? ' (approved)' : ' (approval গেট আছে)'));
       return { id: m.id, state: m.state, stages: m.stages.length, note: 'ops.mission {action:"step", id:"' + m.id + '"} — প্রতি কলে সীমিত ধাপ এগোয়; Persistent ≠ Infinite (budget ' + m.budget + ')' };
     }
@@ -1832,7 +1853,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v30' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v31' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
