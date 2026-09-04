@@ -43,7 +43,7 @@
 **মাপকাঠি:** ফোনে মসৃণ খেলা যায়। **ঝুঁকি:** perf বাজেট (Phase 41)।
 
 ### Phase 50 — EdTech Suite (মালিকের ডোমেইনে গভীরতা)
-**লক্ষ্য:** ভর্তি/পড়াশোনা অ্যাপগুলোর (admission-*, studymate, vocabulary-master, english-academy) সা gede যুগ্ম শক্তি।
+**লক্ষ্য:** ভর্তি/পড়াশোনা অ্যাপগুলোর (admission-*, studymate, vocabulary-master, english-academy) সহযোগে যুগ্ম শক্তি।
 - [ ] 50.1 subject-matter index: ভর্তি সিলেবাস/প্রশ্নব্যাংক স্ট্রাকচার kv/repo-তে (মালিকের উপকরণ থেকে)
 - [ ] 50.2 question generator: পাঠ্য → MCQ/সংক্ষিপ্ত (গুণমান গেট: brain.race ২ মডেল + judge)
 - [ ] 50.3 wrong-answer diagnosis: ভুল থেকে দুর্বল-টপিক শনাক্ত → অনুশীলন-প্রস্তাব

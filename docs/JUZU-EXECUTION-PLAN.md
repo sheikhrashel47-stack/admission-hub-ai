@@ -1,3 +1,5 @@
+> **🌌 উত্তরসূরি (২০২৬-০৯-০৪):** এই প্ল্যানের Phase 0–10 ✅ সম্পূর্ণ। পরবর্তী ১০০ phase-এর মহাপরিকল্পনা: **[docs/MASTER-100/00-INDEX-AND-RULES.md](MASTER-100/00-INDEX-AND-RULES.md)** — নতুন এজেন্টরা সেখানেই যাবে।
+
 # 🗺️ JUZU EXECUTION PLAN — 10 PHASES (মাস্টার রোডম্যাপ)
 > **কার জন্য:** জুজু + ভবিষ্যতের যেকোনো agent session। এটাই একমাত্র "এখন কী করব" ডকুমেন্ট।
 > **উৎস:** Owner-এর ৪টি blueprint — Part 1 (143 capability), Part 2 (Pro Max 70+), Part 3 (20 Ultra), Part 4 (250 capability, 5 Phase)। সবগুলো মিলিয়ে এখানে ১০টা execution phase-এ ভাগ করা।
