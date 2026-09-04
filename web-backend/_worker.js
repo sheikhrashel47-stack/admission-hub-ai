@@ -917,7 +917,7 @@ async function opsHealth(env, keys) {
   return { score: score, top3: problems.slice(0, 3), ts: Date.now() };
 }
 /* ===== Phase 9 — Multi-Brain + Advanced Reasoning ===== */
-const BRAIN_CASCADE = ['groq:fast', 'deepinfra:di', 'cerebras:cere', 'gemini:flash'];
+const BRAIN_CASCADE = ['groq:lite', 'groq:fast', 'gemini:flash', 'mistral:m2'];
 function mbModel(ref) { const pp = String(ref).split(':'); return MODELS.find((m) => m.pid === pp[0] && (!pp[1] || m.id === pp[1])) || null; }
 async function mbCall(keys, ref, messages, maxTok, timeoutMs) {
   const m = mbModel(ref); if (!m) throw new Error('model নেই: ' + ref);
