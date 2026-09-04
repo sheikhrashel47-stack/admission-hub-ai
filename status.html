@@ -1,6 +1,3 @@
-**Standalone JUJU Operations Dashboard** – one HTML file, no external resources, dark‑premium look, Bengali UI.
-
-```html
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -8,93 +5,141 @@
 <title>জুজু অপস ড্যাশবোর্ড</title>
 <style>
 :root{
-  --bg:#0b0b12;--accent:#7c5cff;--card:#15151d;--txt:#e0e0e0;
+  --bg:#0b0b12;
+  --accent:#7c5cff;
+  --card:#15151f;
+  --text:#e0e0e0;
+  --success:#4caf50;
+  --error:#f44336;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:"Noto Sans Bengali","Bangla","Helvetica","Arial",sans-serif;
-      background:var(--bg);color:var(--txt);display:flex;flex-direction:column;
-      align-items:center;min-height:100vh;padding:1rem}
-h1{margin:1rem 0;font-size:1.8rem}
-.card{background:var(--card);border-radius:12px;padding:1rem;
-      width:100%;max-width:420px;margin:0.5rem 0}
-.badge{display:inline-block;padding:0.2rem 0.6rem;border-radius:8px;
-      font-size:0.85rem;margin-right:0.5rem}
-.green{background:#2ecc71;color:#fff}
-.red{background:#e74c3c;color:#fff}
-.chip{display:inline-block;background:var(--accent);
-      color:#fff;border-radius:12px;padding:0.2rem 0.6rem;
-      margin:0.2rem;font-size:0.85rem}
-button{background:var(--accent);color:#fff;border:none;border-radius:8px;
-      padding:0.5rem 1rem;cursor:pointer;font-size:0.9rem;margin-top:0.5rem}
-button:hover{opacity:0.9}
-footer{margin-top:auto;font-size:0.75rem;color:#777}
-@media(max-width:480px){h1{font-size:1.5rem}}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,sans-serif;
+  display:flex;
+  justify-content:center;
+  align-items:flex-start;
+  min-height:100vh;
+  padding:1rem;
+}
+.card{
+  background:var(--card);
+  border-radius:12px;
+  padding:1.5rem;
+  max-width:600px;
+  width:100%;
+  box-shadow:0 4px 12px rgba(0,0,0,.4);
+}
+h1{
+  text-align:center;
+  margin-bottom:1rem;
+  color:var(--accent);
+}
+.status{
+  display:inline-flex;
+  align-items:center;
+  gap:.4rem;
+  padding:.3rem .6rem;
+  border-radius:8px;
+  font-size:.9rem;
+  font-weight:600;
+}
+.success{background:var(--success);}
+.error{background:var(--error);}
+.chip{
+  display:inline-block;
+  background:rgba(124,92,255,.15);
+  color:var(--accent);
+  padding:.3rem .8rem;
+  border-radius:16px;
+  margin:0.3rem;
+  font-size:.85rem;
+}
+.controls{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-top:1rem;
+}
+button{
+  background:var(--accent);
+  border:none;
+  color:#fff;
+  padding:.5rem 1rem;
+  border-radius:8px;
+  cursor:pointer;
+}
+button:hover{opacity:.9;}
+@media(max-width:480px){
+  .card{padding:1rem;}
+  h1{font-size:1.4rem;}
+}
 </style>
 </head>
 <body>
-<h1>জুজু অপস ড্যাশবোর্ড</h1>
-
-<div class="card" id="healthCard">
-  <span id="apiBadge" class="badge red">API ডাউন</span>
-  <span id="apiVer"></span>
-</div>
-
-<div class="card" id="configCard">
-  <div id="chips"></div>
-</div>
-
 <div class="card">
-  <button id="refreshBtn">রিফ্রেশ</button>
-  <div id="lastUpd" style="margin-top:0.5rem;font-size:0.85rem"></div>
+  <h1>জুজু অপস ড্যাশবোর্ড</h1>
+  <div id="healthStatus" class="status error">API ডাউন</div>
+  <div id="modelsSection" style="margin-top:1rem;display:none;">
+    <strong>মডেলস:</strong>
+    <div id="modelChips"></div>
+  </div>
+  <div class="controls">
+    <button id="refreshBtn">রিফ্রেশ</button>
+    <div id="lastUpdate"></div>
+  </div>
 </div>
-
-<footer>© 2026 জুজু</footer>
-
 <script>
-const badge=document.getElementById('apiBadge'), ver=document.getElementById('apiVer');
-const chips=document.getElementById('chips'), cfgCard=document.getElementById('configCard');
-const last=document.getElementById('lastUpd'), btn=document.getElementById('refreshBtn');
+const healthEl=document.getElementById('healthStatus');
+const modelsSec=document.getElementById('modelsSection');
+const chipsDiv=document.getElementById('modelChips');
+const lastEl=document.getElementById('lastUpdate');
+const refreshBtn=document.getElementById('refreshBtn');
 
-function bnDate(d){return new Intl.DateTimeFormat('bn-BD',{dateStyle:'short',timeStyle:'short'}).format(d);}
-
-async function loadHealth(){
+async function fetchHealth(){
   try{
     const r=await fetch('https://admission-hub-ai.pages.dev/api/health');
-    const j=await r.json();
-    if(j.ok){
-      badge.textContent='API লাইভ';badge.className='badge green';
-      ver.textContent='| WV '+(j.version||'—');
-    }else throw'bad';
-  }catch(e){
-    badge.textContent='API ডাউন';badge.className='badge red';ver.textContent='';
+    if(!r.ok) throw new Error();
+    const d=await r.json();
+    healthEl.textContent=`API LIVE • v${d.version||'?'}`;
+    healthEl.className='status success';
+  }catch{
+    healthEl.textContent='API ডাউন';
+    healthEl.className='status error';
   }
 }
-async function loadConfig(){
+async function fetchConfig(){
   try{
     const r=await fetch('https://admission-hub-ai.pages.dev/api/config');
-    const j=await r.json();
-    if(j.models && j.models.length){
-      chips.innerHTML=j.models.map(m=>`<span class="chip">${m.id}/${m.label}</span>`).join('');
-      cfgCard.style.display='block';
-    }else cfgCard.style.display='none';
-  }catch(e){cfgCard.style.display='none'}
+    if(!r.ok) throw new Error();
+    const d=await r.json();
+    if(d.models && d.models.length){
+      chipsDiv.innerHTML='';
+      d.models.forEach(m=>{
+        const span=document.createElement('span');
+        span.className='chip';
+        span.textContent=m.id||'—';
+        chipsDiv.appendChild(span);
+      });
+      modelsSec.style.display='block';
+    }else{
+      modelsSec.style.display='none';
+    }
+  }catch{
+    modelsSec.style.display='none';
+  }
 }
-function refresh(){
-  loadHealth();loadConfig();last.textContent='সর্বশেষ হালনাগাদ: '+bnDate(new Date());
+function updateTime(){
+  const now=new Date();
+  lastEl.textContent=now.toLocaleString('bn-BD');
 }
-btn.onclick=refresh;
-window.onload=refresh;
+async function loadAll(){
+  await Promise.all([fetchHealth(),fetchConfig()]);
+  updateTime();
+}
+refreshBtn.onclick=loadAll;
+loadAll();
 </script>
 </body>
 </html>
-```
-
-**Explanation (kept short to stay under 170 lines)**  
-
-* **Design** – Dark background `#0b0b12`, violet accent `#7c5cff`, rounded cards, Bengali‑friendly font stack.  
-* **Health check** – `fetch` the health endpoint, show a green “API লাইভ” badge with version or a red “API ডাউন”.  
-* **Config** – `fetch` the config endpoint, render each model as a violet chip (`id/label`). Hide the whole section if no models.  
-* **Refresh** – Button re‑runs both fetches and updates the “সর্বশেষ হালনাগাদ” timestamp in Bengali.  
-* **Responsiveness** – Simple flex layout, max‑width card, media query for small screens.  
-
-All code lives in a single HTML file, no external libraries, and stays well within the 170‑line limit. Enjoy the dashboard!
