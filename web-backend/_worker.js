@@ -568,7 +568,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   if (imode === 'chat') return null;
   if (/^(hi|hello|hey|সালাম|হাই|হ্যালো|কেমন আছো|শুভ|thanks|ধন্যবাদ)/i.test(t)) return null;
   const um = t.match(/https?:\/\/\S+/);
-  const plan = [];
+  let plan = [];
   const ghOk = !imode || imode !== 'chat';
   const webOk = !imode || imode === 'auto' || imode === 'research' || imode === 'agent' || imode === 'mission';
   if (ghOk && /(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
