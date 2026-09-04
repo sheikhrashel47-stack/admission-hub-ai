@@ -141,16 +141,16 @@
 - [x] 8.8 **ops.away**: {on,hours≤72,missions[]} → mission-tagged job-এ auto-approval; **prod-deploy (cf.pages.deploy/rollback) কখনোই অটো নয় — explicit approved:true ছাড়া status='approval' + TG 🔐** (interactive tick-এও — প্রথম সংস্করণে hole ছিল, ধরে ফিক্স করা); প্রতিটি job-এর TG রিপোর্ট। Live: away-mode-এ gh.merge mission job gate পেরিয়ে রান করেছে (fake PR → harmless 404), prod job approval-এ আটকেছে ✅
 - [x] 8.9 Deployed gh-pages `38b9a6ef` (wv p8-v28) + heartbeat cron — queue/tick/scheduler/cond/away/prod-gate/incident/stats/TG সব লাইভ প্রমাণিত (2026-09-04) ✅
 
-## 🟦 PHASE 9 — Multi-Brain + Advanced Reasoning
+## 🟦 PHASE 9 — Multi-Brain + Advanced Reasoning ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** কঠিন কাজে একাধিক brain। রেফ: P2 Part A/B/Q-S,AA-AB,BM-BN; P3#14,15; P4#202-210।
-- [ ] 9.1 **Model capability registry + auto benchmark**: coding/reasoning/vision/speed track (P2 AA-AB)
-- [ ] 9.2 **Model cascade**: cheap → low confidence → stronger → reviewer (P2 BM)
-- [ ] 9.3 **Plan critic + alternative plans**: plan-এর আগে ছোট model দিয়ে check (P2#5,6)
-- [ ] 9.4 **Solution competition**: hard task-এ A/B/C solution → judge (P3#15) — শুধু high-value-তে
-- [ ] 9.5 **Sub-agent runner**: research/coder/QA specialist loops (P2 Part Q)
-- [ ] 9.6 **Parallel workers + result aggregation** (P4#209,210)
-- [ ] 9.7 **Confidence-based escalation** + quality gate COMPLETE/PARTIAL (P2 BN,BO)
-- [ ] 9.8 Deploy → test (একটা hard task-এ cascade+critic প্রমাণ)
+- [x] 9.1 **brain.bench + registry**: 3 auto-graded task (code/reason/follow) × যেকোনো মডেল → score+ms D1 `brain:registry`-তে; brainOrder() cascade সাজায়। Live: deepinfra key নেই + cerebras 404 ধরা পড়ল, groq:fast 3/3 (984ms), groq:lite 3/3 (215ms) ✅
+- [x] 9.2 **brain.solve cascade**: BRAIN_CASCADE [groq:lite→groq:fast→gemini:flash→mistral:m2] (বেঞ্চ-অনুযায়ী sorted); প্রতি step-এ CONF parse, minConf-এর কম হলে stronger-এ escalate, error (429) skip। Live: lite 429→fast conf 99→gemini conf 100 ✅
+- [x] 9.3 **brain.critic**: ছোট model (groq:lite) → ঝুঁকি/ফাঁক/বিকল্প + VERDICT: OK|FIX। Live: নিজের deploy plan-এ FIX + race condition/security সমালোচনা ✅
+- [x] 9.4 **brain.race**: ≤3 মডেল parallel সমাধান → blind judge (gemini:flash, fallback groq) → WINNER + registry wins/races update। Live: debounce task → judge groq:fast বেছে নিল কারণসহ ✅
+- [x] 9.5 **brain.sub**: role-specific system prompt (research/coder/qa) + draft→self-critique→improve loop (≤3 iters)। Live: coder throttle() → 2 iteration, draft 8.2K→9K improved ✅
+- [x] 9.6 **brain.parallel**: ≤5 task একসাথে Promise.all (মডেল-রাউন্ড-রবিন) + aggregator সারাংশ। Live: 3 task 2.7s (sequential হত ~8s), mistral 429 honest-fail, aggregate বাংলা সারাংশ ✅
+- [x] 9.7 **Confidence gate**: conf≥minConf → COMPLETE; নাহলে reviewer model VERDICT → COMPLETE/PARTIAL; reviewer fail হলে PARTIAL (সৎ অবনমন)। Live: দুই gate-ই দেখা গেছে ✅
+- [x] 9.8 Deployed gh-pages `34713f80` (wv p9-v29) — hard math task-এ পুরো cascade+escalation+reviewer, critic FIX, race judge, parallel, sub সব লাইভ প্রমাণিত (2026-09-04) ✅
 
 ## 🟦 PHASE 10 — Mission Mode + Evaluation Lab (চূড়ান্ত)
 **লক্ষ্য:** L6 Mission Mode — "এই bug ঠিক করে production-ready করো" এক কথায়। রেফ: P3#L6,18; P4#100,200,250; P2 AD-AH।
