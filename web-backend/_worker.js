@@ -741,6 +741,7 @@ async function memSearch(env, q, kind, limit) {
       : await env.AH_DB.prepare('SELECT id, kind, text, conf, src, ts, exp FROM mem WHERE sup = 0 AND (exp = 0 OR exp > ?1) ORDER BY ts DESC LIMIT 400').bind(now).all();
   } catch { return []; }
   const toks = String(q || '').toLowerCase().split(/[\s,;।?'"()]+/).filter((w) => w.length > 2);
+  if (!toks.length) return [];
   const out = [];
   for (const r of (rows.results || [])) {
     const t = String(r.text).toLowerCase();
@@ -1087,7 +1088,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
       else if (/সিদ্ধান্ত|decision|owner (ordered|said|banned|wants|told)|ঠিক করা/i.test(l)) kind = 'decision';
       else if (/পছন্দ|preference|ভালো লাগে|owner likes/i.test(l)) kind = 'preference';
       const r = await memInsert(env, { kind: kind, text: l, conf: 0.9, src: 'md:' + String(args.path || 'upload').slice(0, 40) });
-      if (r && r.id) inserted++; else skipped++;
+      if (r && r.id && !r.skipped) inserted++; else skipped++;
     }
     return { scanned: scanned, inserted: inserted, skipped: skipped };
   }
