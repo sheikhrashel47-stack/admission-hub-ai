@@ -99,7 +99,7 @@ const refreshBtn=document.getElementById('refreshBtn');
 
 async function fetchHealth(){
   try{
-    const r=await fetch('https://admission-hub-ai.pages.dev/api/health2');
+const r=await fetch('https://admission-hub-ai.pages.dev/api/health');
     if(!r.ok) throw new Error();
     const d=await r.json();
     healthEl.textContent=`API LIVE • v${d.version||'?'}`;
@@ -107,8 +107,7 @@ async function fetchHealth(){
   }catch{
     healthEl.textContent='API ডাউন';
     healthEl.className='status error';
-  }
-}
+  }}
 async function fetchConfig(){
   try{
     const r=await fetch('https://admission-hub-ai.pages.dev/api/config');
