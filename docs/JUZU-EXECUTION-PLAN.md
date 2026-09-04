@@ -105,17 +105,17 @@
 - [x] 5.7 **agent.envcheck**: sandbox env report (node v22/python3.12/npm/git/4cpu/16GB) + prod health from inside + exec-ok/py-ok + result-POST loop = artifact proof. Live ok:true ✅
 - [x] 5.8 Deployed gh-pages `3f3c1d75` (wv p5-v25) — 8/8 live tests passed (2026-09-04). Fix history: CF 1010 (urllib UA → browser UA), cx TDZ, gemini-only gemText → multi-provider fallback
 
-## 🟦 PHASE 6 — Memory Engine Pro (structured, cross-model)
+## 🟦 PHASE 6 — Memory Engine Pro (structured, cross-model) ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** "Model remembers context; Juzu remembers relationship" (P4#150 golden rule)। রেফ: P4#101-149; P2 Part E; P3#20।
-- [ ] 6.1 **Memory DB schema** (D1): facts/decisions/preferences/episodes/errors — প্রতিটিতে confidence+source+timestamp
-- [ ] 6.2 **Auto extraction**: session শেষে summary → structured memory (P4#102,103)
-- [ ] 6.3 **memory.search tool**: hybrid retrieval + relevance ranking (P4#112,141-145)
-- [ ] 6.4 **Context injection**: প্রতি model call-এ task-relevant memory auto (P4#111) — সব model share করে (P4#110)
-- [ ] 6.5 **Conflict detection + temporal validity** (P4#113,114)
-- [ ] 6.6 **Forget/Correct/Update commands**: "এটা মনে রেখো না" কাজ করবে (P4#149)
-- [ ] 6.7 **Memory audit trail**: কোন response কোন memory থেকে (P4#148)
-- [ ] 6.8 **JUJU-MEMORY.md ↔ DB sync** (মানুষ-পড়া ফাইল + machine DB দুটোই সত্য)
-- [ ] 6.9 Deploy → test (৫০ message পরে পুরনো decision recall প্রমাণ)
+- [x] 6.1 **Memory DB schema** (D1 `mem` table): kind(fact/decision/preference/episode/error) + text + conf + src + ts + exp + sup + h(sha256 dedupe). Live: 195 rows ✅
+- [x] 6.2 **Auto extraction**: প্রতি ১০ message-এ শেষ ১২ message → LLM JSON → memInsert (waitUntil, non-blocking). Live: #38-এর সিদ্ধান্ত auto-capture → id 209 `decision` src chat:cd5dd2bf conf 1 ✅
+- [x] 6.3 **mem.search**: token-hit×2 + conf×2 + recency-decay ranking, kind filter, top-N. Live: ranked hits + empty-token guard ✅
+- [x] 6.4 **Context injection**: chat handler-এ memRelevant top-4 → sysAdd '## দীর্ঘমেয়াদি স্মৃতি' block — worker-side তাই সব provider/model share করে; done event-এ memUsed ids. Live: নতুন চ্যাটে 'ভাইয়ের পরীক্ষা কবে?' → MEMUSED:[5] + সঠিক উত্তর ✅
+- [x] 6.5 **Conflict + temporal**: insert-এ same-kind 3-token overlap → পুরোনো row supersede; exp field (search-এ expired বাদ); hash-dedupe. Live: id 3 → id 1 supersede, duplicate skip ✅
+- [x] 6.6 **Forget/Correct/Update**: mem.forget (sup=-1), mem.correct (supersede+new row), mem.save; chat router: 'ভুলে যাও'→forget (save-এর আগে check), 'মনে রেখো'→save, 'আগে কী বলেছি'→search. Live: chat 'মনে রেখো…' → id 5 সেভ ✅
+- [x] 6.7 **Audit trail**: প্রতি injection-এ memaudit:{chatId,q,ids} D1-তে (30d); mem.audit tool uses+memories join করে. Live: ৫টা use-row + memory join ✅
+- [x] 6.8 **MD ↔ DB sync**: mem.syncmd (bullet→kind classify: LESSON→error, সিদ্ধান্ত→decision, পছন্দ→preference; redactSecrets; hash-dedupe) + mem.export (DB→markdown). Live: JUJU-MEMORY.md → 188 inserted; re-sync → skipped:188; export 195 rows ✅
+- [x] 6.9 Deployed gh-pages `0837afb6` (wv p6-v26) — ৫০ message পাঠানোর পরে পুরনো decision recall: MEMUSED:[5,75,10], উত্তর '১৫ অক্টোবর ২০২৬' ✅ (2026-09-04)
 
 ## 🟦 PHASE 7 — Visual QA + Browser Pro
 **লক্ষ্য:** SEE→UNDERSTAND→REASON→ACT→OBSERVE→VERIFY→RECOVER loop (P4#50)। রেফ: P4#1-49,171-180; P2 Part I/J; P3#11,12।
