@@ -105,6 +105,7 @@ const PERM = {
   'twin.index': { risk: 'LOW', gate: 'AUTO' }, 'twin.search': { risk: 'LOW', gate: 'AUTO' }, 'twin.map': { risk: 'LOW', gate: 'AUTO' }, 'twin.impact': { risk: 'LOW', gate: 'AUTO' }, 'twin.time': { risk: 'LOW', gate: 'AUTO' },
   'agent.shell': { risk: 'HIGH', gate: 'POLICY' }, 'agent.test': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.repair': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.envcheck': { risk: 'LOW', gate: 'POLICY' },
   'mem.save': { risk: 'LOW', gate: 'AUTO' }, 'mem.search': { risk: 'LOW', gate: 'AUTO' }, 'mem.forget': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.correct': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.audit': { risk: 'LOW', gate: 'POLICY' }, 'mem.export': { risk: 'LOW', gate: 'POLICY' }, 'mem.syncmd': { risk: 'MEDIUM', gate: 'POLICY' },
+  'qa.scene': { risk: 'LOW', gate: 'AUTO' }, 'qa.baseline': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.compare': { risk: 'LOW', gate: 'AUTO' }, 'qa.matrix': { risk: 'LOW', gate: 'AUTO' }, 'qa.error': { risk: 'LOW', gate: 'AUTO' }, 'qa.browse': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.gate': { risk: 'LOW', gate: 'AUTO' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -766,6 +767,44 @@ async function memExtract(env, keys, chatId, msgs) {
   for (const it of arr.slice(0, 5)) { if (it && it.text) res.push(await memInsert(env, { kind: it.kind, text: it.text, conf: it.conf, exp: it.exp, src: 'chat:' + String(chatId || '').slice(0, 8) })); }
   return { saved: res.filter((x) => x && x.id).length, details: res };
 }
+/* ===== Phase 7 — Visual QA + Browser Pro (SEE→UNDERSTAND→REASON→ACT→OBSERVE→VERIFY→RECOVER) ===== */
+const QA_DEVICES = {
+  iphone: { w: 390, h: 844, label: 'iPhone (390×844)' },
+  android: { w: 412, h: 915, label: 'Android (412×915)' },
+  tablet: { w: 768, h: 1024, label: 'Tablet (768×1024)' },
+  desktop: { w: 1280, h: 800, label: 'Desktop (1280×800)' }
+};
+function imgMime(bytes) { return (bytes[0] === 0xFF && bytes[1] === 0xD8) ? 'image/jpeg' : 'image/png'; }
+async function shotGrab(env, url, w, h) {
+  let bytes = null, source = 'thum.io';
+  try { const r = await fetch('https://image.thum.io/get/width/' + w + '/crop/' + h + '/noanimate/' + url); if (r.ok) bytes = new Uint8Array(await r.arrayBuffer()); } catch {}
+  if (!bytes || bytes.length < 500) {
+    const bt = await storeGet(env, 'cfg:BROWSERLESS_API_KEY');
+    if (bt) { try { const r = await fetch('https://production-sfo.browserless.io/screenshot?token=' + bt, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url, viewport: { width: w, height: h } }) }); if (r.ok) { bytes = new Uint8Array(await r.arrayBuffer()); source = 'browserless.io'; } } catch {} }
+  }
+  if (!bytes || bytes.length < 500) throw new Error('screenshot তোলা যায়নি (thum.io + browserless দুটোই ব্যর্থ)');
+  return { bytes, source };
+}
+async function visionAsk(keys, imgs, prompt) {
+  const parts = [{ text: prompt }];
+  for (const im of imgs) parts.push({ inline_data: { mime_type: im.mime, data: im.b64 } });
+  const body = JSON.stringify({ contents: [{ parts }] });
+  let last = '';
+  for (const m of VISION_MODELS) {
+    for (let tryN = 0; tryN < 2; tryN++) {
+      try {
+        const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + keys.GEMINI_API_KEY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        const j = await r.json().catch(() => ({}));
+        const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
+        if (t.trim()) return t;
+        last = m + ':' + r.status;
+      } catch (e) { last = m + ':' + (e.message || e); }
+      if (!/(503|429)/.test(last)) break;
+    }
+  }
+  throw new Error('vision ব্যর্থ (' + last + ')');
+}
+function jsonFromVision(t) { const m = String(t).match(/\{[\s\S]*\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch { try { return JSON.parse(m[0].replace(/,\s*([\]}])/g, '$1')); } catch { return null; } } }
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
@@ -1092,6 +1131,116 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     }
     return { scanned: scanned, inserted: inserted, skipped: skipped };
   }
+  if (tool === 'qa.scene') {
+    const u = String(args.url || ''); if (!u) throw new Error('url লাগবে');
+    const dev = QA_DEVICES[args.device] || QA_DEVICES.desktop;
+    const shot = await shotGrab(env, u, dev.w, dev.h);
+    const b64 = bytesToB64(shot.bytes);
+    const t = await visionAsk(keys, [{ b64, mime: imgMime(shot.bytes) }], 'Analyze this webpage screenshot as structured scene data: page type/title, visible UI elements with region (top/mid/bottom + left/center/right), hierarchy (header/nav/main/footer), element states (active/disabled/error/loading), interactive elements, visual problems. Respond ONLY valid JSON: {"page":"...","elements":[{"name":"...","region":"...","state":"...","interactive":true}],"hierarchy":{"header":"...","main":"...","footer":"..."},"issues":["..."],"summary":"..."}');
+    return { url: u, device: dev.label, source: shot.source, bytes: shot.bytes.length, scene: jsonFromVision(t) || { raw: String(t).slice(0, 1200) } };
+  }
+  if (tool === 'qa.baseline') {
+    const urls = (Array.isArray(args.urls) ? args.urls : [args.url]).filter(Boolean).slice(0, 5);
+    if (!urls.length) throw new Error('url/urls লাগবে');
+    const devs = (Array.isArray(args.devices) && args.devices.length ? args.devices : ['desktop', 'iphone']).slice(0, 4);
+    const out = [];
+    for (const u of urls) for (const dn of devs) {
+      const dev = QA_DEVICES[dn] || QA_DEVICES.desktop;
+      try {
+        const shot = await shotGrab(env, String(u), dev.w, dev.h);
+        const b64 = bytesToB64(shot.bytes);
+        const sha = await sha256hex(b64);
+        const key = 'qab' + (await sha256hex(String(u) + '|' + dn)).slice(0, 16);
+        const where = await filebPut(env, key, b64);
+        await storePut(env, 'qa:base:' + key, JSON.stringify({ url: String(u), device: dn, sha, mime: imgMime(shot.bytes), bytes: shot.bytes.length, where, ts: Date.now(), source: shot.source }), 90 * 86400);
+        out.push({ url: String(u), device: dn, sha: sha.slice(0, 12), bytes: shot.bytes.length, stored: where, key });
+      } catch (e) { out.push({ url: String(u), device: dn, error: String(e.message || e).slice(0, 100) }); }
+    }
+    return { saved: out.filter((x) => x.sha).length, out };
+  }
+  if (tool === 'qa.compare') {
+    const u = String(args.url || ''); const dn = args.device || 'desktop';
+    const dev = QA_DEVICES[dn] || QA_DEVICES.desktop;
+    const key = 'qab' + (await sha256hex(u + '|' + dn)).slice(0, 16);
+    const base = await storeGetJson(env, 'qa:base:' + key, null);
+    if (!base) throw new Error('baseline নেই — আগে qa.baseline চালাও');
+    const shot = await shotGrab(env, u, dev.w, dev.h);
+    const b64new = bytesToB64(shot.bytes);
+    const shaNew = await sha256hex(b64new);
+    if (shaNew === base.sha) return { url: u, device: dn, identical: true, score: 100, verdict: 'PASS' };
+    const b64old = await filebGet(env, key);
+    if (!b64old) return { url: u, device: dn, identical: false, note: 'পুরোনো ছবি পাওয়া যায়নি — শুধু sha ভিন্ন', shaOld: String(base.sha).slice(0, 12), shaNew: shaNew.slice(0, 12) };
+    const t = await visionAsk(keys, [{ b64: b64old, mime: base.mime || 'image/png' }, { b64: b64new, mime: imgMime(shot.bytes) }], 'ছবি ১ = পুরোনো baseline, ছবি ২ = নতুন screenshot (একই পেজ, ' + u + ')। তুলনা করো: কী বদলেছে (region সহ), কোনো visual regression/ভাঙা layout আছে কিনা। Respond ONLY valid JSON: {"score":0-100,"diffs":[{"region":"...","change":"...","regression":true}],"verdict":"PASS|WARN|BLOCK","note":"..."}');
+    return Object.assign({ url: u, device: dn, identical: false, shaOld: String(base.sha).slice(0, 12), shaNew: shaNew.slice(0, 12), baselineTs: base.ts }, jsonFromVision(t) ? { compare: jsonFromVision(t) } : { raw: String(t).slice(0, 800) });
+  }
+  if (tool === 'qa.matrix') {
+    const u = String(args.url || ''); if (!u) throw new Error('url লাগবে');
+    const out = [];
+    for (const dn of ['iphone', 'android', 'tablet', 'desktop']) {
+      const dev = QA_DEVICES[dn];
+      try {
+        const shot = await shotGrab(env, u, dev.w, dev.h);
+        const t = await visionAsk(keys, [{ b64: bytesToB64(shot.bytes), mime: imgMime(shot.bytes) }], 'এই ' + dn + ' viewport (' + dev.w + '×' + dev.h + ') screenshot-এ পেজটা ঠিকভাবে render হয়েছে? horizontal overflow, cut-off text, ভাঙা layout, বা খালি পেজ আছে? Respond ONLY valid JSON: {"ok":true,"issues":["..."],"score":0-100}');
+        const j = jsonFromVision(t);
+        out.push(Object.assign({ device: dev.label, bytes: shot.bytes.length, source: shot.source }, j || { raw: String(t).slice(0, 200) }));
+      } catch (e) { out.push({ device: dev.label, error: String(e.message || e).slice(0, 100) }); }
+    }
+    return { url: u, pass: out.every((x) => x.ok === true), devices: out };
+  }
+  if (tool === 'qa.error') {
+    const u = String(args.url || ''); if (!u) throw new Error('url লাগবে');
+    const dev = QA_DEVICES[args.device] || QA_DEVICES.desktop;
+    const shot = await shotGrab(env, u, dev.w, dev.h);
+    const t = await visionAsk(keys, [{ b64: bytesToB64(shot.bytes), mime: imgMime(shot.bytes) }], 'এই screenshot-এ visual error খুঁজো: ভাঙা layout, error message, খালি/সাদা অঞ্চল, element overlap, ছবি লোড না হওয়া, ফন্ট সমস্যা। প্রতিটি সমস্যার region, severity (LOW/MED/HIGH/CRITICAL) ও সম্ভাব্য কারণ বলো। Respond ONLY valid JSON: {"pageOk":true,"errors":[{"region":"...","severity":"...","likelyCause":"...","desc":"..."}]}');
+    return Object.assign({ url: u, device: dev.label }, jsonFromVision(t) || { raw: String(t).slice(0, 1000) });
+  }
+  if (tool === 'qa.browse') {
+    const goal = String(args.goal || ''); const start = String(args.url || '');
+    if (!goal || !start) throw new Error('goal + url লাগবে');
+    const maxSteps = Math.min(5, Number(args.maxSteps) || 4);
+    const hist = []; let cur = start; let recovered = 0;
+    for (let step = 1; step <= maxSteps; step++) {
+      let shot;
+      try { shot = await shotGrab(env, cur, 1024, 768); } catch (e) { hist.push({ step, url: cur, error: String(e.message || e).slice(0, 80) }); break; }
+      const t = await visionAsk(keys, [{ b64: bytesToB64(shot.bytes), mime: imgMime(shot.bytes) }], 'লক্ষ্য: "' + goal.slice(0, 200) + '"\nবর্তমান URL: ' + cur + '\nআগের ধাপসমূহ: ' + JSON.stringify(hist.slice(-2)).slice(0, 400) + '\nস্ক্রিনশট দেখে বলো: পেজটা কী, লক্ষ্যের সাথে মিলছে কিনা, error/ভুল পেজ কিনা, পরের পদক্ষেপ কী (visible লিঙ্ক থেকে পূর্ণ URL বেছে নাও)। Respond ONLY valid JSON: {"pageTitle":"...","matchesGoal":"yes|partial|no","pageError":false,"visibleLinks":[{"text":"...","likelyUrl":"https://..."}],"action":"done|continue|back|investigate","nextUrl":"https://...","reason":"..."}');
+      const j = jsonFromVision(t);
+      if (!j) { hist.push({ step, url: cur, interpret: String(t).slice(0, 200) }); break; }
+      hist.push({ step, url: cur, pageTitle: j.pageTitle, matchesGoal: j.matchesGoal, pageError: !!j.pageError, action: j.action, reason: String(j.reason || '').slice(0, 120) });
+      if (j.action === 'done' || j.matchesGoal === 'yes') break;
+      if (j.action === 'back' || j.pageError === true) {
+        recovered++;
+        const prev = hist.length >= 2 ? hist[hist.length - 2].url : null;
+        if (!prev || recovered > 2) break;
+        cur = prev; continue;
+      }
+      let nxt = String(j.nextUrl || '');
+      if (!/^https?:\/\//i.test(nxt)) { const cand = (j.visibleLinks || []).find((x) => x && /^https?:\/\//i.test(String(x.likelyUrl || ''))); nxt = cand ? String(cand.likelyUrl) : ''; }
+      if (!nxt) break;
+      cur = nxt;
+    }
+    return { goal: goal.slice(0, 200), steps: hist, recovered, finalUrl: cur, success: hist.some((x) => x.matchesGoal === 'yes') };
+  }
+  if (tool === 'qa.gate') {
+    const urls = (Array.isArray(args.urls) ? args.urls : [args.url]).filter(Boolean).slice(0, 5);
+    if (!urls.length) throw new Error('url/urls লাগবে');
+    const report = []; let block = false;
+    for (const u of urls) {
+      const row = { url: String(u), checks: [] };
+      for (const dn of ['desktop', 'iphone']) {
+        const dev = QA_DEVICES[dn];
+        try {
+          const shot = await shotGrab(env, String(u), dev.w, dev.h);
+          const t = await visionAsk(keys, [{ b64: bytesToB64(shot.bytes), mime: imgMime(shot.bytes) }], 'Deploy-gate ' + dn + ' (' + dev.w + '×' + dev.h + ') check: পেজ ঠিকভাবে লোড হয়েছে? মূল কনটেন্ট দেখা যাচ্ছে? ভাঙা layout/error/খালি পেজ/overflow নেই? Respond ONLY valid JSON: {"ok":true,"issues":["..."]}');
+          const j = jsonFromVision(t);
+          const okc = !!(j && j.ok === true);
+          row.checks.push({ check: dn, ok: okc, issues: (j && j.issues) || (j ? [] : [String(t).slice(0, 100)]) });
+          if (!okc) block = true;
+        } catch (e) { row.checks.push({ check: dn, ok: false, issues: [String(e.message || e).slice(0, 80)] }); block = true; }
+      }
+      report.push(row);
+    }
+    return { verdict: block ? 'BLOCK' : 'PASS', report };
+  }
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
@@ -1104,7 +1253,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     try { const sr = await fetch('https://image.thum.io/get/width/1024/crop/768/noanimate/' + args.url); if (sr.ok) bytes = new Uint8Array(await sr.arrayBuffer()); } catch {}
     if (!bytes || bytes.length < 500) {
       const bt = await storeGet(env, 'cfg:BROWSERLESS_API_KEY');
-      if (bt) { try { const r = await fetch('https://production-sfo.browserless.io/screenshot?token=' + bt, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: args.url, options: { width: 1024, height: 768 } }) }); if (r.ok) { bytes = new Uint8Array(await r.arrayBuffer()); source = 'browserless.io'; } } catch {} }
+      if (bt) { try { const r = await fetch('https://production-sfo.browserless.io/screenshot?token=' + bt, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: args.url, viewport: { width: 1024, height: 768 } }) }); if (r.ok) { bytes = new Uint8Array(await r.arrayBuffer()); source = 'browserless.io'; } } catch {} }
     }
     if (!bytes || bytes.length < 500) throw new Error('কোনো screenshot সেবা পৌঁছায়নি (thum.io + browserless দুটোই ব্যর্থ)');
     let bin = '';
@@ -1199,7 +1348,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p6-v26' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p7-v27' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
