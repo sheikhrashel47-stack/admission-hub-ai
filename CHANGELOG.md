@@ -1,0 +1,57 @@
+# CHANGELOG — JUJU Agent (sheikhrashel47-stack/admission-hub-ai)
+
+_অটো-জেনারেটেড: 2026-09-04 | 50 কমিট স্ক্যান_
+
+## FEAT
+- `7004797` mission engine + delivery loop + deploy gate + golden tasks + eval lab + selftest + change (2026-09-04)
+- `a47cd83` multi-brain — mbCall universal adapter, brain.bench auto-benchmark registry, brain.solve c (2026-09-04)
+- `d11bf7b` background ops — job queue (5 priorities), cron heartbeat drain, scheduler pro (once/every (2026-09-04)
+- `a3ba3e0` shotGrab engine=browserless for fresh captures (thum.io cache bypass in QA) (2026-09-04)
+- `d490e0e` visual QA + browser pro — qa.scene/baseline/compare/matrix/error/browse/gate, visionAsk mu (2026-09-04)
+- `d18870a` memory engine pro — mem DB (facts/decisions/prefs/episodes/errors), auto-extract, mem.sear (2026-09-04)
+- `2820748` sandbox+test engine — agent-runner workflow, agent.shell/test/repair/envcheck, safe comman (2026-09-04)
+- `a03266c` repo digital twin — walker+cache, entries/configs/deps, symbol index, incremental re-index (2026-09-04)
+- `0ce46db` permission matrix + git safety firewall + risk gates + secret redaction + injection hierar (2026-09-04)
+- `e1e5d7c` pronoun follow-up inherits last tool plan (2026-09-03)
+- `90a215a` intent engine — classifier, greeting hard-rule, pronoun resolution, state tracking, 6 mode (2026-09-03)
+- `528d6aa` code box one-tap PREVIEW (in-app iframe) + DOWNLOAD file button + exact-raw copy; sw v18 (2026-09-03)
+- `b29f971` ALDRA SKIN — owner-provided glassmorphism design (robot card, violet bubbles, glass sheets (2026-09-03)
+- `d0b1c5b` all-juzu — flat feed, orb avatar, working strip, type ramp, context pack (lasttask), chat  (2026-09-03)
+
+## FIX
+- `cb6b1ec` cascade = alive models only (groq lite/fast, gemini, mistral) per bench results (2026-09-04)
+- `dda563b` prod-deploy jobs ALWAYS need explicit approved:true — even interactive tick (away-mode pol (2026-09-04)
+- `a75070d` syncmd dup counter + memSearch empty-token guard (no random injection on short msgs) (2026-09-04)
+- `480a192` explicit mem commands take priority over web.search router rule (2026-09-04)
+- `3c82467` gemText multi-provider fallback (gemini→groq→cerebras→mistral→deepinfra) + full error trai (2026-09-04)
+- `18ccac9` agent.test pre-saves candidate code + path guidance (2026-09-04)
+- `a256c98` runner UA (CF 1010) + cx TDZ in agent.shell (2026-09-04)
+- `0c9bf00` redact chat title too (2026-09-04)
+- `a38f66d` let plan (const reassign broke Pages build) (2026-09-04)
+- `794ff68` per-chat mode default + gh tools in research mode (2026-09-03)
+- `0c9ea36` greeting regex pairs + per-chat clarify scope (2026-09-03)
+- `2313778` clog uses req param (2026-09-03)
+- `e7106a9` message-vanish safety net — auto-reopen empty chat (8s), boot resumes last chat, client er (2026-09-03)
+- `82f751d` kill iOS standalone double safe-area gap + seam (unified #fcfcfe top), AI replies full-wid (2026-09-03)
+- `dfaba43` scrim visibility gate (iOS gray band), update watchdog (45s self-reload) + sw activate not (2026-09-03)
+- `c4c426f` owner batch2 — no home chips, no sheet-peek pill (visibility), ChatGPT-style dark drawer + (2026-09-03)
+- `442fc93` owner 4 points — ChatGPT-style mini popup (copy/reply/share), no idle agBar, random hero l (2026-09-03)
+- `2b5759b` hero section-row/chips full-width (2026-09-03)
+- `d0a2237` msg scope bug in chat tool loop (2026-09-03)
+- `a0dd100` deterministic intent router for chat tool loop (no planner model — faster+reliable) (2026-09-03)
+
+## DOCS
+- `db7ae53` PHASE 9 COMPLETE 8/8 [x] + live proofs (2026-09-04)
+- `0f8304f` PHASE 8 COMPLETE 9/9 [x] + live proofs (2026-09-04)
+- `f4f876d` PHASE 7 COMPLETE 9/9 [x] + live proofs (2026-09-04)
+- `14e21f9` PHASE 6 COMPLETE 9/9 [x] + live proofs (2026-09-04)
+- `5f44515` PHASE 5 COMPLETE 8/8 [x] + live proofs (2026-09-04)
+- `3996261` PHASE 4 COMPLETE 9/9 [x] + live proofs (2026-09-04)
+- `01052b0` PHASE 3 COMPLETE 8/8 [x] (2026-09-04)
+- `54a7a64` PHASE 2 COMPLETE 8/8 [x] + live test proofs (2026-09-03)
+- `be2be48` PHASE 0 marked complete (5/5) + memory §25 (gh-pages=production lesson) (2026-09-03)
+- `2921a84` PART 5 — Manus-style A-Z all-in-one capability blueprint + juzu mapping (2026-09-03)
+- `81c13b0` PHASE 0 step 0.1 — UI BLUEPRINT v1 (flat feed, juzu orb, working strip, type ramp) for own (2026-09-03)
+
+## OTHER
+- `ab24cec` ui v21: premium typography (15.8px/1.78), empty-gap kill, keyboard-perfect composer (vv bo (2026-09-03)
