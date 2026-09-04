@@ -103,6 +103,7 @@ const PERM = {
   'web.search': { risk: 'LOW', gate: 'AUTO' }, 'web.read': { risk: 'LOW', gate: 'AUTO' }, 'web.eye': { risk: 'LOW', gate: 'AUTO' },
   'verify.url': { risk: 'LOW', gate: 'AUTO' }, 'bu.health': { risk: 'LOW', gate: 'AUTO' },
   'twin.index': { risk: 'LOW', gate: 'AUTO' }, 'twin.search': { risk: 'LOW', gate: 'AUTO' }, 'twin.map': { risk: 'LOW', gate: 'AUTO' }, 'twin.impact': { risk: 'LOW', gate: 'AUTO' }, 'twin.time': { risk: 'LOW', gate: 'AUTO' },
+  'agent.shell': { risk: 'HIGH', gate: 'POLICY' }, 'agent.test': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.repair': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.envcheck': { risk: 'LOW', gate: 'POLICY' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -632,6 +633,56 @@ async function twinTime(keys, repo, path, kw) {
   }
   return out;
 }
+/* ===== Phase 5 — Sandbox + Test Engine (GH Actions = $0 CI) ===== */
+function b64utf8enc(str) { const bin = new TextEncoder().encode(String(str || '')); let s = ''; for (let i = 0; i < bin.length; i += 8192) s += String.fromCharCode.apply(null, bin.subarray(i, i + 8192)); return btoa(s); }
+function stripFences(t) { return String(t || '').replace(/^\s*```[a-zA-Z]*\s*\n?/, '').replace(/\n?```\s*$/, '').trim(); }
+async function gemText(keys, prompt, maxTok) {
+  const models = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+  let last = '';
+  for (const m of models) {
+    try {
+      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + keys.GEMINI_API_KEY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: maxTok || 3000 } }) });
+      const j = await r.json().catch(() => ({}));
+      const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
+      if (t.trim()) return t;
+      last = m + ' HTTP ' + r.status;
+    } catch (e) { last = m + ' ' + (e.message || e); }
+  }
+  throw new Error('LLM সাড়া দেয়নি (' + last + ')');
+}
+function cmdGate(script) {
+  let g = 'SAFE';
+  for (const raw of String(script || '').split('\n')) {
+    const l = raw.trim();
+    if (!l || l.startsWith('#')) continue;
+    if (/rm\s+-rf\s+\/(\s|$)|mkfs|\bdd\s+if=|:\(\)\s*\{[^}]*\}\s*;\s*:|\bshutdown\b|\breboot\b|>\s*\/dev\/[sh]d|chmod\s+-R\s+0?777\s+\/(\s|$)/i.test(l)) return 'BLOCK';
+    if (/git\s+push|--force\b|curl[^|]*\|\s*(ba|z)?sh|wget[^|]*\|\s*(ba|z)?sh|\bsudo\b|\bnc\s+-l|\bssh\b|gh\s+(repo|release|secret|ssh)/i.test(l)) { g = 'APPROVAL'; continue; }
+    if (/^(if|then|else|elif|fi|for|while|do|done|case|esac|\{|\}|;;|echo|ls|cd|cat|pwd|node|python3?|pip3?|npm|npx|git|head|tail|grep|egrep|find|wc|date|whoami|df|free|uname|jq|awk|sed|sort|uniq|tr|cut|env|export|which|base64|md5sum|sha256sum|printf|test|sleep|mkdir|touch|cp|mv|rm|timeout|bash|sh|curl|wget|make|set|true|false|\[)\b/i.test(l)) continue;
+    if (/^[\w.\/-]+=/.test(l) || /^[<>()|&;'"]/.test(l)) continue;
+    if (g === 'SAFE') g = 'INSPECT';
+  }
+  return g;
+}
+async function runSandbox(env, keys, script, repo) {
+  const key = 'run_' + Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(16).padStart(2, '0')).join('');
+  await storePut(env, 'runner:' + key, JSON.stringify({ status: 'pending', ts: Date.now() }), 3600);
+  await ghApi(keys, '/repos/' + (repo || TWIN_REPO) + '/dispatches', { method: 'POST', body: JSON.stringify({ event_type: 'agent-run', client_payload: { script_b64: b64utf8enc(script), result_key: key, result_url: 'https://admission-hub-ai.pages.dev/api/runner/result' } }) });
+  const t0 = Date.now();
+  while (Date.now() - t0 < 150000) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const j = await storeGetJson(env, 'runner:' + key, null);
+    if (j && j.status !== 'pending') return { key, exit: j.exit, out: String(j.out || ''), err: String(j.err || ''), run: j.run, ms: Date.now() - t0 };
+  }
+  throw new Error('sandbox timeout (150s) — Actions রানার cold/slow হতে পারে');
+}
+function analyzeTests(run) {
+  const pass = [], fail = [];
+  for (const l of String((run && run.out) || '').split('\n')) {
+    const m = l.match(/^\s*(PASS|FAIL)[:\s]+(.+?)\s*$/);
+    if (m) (m[1] === 'PASS' ? pass : fail).push(m[2].slice(0, 140));
+  }
+  return { total: pass.length + fail.length, passed: pass.length, failed: fail.length, pass, fail };
+}
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
@@ -836,6 +887,59 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
   if (tool === 'twin.map') { const repo0 = args.repo || TWIN_REPO; const mi1 = await storeGetJson(env, 'twin:' + repo0 + ':meta', null); if (!mi1) await twinIndex(env, keys, repo0); return { meta: mi1, deps: await storeGetJson(env, 'twin:' + repo0 + ':deps', null), map: (await storeGetJson(env, 'twin:' + repo0 + ':map', null)) || [] }; }
   if (tool === 'twin.impact') { const repo1 = args.repo || TWIN_REPO; const mi2 = await storeGetJson(env, 'twin:' + repo1 + ':meta', null); if (!mi2) await twinIndex(env, keys, repo1); return await twinImpact(env, repo1, args.path || ''); }
   if (tool === 'twin.time') return await twinTime(keys, args.repo, args.path || '', args.kw || '');
+  if (tool === 'agent.shell') {
+    const script = String(args.script || args.command || '');
+    if (!script.trim()) throw new Error('script বা command লাগবে');
+    const cls = cmdGate(script);
+    if (cls === 'BLOCK' || (cls === 'APPROVAL' && !cx.approved)) {
+      await audit(env, { tool: tool, action: 'agent.shell', risk: 'CRITICAL', gate: cls, result: 'DENIED', task: (cx.task || '').slice(0, 80) });
+      throw new Error('🔥 Firewall: কমান্ড ' + cls + ' — ' + (cls === 'BLOCK' ? 'চিরকাল নিষিদ্ধ' : 'approved:true পাঠাতে হবে'));
+    }
+    const run = await runSandbox(env, keys, script, args.repo);
+    return { gate: cls, exit: run.exit, run: run.run, ms: run.ms, out: run.out.slice(0, 6000), err: run.err.slice(0, 1500) };
+  }
+  if (tool === 'agent.test') {
+    const requirement = String(args.requirement || args.req || '');
+    if (!requirement) throw new Error('requirement লাগবে');
+    let code = String(args.code || '');
+    if (!code && args.path) code = (await storeGet(env, 'twin:' + TWIN_REPO + ':src:' + args.path)) || '';
+    const spec = await gemText(keys, 'You are a test engineer. Write ONLY a bash script (no markdown fences, no explanation) that tests this requirement with positive, negative and edge cases. Max 8 tests, total runtime under 60 seconds. Sandbox = ubuntu-latest with node, python3, curl; the repo checkout is the parent directory (..). Every test must print exactly one line starting with "PASS <name>" or "FAIL <name> — reason". Script must exit 0.\nRequirement: ' + requirement.slice(0, 3000) + (code ? '\nCode under test:\n' + code.slice(0, 10000) : ''), 3500);
+    const script = stripFences(spec);
+    const run = await runSandbox(env, keys, script, args.repo);
+    const an = analyzeTests(run);
+    return { requirement: requirement.slice(0, 200), genLen: script.length, exit: run.exit, run: run.run, ms: run.ms, tests: an, outTail: run.out.slice(-1200), err: run.err.slice(0, 600) };
+  }
+  if (tool === 'agent.repair') {
+    let code = String(args.code || '');
+    if (!code && args.path) code = (await storeGet(env, 'twin:' + TWIN_REPO + ':src:' + args.path)) || '';
+    if (!code) throw new Error('code বা path লাগবে');
+    const ext = (/\.(\w+)$/.exec(String(args.path || '')) || [null, 'js'])[1];
+    let tests = String(args.tests || '');
+    if (!tests) {
+      const spec = await gemText(keys, 'Write ONLY a bash test script (no markdown fences) for the code below. In the sandbox the code under test is pre-saved as ./candidate.' + ext + ' (ubuntu-latest, node+python3 available, repo checkout at ..). Max 8 tests covering positive, negative and edge cases; each test prints exactly one line "PASS <name>" or "FAIL <name> — reason"; script must exit 0.\nRequirement: ' + String(args.requirement || 'verify the code behaves as its name and structure imply').slice(0, 1500) + '\nCode:\n' + code.slice(0, 10000), 3500);
+      tests = stripFences(spec);
+    }
+    const hist = [];
+    for (let it = 1; it <= 3; it++) {
+      const script = 'set -u\necho ' + b64utf8enc(code) + ' | base64 -d > candidate.' + ext + '\necho ' + b64utf8enc(tests) + ' | base64 -d > tests.sh\nbash tests.sh\n';
+      const run = await runSandbox(env, keys, script, args.repo);
+      const an = analyzeTests(run);
+      hist.push({ it: it, passed: an.passed, failed: an.failed, exit: run.exit, failNames: an.fail.slice(0, 6) });
+      if (an.failed === 0 && an.total > 0) return { fixed: true, iterations: it, hist: hist, codeLen: code.length, code: code.slice(0, 9000) };
+      if (it === 3) break;
+      const patch = await gemText(keys, 'Fix the code so ALL tests pass. Failing tests: ' + JSON.stringify(an.fail).slice(0, 700) + '\nTest output:\n' + run.out.slice(0, 3000) + '\nStderr:\n' + run.err.slice(0, 800) + '\nCurrent code:\n' + code.slice(0, 11000) + '\nReply with ONLY the complete fixed code — no markdown fences, no explanation.', 4000);
+      const np = stripFences(patch);
+      if (!np || np.length < 20) break;
+      code = np;
+    }
+    return { fixed: false, hist: hist, note: '৩ রাউন্ডেও সব টেস্ট পাস করেনি' };
+  }
+  if (tool === 'agent.envcheck') {
+    const script = ['echo "node $(node -v)"', 'echo "python $(python3 -V 2>&1)"', 'echo "npm $(npm -v)"', 'echo "git $(git --version)"', 'echo "os $(uname -sr) $(nproc)cpu"', 'free -m | head -2 | tail -1', 'df -h . | tail -1', 'echo "repo: $(ls .. | head -6 | xargs)"', 'curl -s --max-time 15 https://admission-hub-ai.pages.dev/api/health || echo healthFAIL', 'echo', 'node -e "console.log(\'exec-ok\', 6*7)"', 'python3 -c "print(\'py-ok\', 2**10)"'].join('\n');
+    const run = await runSandbox(env, keys, script, args.repo);
+    const ok = run.out.includes('exec-ok 42') && run.out.includes('py-ok 1024') && run.out.includes('"ok":true');
+    return { ok: ok, exit: run.exit, run: run.run, ms: run.ms, env: run.out.slice(0, 2200) };
+  }
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
@@ -943,7 +1047,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p3-v24' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p5-v25' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -1026,6 +1130,15 @@ export default {
       const b = await req.json().catch(() => ({}));
       return json(await ownerUnlock(env, b.code));
     }
+    if (method === 'POST' && path === '/api/runner/result') {
+      const b = await parseBody(req);
+      const k = String(b.key || '');
+      if (!/^run_[a-f0-9]{24}$/.test(k)) return json({ error: 'bad key' }, 400);
+      const cur = await storeGetJson(env, 'runner:' + k, null);
+      if (!cur) return json({ error: 'unknown/expired key' }, 404);
+      await storePut(env, 'runner:' + k, JSON.stringify({ status: 'done', exit: Number(b.exit) | 0, out: String(b.out || '').slice(0, 120000), err: String(b.err || '').slice(0, 30000), run: String(b.run || ''), ts: Date.now() }), 3600);
+      return json({ ok: true });
+    }
     if (path === '/api/tools') {
       if (method !== 'POST') return json({ error: 'POST লাগবে' }, 405);
       if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক পরিচয় লাগবে — আগে /api/owner/unlock' }, 401);
@@ -1052,7 +1165,7 @@ export default {
           { name: 'Web Research', status: keys.TAVILY_API_KEY ? 'Operational' : 'Setup needed', dot: keys.TAVILY_API_KEY ? 'ok' : 'warn' },
           { name: 'Storage (KV)', status: 'Operational', dot: 'ok' },
           { name: 'Drive Backup', status: drv ? 'Operational' : 'Setup needed', dot: drv ? 'ok' : 'warn' },
-          { name: 'Agent Engine', status: 'Phase 5-এ আসবে', dot: 'off' },
+          { name: 'Agent Engine', status: 'Operational (GH Actions sandbox)', dot: 'ok' },
         ],
         deployments: [],
       });
