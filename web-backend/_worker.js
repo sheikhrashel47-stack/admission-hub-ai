@@ -1565,7 +1565,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v32';
+  const AGENT_VERSION = 'p10-v33';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1596,9 +1596,11 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
           let end = txt.indexOf('\n  }\n', ai); end = end > 0 ? end + 5 : Math.min(txt.length, ai + 3200);
           if (end - start > 3200) end = start + 3200;
           const win = txt.slice(start, end);
-          const fr = await R('brain.sub', { role: 'coder', iters: 2, task: 'নিচের কোড-উইন্ডোতে বর্ণিত বাগ ফিক্স করো। শুধু ফিক্স করা পুরো উইন্ডো ফেরত দাও — markdown fence বা ব্যাখ্যা নয়; উইন্ডোর বাকি সব লাইন হুবহু অক্ষত রাখো; সিনট্যাক্স বৈধ রাখো।\nবাগ: ' + String(f.bug).slice(0, 1200) + '\nউইন্ডো (' + win.length + ' chars):\n' + win });
-          const fixed = stripFences(String(fr.result || ''));
-          if (!fixed || fixed.length < win.length * 0.4 || fixed.length > win.length * 3) throw new Error('fix আউটপুট অস্বাভাবিক (' + fixed.length + 'B vs উইন্ডো ' + win.length + 'B) — নিরাপত্তায় বাতিল');
+          const fr = await R('brain.sub', { role: 'coder', iters: 1, task: 'নিচের কোড-উইন্ডোতে বর্ণিত বাগ ফিক্স করো। শুধু ফিক্স করা পুরো উইন্ডো ফেরত দাও — markdown fence বা ব্যাখ্যা নয়; উইন্ডোর বাকি সব লাইন হুবহু অক্ষত রাখো; সিনট্যাক্স বৈধ রাখো।\nবাগ: ' + String(f.bug).slice(0, 1200) + '\nগুরুত্বপূর্ণ: কোনো ব্যাখ্যা, ভূমিকা বা প্রস্তাবনা লিখো না — আউটপুটের প্রথম লাইন থেকে শেষ লাইন পর্যন্ত শুধু ফিক্স করা কোড। আকার উইন্ডোর ১-৪ গুণের মধ্যে রাখো।\nউইন্ডো (' + win.length + ' chars):\n' + win });
+          let fixed = String(fr.result || '');
+          const fm = fixed.match(/```[a-zA-Z]*\n([\s\S]*?)```/); if (fm && fm[1].trim().length > 100) fixed = fm[1];
+          fixed = stripFences(fixed);
+          if (!fixed || fixed.length < win.length * 0.4 || fixed.length > win.length * 6) throw new Error('fix আউটপুট অস্বাভাবিক (' + fixed.length + 'B vs উইন্ডো ' + win.length + 'B) — বাতিল। শুরু: ' + fixed.slice(0, 120).replace(/\n/g, ' '));
           if (fixed.indexOf('```') >= 0) throw new Error('fix আউটপুটে fence মিশেছে — বাতিল');
           if (fixed === win) throw new Error('coder উইন্ডো অপরিবর্তিত ফেরত দিয়েছে');
           const merged = txt.slice(0, start) + fixed + txt.slice(end);
@@ -1853,7 +1855,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v32' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v33' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
