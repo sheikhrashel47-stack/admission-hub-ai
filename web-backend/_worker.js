@@ -20,7 +20,13 @@ const SYSTEM = `তুমি "ADMISSION HUB AI" — Admission Hub-এর জন�
 const MODELS = [
   { pid: 'groq', id: 'fast', label: 'Groq · GPT-OSS-120B', model: 'openai/gpt-oss-120b', speed: 5, quality: 4, coding: 5 },
   { pid: 'groq', id: 'lite', label: 'Groq · Qwen 3.8-27B', model: 'qwen/qwen3.8-27b', speed: 5, quality: 3, coding: 4 },
-  { pid: 'cerebras', id: 'cere', label: 'Cerebras · Llama 3.3 70B', model: 'llama-3.3-70b', speed: 5, quality: 4, coding: 4 },
+  { pid: 'cerebras', id: 'cere', label: 'Cerebras · GPT-OSS 120B', model: 'gpt-oss-120b', speed: 5, quality: 4, coding: 5 },
+  { pid: 'cerebras', id: 'cereq', label: 'Cerebras · Qwen 3.8-27B', model: 'qwen-3.8-27b', speed: 5, quality: 3, coding: 4 },
+  { pid: 'cfai', id: 'cfgoss', label: 'CF Workers AI · GPT-OSS 120B', model: '@cf/openai/gpt-oss-120b', speed: 3, quality: 4, coding: 4 },
+  { pid: 'cfai', id: 'cfll8', label: 'CF Workers AI · Llama 3.1 8B', model: '@cf/meta/llama-3.1-8b-instruct-fp8', speed: 5, quality: 3, coding: 3, hide: 1 },
+  { pid: 'deepseek', id: 'dsk', label: 'DeepSeek · Chat', model: 'deepseek-chat', speed: 4, quality: 4, coding: 5, hide: 1 },
+  { pid: 'nvidia', id: 'nv', label: 'NVIDIA NIM · DeepSeek-R1', model: 'deepseek-ai/deepseek-r1', speed: 3, quality: 4, coding: 4, hide: 1 },
+  { pid: 'xai', id: 'grok', label: 'xAI · Grok 4 Fast', model: 'grok-4-fast-reasoning', speed: 4, quality: 4, coding: 4, hide: 1 },
   { pid: 'sambanova', id: 'snova', label: 'SambaNova · Llama 3.3 70B', model: 'Meta-Llama-3.3-70B-Instruct', speed: 3, quality: 4, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
@@ -33,9 +39,9 @@ const MODELS = [
   { pid: 'ollama', id: 'o20', label: 'Ollama · GPT-OSS 20B', model: 'gpt-oss:20b', speed: 4, quality: 3, coding: 4 },
   { pid: 'pollinations', id: 'polli', label: 'Pollinations · Free (key লাগে না)', model: 'openai', speed: 2, quality: 2, coding: 2 },
 ];
-const KEYMAP = { groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY', ollama: 'OLLAMA_API_KEY' };
+const KEYMAP = { deepseek: 'DEEPSEEK_API_KEY', nvidia: 'NVIDIA_API_KEY', xai: 'XAI_API_KEY', cfai: 'CF_GLOBAL_KEY', groq: 'GROQ_API_KEY', gemini: 'GEMINI_API_KEY', cerebras: 'CEREBRAS_API_KEY', sambanova: 'SAMBANOVA_API_KEY', deepinfra: 'DEEPINFRA_API_KEY', together: 'TOGETHER_API_KEY', mistral: 'MISTRAL_API_KEY', openrouter: 'OPENROUTER_API_KEY', huggingface: 'HUGGINGFACE_API_KEY', ollama: 'OLLAMA_API_KEY' };
 // টেক্সট চ্যাটের ফিক্সড fallback ক্রম (প্রথমটা সেরা/দ্রুততম)
-const FALLBACK_ORDER = ['groq', 'cerebras', 'ollama', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'openrouter', 'huggingface', 'pollinations'];
+const FALLBACK_ORDER = ['groq', 'cerebras', 'cfai', 'ollama', 'sambanova', 'gemini', 'mistral', 'deepinfra', 'together', 'deepseek', 'nvidia', 'xai', 'openrouter', 'huggingface', 'pollinations'];
 // key লাগে না এমন provider (pollinations) সবসময় "available" — বাকিরা key-নির্ভর
 const hasKey = (keys, pid) => (pid === 'pollinations' ? true : !!keys[KEYMAP[pid]]);
 const NL = '\n';
@@ -63,7 +69,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -415,6 +421,26 @@ async function* openaiStream(base, key, model, messages, signal) {
     }
   }
 }
+async function* cfaiStream(keys, model, messages, signal) {
+  // Cloudflare Workers AI — openai-compat endpoint, X-Auth-Email/X-Auth-Key auth (নতুন key লাগে না!)
+  const r = await fetch('https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/v1/chat/completions', {
+    method: 'POST', signal,
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY || '' },
+    body: JSON.stringify({ model, messages: cleanMsgs(messages), stream: true, temperature: 0.6, max_tokens: 2048 }),
+  });
+  if (!r.ok || !r.body) throw new Error('cfai HTTP ' + r.status);
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = '';
+  while (true) {
+    const { done, value } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true }); let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line.startsWith('data:')) continue;
+      const p = line.slice(5).trim(); if (p === '[DONE]') return;
+      try { const j = JSON.parse(p); if (j.choices?.[0]?.delta?.content) yield j.choices[0].delta.content; } catch {}
+    }
+  }
+}
 async function* geminiStream(key, model, messages, signal) {
   const contents = cleanMsgs(messages).filter((m) => m.role !== 'system').map((m) => {
     const parts = Array.isArray(m.content)
@@ -461,8 +487,9 @@ async function* streamAnswer(keys, messages, model, mode, emit, signal, multimod
       try {
         emit({ attempt: { provider: m.pid, label: m.label, model: m.model } }); attempt = m;
         let got = false;
-        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' }[m.pid];
+        const base = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1', deepseek: 'https://api.deepseek.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', xai: 'https://api.x.ai/v1' }[m.pid];
         const it = m.pid === 'gemini' ? geminiStream(key, m.model, messages, ac.signal)
+          : m.pid === 'cfai' ? cfaiStream(keys, m.model, messages, ac.signal)
           : m.pid === 'pollinations' ? pollinationsStream(messages, ac.signal)
           : openaiStream(base, key, m.model, messages, ac.signal);
         for await (const t of it) { got = true; yield t; }
@@ -652,7 +679,7 @@ async function gemText(keys, prompt, maxTok) {
       errs.push(m + ':' + r.status);
     } catch (e) { errs.push(m + ':' + (e.message || e)); }
   }
-  const oai = [['groq', 'GROQ_API_KEY', 'openai/gpt-oss-120b'], ['cerebras', 'CEREBRAS_API_KEY', 'llama-3.3-70b'], ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'], ['deepinfra', 'DEEPINFRA_API_KEY', 'deepseek-ai/DeepSeek-V3']];
+  const oai = [['groq', 'GROQ_API_KEY', 'openai/gpt-oss-120b'], ['cerebras', 'CEREBRAS_API_KEY', 'gpt-oss-120b'], ['deepseek', 'DEEPSEEK_API_KEY', 'deepseek-chat'], ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'], ['deepinfra', 'DEEPINFRA_API_KEY', 'deepseek-ai/DeepSeek-V3']];
   for (const oa of oai) {
     const key = keys[oa[1]]; if (!key) { errs.push(oa[0] + ':nokey'); continue; }
     try {
@@ -932,6 +959,13 @@ async function mbCall(keys, ref, messages, maxTok, timeoutMs) {
       if (!t.trim()) throw new Error(m.pid + ' HTTP ' + r.status);
       return { ref: ref, text: t, ms: Date.now() - t0 };
     }
+    if (m.pid === 'cfai') {
+      const r = await fetch('https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/v1/chat/completions', { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY || '' }, body: JSON.stringify({ model: m.model, stream: false, temperature: 0.3, max_tokens: maxTok || 1500, messages: messages }) });
+      const j = await r.json().catch(() => ({}));
+      const t = (((j.choices || [])[0] || {}).message || {}).content || '';
+      if (!String(t).trim()) throw new Error('cfai HTTP ' + r.status);
+      return { ref: ref, text: String(t), ms: Date.now() - t0 };
+    }
     const key = keys[KEYMAP[m.pid]]; if (!key) throw new Error(m.pid + ' key নেই');
     if (!PING_BASE[m.pid]) throw new Error(m.pid + ' endpoint নেই');
     const r = await fetch(PING_BASE[m.pid] + '/chat/completions', { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: m.model, stream: false, temperature: 0.3, max_tokens: maxTok || 1500, messages: messages }) });
@@ -1012,7 +1046,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   }
   return notes.length ? notes.join('\n') : null;
 }
-const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1' };
+const PING_BASE = { groq: 'https://api.groq.com/openai/v1', cerebras: 'https://api.cerebras.ai/v1', sambanova: 'https://api.sambanova.ai/v1', deepinfra: 'https://api.deepinfra.com/v1/openai', together: 'https://api.together.xyz/v1', mistral: 'https://api.mistral.ai/v1', openrouter: 'https://openrouter.ai/api/v1', huggingface: 'https://router.huggingface.co/v1', ollama: 'https://ollama.com/v1', deepseek: 'https://api.deepseek.com/v1', nvidia: 'https://integrate.api.nvidia.com/v1', xai: 'https://api.x.ai/v1', cfai: 'https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/v1' };
 const CF_ACC = 'abb783e456e51a5d338419de93d5e576';
 async function sha256hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
 let _sessSecretCache = null;
@@ -1577,7 +1611,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v35';
+  const AGENT_VERSION = 'p10-v36';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1841,6 +1875,7 @@ async function pingProviders(keys) {
       if (m.pid === 'gemini') ok = (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`)).ok;
       else if (m.pid === 'openrouter') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000); const r = await fetch(`${PING_BASE.openrouter}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, stream: false, temperature: 0.6, max_tokens: 8, messages: [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else if (m.pid === 'pollinations') { const r = await fetch('https://text.pollinations.ai/' + encodeURIComponent('ping')); ok = r.ok && (await r.text()).trim().length > 0; }
+      else if (m.pid === 'cfai') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 20000); const r = await fetch(`${PING_BASE.cfai}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY || '' }, body: JSON.stringify({ model: m.model, max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else {
         const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000);
         const r = await fetch(`${PING_BASE[m.pid]}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }) });
@@ -1872,7 +1907,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v35' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v36' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
