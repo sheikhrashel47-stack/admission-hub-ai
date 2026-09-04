@@ -1,0 +1,17 @@
+# JUJU heartbeat — প্রতি ৩০ মিনিটে ops queue drain + scheduler tick (Phase 8.2)
+# PC1 (Actions) → PC2 (CF worker) /api/ops/tick — X-Watch secret হেডারে (repo public, তাই secrets API-তে রাখা)
+name: juju-heartbeat
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: tick JUJU ops
+        run: |
+          echo "::notice::heartbeat $(date -u +%FT%TZ)"
+          curl -s --max-time 200 -H "X-Watch: ${{ secrets.WATCH_SECRET }}" https://admission-hub-ai.pages.dev/api/ops/tick | head -c 500
+          echo
