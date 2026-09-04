@@ -152,17 +152,17 @@
 - [x] 9.7 **Confidence gate**: conf≥minConf → COMPLETE; নাহলে reviewer model VERDICT → COMPLETE/PARTIAL; reviewer fail হলে PARTIAL (সৎ অবনমন)। Live: দুই gate-ই দেখা গেছে ✅
 - [x] 9.8 Deployed gh-pages `34713f80` (wv p9-v29) — hard math task-এ পুরো cascade+escalation+reviewer, critic FIX, race judge, parallel, sub সব লাইভ প্রমাণিত (2026-09-04) ✅
 
-## 🟦 PHASE 10 — Mission Mode + Evaluation Lab (চূড়ান্ত)
+## 🟦 PHASE 10 — Mission Mode + Evaluation Lab (চূড়ান্ত) ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** L6 Mission Mode — "এই bug ঠিক করে production-ready করো" এক কথায়। রেফ: P3#L6,18; P4#100,200,250; P2 AD-AH।
-- [ ] 10.1 **Mission engine**: goal→bounded steps→checkpoints→verification→retry policy→stop condition→human escalation (P4#200 — Persistent ≠ Infinite)
-- [ ] 10.2 **Autonomous delivery loop wiring**: understand→inspect→architect→plan→implement→build→test→debug→review→visual→security→diff→ready→approve→deploy→post-verify→report (P4#100)
-- [ ] 10.3 **Deployment intelligence gate**: "Deployment verified: PASS" / "blocked: reason" (P3#18)
-- [ ] 10.4 **Golden tasks**: Admission Hub-এর ২০টা real task + expected result save (P2 AE)
-- [ ] 10.5 **Evaluation lab**: agent version update-এর আগে old vs new % (P2 AD)
-- [ ] 10.6 **Self-test before release** + agent versioning + safe rollback (P2 AF-AG-AH)
-- [ ] 10.7 **Auto docs + changelog generator** (P2 AX-AY)
-- [ ] 10.8 **চূড়ান্ত অডিট**: ৪টা blueprint-এর সব capability আবার মিলিয়ে নতুন AUDIT ফাইল
-- [ ] 10.9 **Owner-কে L6 mission demo** 🎓
+- [x] 10.1 **ops.mission**: new/step/status/list/cancel/approve/retry; 15 stage, budget (≤60 step), retry 2×→escalated, awaiting-approval stop, kv checkpoint + TG alert। Live: Mmtmqfnc3-এ groq 429→escalation→retry resume প্রমাণিত ✅
+- [x] 10.2 **15-stage delivery loop**: understand(mbCall)→inspect(twin)→architect(gemini)→plan(brain.critic FIX-gate)→implement(gh.commit/brain.sub)→build(agent.shell node --check)→test(agent.test)→review(critic)→security(secret-scan)→diff→ready(gate)→approve(human)→deploy(ghpages, prod gated)→postverify(verify.url+GitHub)→report(kv+TG)। Live demo: docs/MISSION-DEMO-P10.md মিশন-নিজে কমিট করেছে (6fc4ccf) ✅
+- [x] 10.3 **ops.gate + missionGateCheck**: API health+wv, UI alive, rollback available (≥2 deployments), secret-scan → 'Deployment verified: PASS' / 'blocked: …'। Live: PASS (4/4 checks) ✅
+- [x] 10.4 **ops.golden**: ২০ task (code 7/reason 6/follow 4/domain 3) + keyword-expect scoring → kv eval:<wv>:<model>। Baseline: groq:fast 13/20=65%, gemini:flash 6/8=75% ✅
+- [x] 10.5 **ops.eval**: compare/history — eval:index থেকে old vs new pct → delta, verdict release-safe / REGRESSION-rollback। Live: delta +10 → release-safe ✅
+- [x] 10.6 **ops.selftest**: health+wv match, UI 200, golden smoke, rollback refs → PASS/FAIL + kv agent:version stamp। Live: PASS (4/4) ✅
+- [x] 10.7 **ops.changelog**: ৫০ commit স্ক্যান → conventional-prefix grouping (feat/fix/docs/deploy/…) → CHANGELOG.md auto-commit (b90b6dd: feat:14, fix:20, docs:11) ✅
+- [x] 10.8 **docs/FINAL-AUDIT-P10.md**: ২২ ❌-এর ১২টা ✅ + ৮টা 🟡, ৯টা 🟡→✅ উন্নীত; স্কোর ৬০%→**৭৪%** (✅৭১·🟡৭০·❌২); Part 2/3/4 কভারেজ টেবিল + সৎ সীমাবদ্ধতা ✅
+- [x] 10.9 **Live L6 demo (2026-09-04)**: মিশন Mmtmqfnc3 — ১৯ step-এ পূর্ণ loop: 429-এ escalation, retry-তে resume, approve-গেটে থামা, অনুমোদনে deploy→postverify→TG রিপোর্ট; মিশনের নিজের হাতে লেখা ফাইল রেপোতে ✅ 🎓
 
 ---
 
