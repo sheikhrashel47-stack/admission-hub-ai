@@ -398,6 +398,13 @@ html.standalone #netBanner{top:6px}
 #modeRow{display:flex;gap:2px;justify-content:flex-start;align-items:center;padding:2px 2px 10px;flex-wrap:wrap}
 #modeRow button{font-size:10.5px;font-weight:700;color:var(--dim);padding:4px 9px;border-radius:999px;letter-spacing:.2px}
 #modeRow button.on{color:#6d5bf0;background:rgba(109,91,240,.10)}
+#auditList{display:flex;flex-direction:column;gap:6px}
+.auRow{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--card2);font-size:12px}
+.auRow .auT{font-weight:700}
+.auRow .auR{margin-left:auto;font-weight:800;font-size:10.5px;padding:2px 8px;border-radius:999px}
+.auR.CALL{background:rgba(22,163,74,.14);color:var(--green-d)}
+.auR.DENIED{background:rgba(220,38,38,.14);color:var(--red)}
+.auRow small{color:var(--dim)}
 /* premium typography + gap kill */
 .msgA{font-size:15.8px;line-height:1.78;letter-spacing:.1px}
 .bubU{font-size:15.6px;line-height:1.62}
@@ -588,6 +595,7 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
       <button id="mSearch" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><div>চ্যাট সার্চ</div><span class="right">›</span></button>
       <button id="mProjects" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span><div>প্রজেক্টস</div><span class="right">›</span></button>
       <button id="mHistory" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div>চ্যাট হিস্টরি</div><span class="right">›</span></button>
+      <button id="mAudit" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l7 4v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V7z"/><path d="m9 12 2 2 4-4"/></svg></span><div>অডিট লগ<small>টুল/অ্যাকশন/অনুমোদন ইতিহাস</small></div><span class="right">›</span></button>
       <button id="mFav" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m12 3 2.7 5.6 6.3.9-4.5 4.4 1 6.1L12 17l-5.5 3 1-6.1L3 9.5l6.3-.9Z"/></svg></span><div>সেভড / ফেবারিট</div><span class="right">›</span></button>
       <button id="mModel" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9Z"/></svg></span><div>AI মডেল<small id="mModelSub">Auto</small></div><span class="right">›</span></button>
       <button id="mSettings" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-.9c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span><div>সেটিংস</div><span class="right">›</span></button>
@@ -715,6 +723,11 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
       <div id="taskList"></div>
     </div>
   </div>
+  <div id="sAudit" class="sheet">
+    <div class="grab"></div>
+    <div class="hd"><div><span class="ttl">অডিট লগ</span><span class="sub">সাম্প্রতিক ৬০টি টুল-অ্যাকশন</span></div><button class="x" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="bd"><div id="auditList"></div></div>
+  </div>
   <div id="codePrev"><div class="cpHd"><span id="cpTitle">প্রিভিউ</span><button id="cpX">✕ বন্ধ</button></div><iframe id="cpFrame" sandbox="allow-scripts"></iframe></div>
   <div id="codeFs"><div class="cfsHd"><span id="cfsTitle">কোড</span><button id="cfsCopy">কপি</button><button id="cfsX">✕ বন্ধ</button></div><pre id="cfsBody"></pre></div>
 
@@ -820,7 +833,7 @@ function hl(code,lang){
   h=h.replace(new RegExp('\\b('+keys+')\\b','g'),'<span style="color:#79C0FF">$1</span>');
   return h;
 }
-function md(src){
+function md(src){src=redactSec(src);
   const cb=[];let h=esc(src);
   window._CBRAW=window._CBRAW||[];h=h.replace(/```([\w+-]*)\n([\s\S]*?)\n```/g,(m,l,c)=>{c=fixOver(c);cb.push({h:hl(c,l),l:l||'code',g:window._CBRAW.push(c)-1});return '\u0000C'+(cb.length-1)+'\u0000'});
   h=h.replace(/`([^`\n]+)`/g,(m,c)=>'\u0000I'+c+'\u0000');
@@ -844,9 +857,10 @@ function md(src){
 }
 
 /* streaming-safe markdown: খোলা fence/bold বন্ধ করে render — flicker/ভাঙা block নেই */
+function redactSec(t){return String(t==null?'':t).replace(/gh[pousr]_[A-Za-z0-9]{20,}/g,'[REDACTED:gh_token]').replace(/github_pat_[A-Za-z0-9_]{20,}/g,'[REDACTED:gh_pat]').replace(/AKIA[0-9A-Z]{16}/g,'[REDACTED:aws_key]').replace(/sk-[A-Za-z0-9_-]{20,}/g,'[REDACTED:api_key]').replace(/Bearer\s+[A-Za-z0-9._-]{20,}/g,'Bearer [REDACTED]').replace(/[0-9a-f]{40,}/gi,'[REDACTED:hex]')}
 function fixOver(c){if(c.indexOf('&lt;')<0||c.indexOf('<')>=0)return c;return c.split('&lt;').join('<').split('&gt;').join('>').split('&quot;').join(String.fromCharCode(34)).split('&#39;').join(String.fromCharCode(39)).split('&amp;').join('&')}
 function stripSug(t){return String(t).replace(/(?:\n|^)\[SUGGEST\][\s\S]*$/,'')}
-function mdLive(src){
+function mdLive(src){src=redactSec(src);
   let t=stripSug(src);
   if(((t.match(/```/g)||[]).length)%2)t+='\n```';
   if(((t.match(/\*\*/g)||[]).length)%2)t+='**';
@@ -870,7 +884,7 @@ function addUserMsg(text,ts,att){
   const r=document.createElement('div');r.className='row user';
   r.innerHTML='<div class="msgWrap"><div class="bubU"><div class="bubMedia"></div><div class="bubTxt"></div></div><div class="meta"><span>'+fmtTime(ts)+'</span><span class="ticks">✓✓</span></div></div>';
   const media=r.querySelector('.bubMedia'),bub=r.querySelector('.bubU'),txt=r.querySelector('.bubTxt');
-  txt.textContent=text||'';
+  txt.textContent=redactSec(text||'');
   if(!text)txt.style.display='none';
   if(att&&att.quote&&att.quote.text){const qd=document.createElement('div');qd.className='qRef';qd.textContent=(att.quote.who==='user'?'↩ তুমি: ':'↩ AI: ')+att.quote.text.slice(0,120);bub.insertBefore(qd,txt)}
   const imgs=(att&&att.imgs)||[],files=(att&&att.files)||[];
@@ -1248,6 +1262,13 @@ $('#mNew').onclick=()=>{closeSheets();$('#newChatBtn').click()};
 $('#mSearch').onclick=()=>{closeSheets();$('#chatSearchWrap').style.display='block';$('#chatSearch').focus()};
 $('#mProjects').onclick=()=>{closeSheets();loadHistory();openSheet('#sProjects')};
 $('#mHistory').onclick=()=>{closeSheets();loadHistory();openSheet('#sHistory')};
+$('#mAudit').onclick=async()=>{closeSheets();openSheet('#sAudit');const box=$('#auditList');box.innerHTML='<div class="agMsg">লোড হচ্ছে…</div>';
+  try{const j=await api('/api/audit');const rows=j.audit||[];box.innerHTML='';
+    if(!rows.length){box.innerHTML='<div class="agMsg">এখনো কোনো অডিট এন্ট্রি নেই</div>';return}
+    rows.forEach(r=>{const d=document.createElement('div');d.className='auRow';
+      d.innerHTML='<span class="auT">'+esc(r.tool||'?')+'</span><small>'+esc((r.risk||'')+'/'+(r.gate||''))+'</small><small>'+new Date(r.ts||Date.now()).toLocaleString('bn-BD',{hour12:false})+'</small><span class="auR '+esc(r.result||'')+'">'+esc(r.result||'')+'</span>';
+      box.appendChild(d)});
+  }catch(e){box.innerHTML='<div class="agMsg">⚠️ '+esc(e.message||'লোড যায়নি')+' — আগে আনলক করো</div>'}};
 $('#mFav').onclick=()=>{closeSheets();loadHistory().then(()=>{renderFav();openSheet('#sFav')})};
 $('#mSettings').onclick=()=>{closeSheets();loadMemory();openSheet('#sSettings')};
 $('#mSystem').onclick=()=>{closeSheets();openSys()};
@@ -1829,7 +1850,7 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
-window.__SWV='ahai-v23';
+window.__SWV='ahai-v24';
 function clog(m){try{fetch(apiBase()+'/api/clog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({m:String(m).slice(0,400)})}).catch(()=>{})}catch(e){}}
 window.addEventListener('error',e=>clog('ERR '+e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno));
 window.addEventListener('unhandledrejection',ev=>clog('REJ '+((ev.reason&&ev.reason.message)||ev.reason||'')));
