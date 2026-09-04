@@ -42,7 +42,7 @@ jobs:
           url = os.environ.get('RESULT_URL', '')
           if url:
               try:
-                  req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json'})
+                  req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) juju-agent-runner/1.0'})
                   print('post:', urllib.request.urlopen(req, timeout=30).read()[:200])
               except Exception as e:
                   print('result post failed:', e)

@@ -891,8 +891,8 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     const script = String(args.script || args.command || '');
     if (!script.trim()) throw new Error('script বা command লাগবে');
     const cls = cmdGate(script);
-    if (cls === 'BLOCK' || (cls === 'APPROVAL' && !cx.approved)) {
-      await audit(env, { tool: tool, action: 'agent.shell', risk: 'CRITICAL', gate: cls, result: 'DENIED', task: (cx.task || '').slice(0, 80) });
+    if (cls === 'BLOCK' || (cls === 'APPROVAL' && !(ctx && ctx.approved))) {
+      await audit(env, { tool: tool, action: 'agent.shell', risk: 'CRITICAL', gate: cls, result: 'DENIED', task: String((ctx && ctx.task) || '').slice(0, 80) });
       throw new Error('🔥 Firewall: কমান্ড ' + cls + ' — ' + (cls === 'BLOCK' ? 'চিরকাল নিষিদ্ধ' : 'approved:true পাঠাতে হবে'));
     }
     const run = await runSandbox(env, keys, script, args.repo);
