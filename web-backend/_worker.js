@@ -883,8 +883,8 @@ async function opsDrain(env, keys, opts) {
     let st = 'done'; let res = ''; let err = '';
     const isProd = OPS_PROD_RE.test(toolName);
     const missionOk = awayOn && !!job.mission && (!away.missions || !away.missions.length || away.missions.indexOf(job.mission) >= 0);
-    const approved = (missionOk && !isProd) || !!(O.interactive && O.approved);
-    if (isProd && !O.interactive) { st = 'approval'; err = 'production deploy — owner approval লাগবে (away-mode নীতি)'; }
+    const approved = (missionOk && !isProd) || !!O.approved;
+    if (isProd && !O.approved) { st = 'approval'; err = 'production deploy — explicit approved:true লাগবে (away-mode নীতি: prod কখনো অটো নয়)'; }
     else {
       try {
         const r = await runAgentTool(env, keys, toolName, payload.args || {}, () => {}, { owner: true, approved: approved, task: 'job#' + job.id + (job.mission ? ':' + job.mission : '') });
