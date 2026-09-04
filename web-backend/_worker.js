@@ -637,18 +637,28 @@ async function twinTime(keys, repo, path, kw) {
 function b64utf8enc(str) { const bin = new TextEncoder().encode(String(str || '')); let s = ''; for (let i = 0; i < bin.length; i += 8192) s += String.fromCharCode.apply(null, bin.subarray(i, i + 8192)); return btoa(s); }
 function stripFences(t) { return String(t || '').replace(/^\s*```[a-zA-Z]*\s*\n?/, '').replace(/\n?```\s*$/, '').trim(); }
 async function gemText(keys, prompt, maxTok) {
-  const models = ['gemini-2.5-flash', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
-  let last = '';
-  for (const m of models) {
+  const errs = [];
+  for (const m of ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite']) {
     try {
       const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent?key=' + keys.GEMINI_API_KEY, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, maxOutputTokens: maxTok || 3000 } }) });
       const j = await r.json().catch(() => ({}));
       const t = (((j.candidates || [])[0] || {}).content?.parts || []).map((pp) => pp.text || '').join('');
       if (t.trim()) return t;
-      last = m + ' HTTP ' + r.status;
-    } catch (e) { last = m + ' ' + (e.message || e); }
+      errs.push(m + ':' + r.status);
+    } catch (e) { errs.push(m + ':' + (e.message || e)); }
   }
-  throw new Error('LLM সাড়া দেয়নি (' + last + ')');
+  const oai = [['groq', 'GROQ_API_KEY', 'openai/gpt-oss-120b'], ['cerebras', 'CEREBRAS_API_KEY', 'llama-3.3-70b'], ['mistral', 'MISTRAL_API_KEY', 'mistral-small-latest'], ['deepinfra', 'DEEPINFRA_API_KEY', 'deepseek-ai/DeepSeek-V3']];
+  for (const oa of oai) {
+    const key = keys[oa[1]]; if (!key) { errs.push(oa[0] + ':nokey'); continue; }
+    try {
+      const r = await fetch(PING_BASE[oa[0]] + '/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key }, body: JSON.stringify({ model: oa[2], stream: false, temperature: 0.2, max_tokens: maxTok || 3000, messages: [{ role: 'user', content: prompt }] }) });
+      const j = await r.json().catch(() => ({}));
+      const t = (((j.choices || [])[0] || {}).message || {}).content || '';
+      if (String(t).trim()) return String(t);
+      errs.push(oa[0] + ':' + r.status);
+    } catch (e) { errs.push(oa[0] + ':' + (e.message || e)); }
+  }
+  throw new Error('LLM সাড়া দেয়নি (' + errs.join(', ').slice(0, 190) + ')');
 }
 function cmdGate(script) {
   let g = 'SAFE';
