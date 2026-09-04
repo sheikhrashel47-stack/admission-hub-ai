@@ -82,17 +82,17 @@
 - [x] 3.7 **Error memory**: errmem:<sig> {n,cause,fix}; chat catch-এ auto-record + পুরনো হলে hint append — (2026-09-04, b9ff1cd)
 - [x] 3.8 Deploy → gh-pages e2d2389 (+title-fix) → live: BLOCK✅ APPROVAL-DENIED✅ CALL-logged✅ redaction✅ health wv=p3-v24 — (2026-09-04)
 
-## 🟦 PHASE 4 — Repo Digital Twin + Code Intelligence
+## 🟦 PHASE 4 — Repo Digital Twin + Code Intelligence ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** "জুজু project-এর structure মুখস্থ জানে"। রেফ: P3#1,2,7; P2 Part D; P4#51-57,42; P1#24,12,31।
-- [ ] 4.1 **Repo walker**: tree + file metadata cache (D1, per-repo)
-- [ ] 4.2 **Entry-point + config + dependency discovery** (P4#53,59,60)
-- [ ] 4.3 **Symbol index**: functions/components/routes/hooks — কোথায় define, কোথায় used
-- [ ] 4.4 **Incremental re-index**: শুধু বদলানো file (commit hash compare)
-- [ ] 4.5 **repo.search tool**: keyword + semantic hybrid, context ranking (top 5-15 result)
-- [ ] 4.6 **Codebase Map Report**: "কোন file কী করে" operational map (P4#51-52)
-- [ ] 4.7 **Impact Analysis**: file বদলালে কী কী প্রভাবিত → Risk LOW/MED/HIGH/CRITICAL (P3#2)
-- [ ] 4.8 **Git Time-Machine tool**: log/diff/blame → "কোন commit-এর পরে bug শুরু" (P3#7, P4#84)
-- [ ] 4.9 Deploy → Admission Hub repo-র ওপর live test
+- [x] 4.1 **Repo walker**: git/trees?recursive=1 + blob-sha diff → contents D1 cache `twin:<repo>:src:<p>` (30d). Live: 25 files ✅
+- [x] 4.2 **Entry-point + config + dependency discovery** — entries (index.html×2, _worker.js, sw.js), configs (yml/manifest), external-host counts ✅
+- [x] 4.3 **Symbol index**: js functions (decl+arrow-const), /api routes, html ids; uses = word-boundary refs per name/file. Live: 278 symbols ✅
+- [x] 4.4 **Incremental re-index**: head-sha match → `{cached:true}`; শুধু বদলানো blob fetch, deleted files purge. Live ✅
+- [x] 4.5 **twin.search tool**: hybrid ranking (path+3, symbol+2, line+1), snippets w/ line numbers, top-10. Live: 'firewall' ranked ✅
+- [x] 4.6 **Codebase Map Report** (`twin.map`): per-file role + symbol count + size. Live: chat "repo-এর ম্যাপ দাও" → auto table ✅
+- [x] 4.7 **Impact Analysis** (`twin.impact`): symbol-users + filename refs → dependents; entry files = CRITICAL. Live: web/index.html → CRITICAL ✅
+- [x] 4.8 **Git Time-Machine** (`twin.time`): commits?path= + per-commit files/message keyword scan → hit flags. Live: kw='firewall' → শুধু Phase 3 commit 0ce46dbc hit ✅
+- [x] 4.9 Deployed gh-pages `e9f6cb96` — 6 twin live tests + chat-router passed (2026-09-04)
 
 ## 🟦 PHASE 5 — Sandbox + Test Engine (GitHub Actions = $0 CI)
 **লক্ষ্য:** CORE tier-এর শেষ ফাঁক — code execution + testing। রেফ: P1#13-16,50; P2 Part H/L; P4#80,91-96,188,189।
