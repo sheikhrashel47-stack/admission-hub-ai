@@ -102,6 +102,7 @@ const PERM = {
   'gh.repos': { risk: 'LOW', gate: 'AUTO' }, 'gh.read': { risk: 'LOW', gate: 'AUTO' },
   'web.search': { risk: 'LOW', gate: 'AUTO' }, 'web.read': { risk: 'LOW', gate: 'AUTO' }, 'web.eye': { risk: 'LOW', gate: 'AUTO' },
   'verify.url': { risk: 'LOW', gate: 'AUTO' }, 'bu.health': { risk: 'LOW', gate: 'AUTO' },
+  'twin.index': { risk: 'LOW', gate: 'AUTO' }, 'twin.search': { risk: 'LOW', gate: 'AUTO' }, 'twin.map': { risk: 'LOW', gate: 'AUTO' }, 'twin.impact': { risk: 'LOW', gate: 'AUTO' }, 'twin.time': { risk: 'LOW', gate: 'AUTO' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -531,7 +532,106 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1 };
+/* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
+const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
+const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
+const TWIN_SKIP = /(^|\/)(node_modules|dist|build|icons|\.git)\//i;
+function b64utf8(b64) { try { const bin = atob(String(b64 || '').replace(/\n/g, '')); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new TextDecoder().decode(u); } catch (e) { return ''; } }
+function twinRole(p) { if (/_worker\.js$/.test(p)) return 'backend API + agent brain'; if (/index\.html$/.test(p)) return 'PWA UI (single-file app)'; if (/sw\.js$/.test(p)) return 'offline cache + update watchdog'; if (/manifest/.test(p)) return 'PWA manifest'; if (/\.ya?ml$/.test(p)) return 'CI/CD (GitHub Actions)'; if (/\.md$/.test(p)) return 'docs / blueprint / memory'; return 'asset / config'; }
+async function twinHead(keys, repo) { const rp = await ghApi(keys, '/repos/' + repo); const b = await ghApi(keys, '/repos/' + repo + '/branches/' + rp.default_branch); return b.commit.sha; }
+async function twinSrcs(env, repo, blobs) { const srcs = {}; for (const b of blobs) { srcs[b.p] = (await storeGet(env, 'twin:' + repo + ':src:' + b.p)) || ''; } return srcs; }
+async function twinIndex(env, keys, repo) {
+  repo = repo || TWIN_REPO;
+  const head = await twinHead(keys, repo);
+  const meta = await storeGetJson(env, 'twin:' + repo + ':meta', null);
+  if (meta && meta.sha === head) return { cached: true, sha: head.slice(0, 8), files: meta.files, symbols: meta.symbols, ts: meta.ts };
+  const tree = (await ghApi(keys, '/repos/' + repo + '/git/trees/' + head + '?recursive=1')).tree || [];
+  const blobs = tree.filter((t) => t.type === 'blob' && !TWIN_SKIP.test(t.path) && TWIN_EXT.test(t.path) && t.size <= 400000).map((t) => ({ p: t.path, sha: t.sha, s: t.size }));
+  const oldTree = (await storeGetJson(env, 'twin:' + repo + ':tree', null)) || [];
+  const oldBy = {}; oldTree.forEach((t) => { oldBy[t.p] = t.sha; });
+  const changed = blobs.filter((b) => oldBy[b.p] !== b.sha);
+  for (const b of changed) { const j = await ghApi(keys, '/repos/' + repo + '/contents/' + b.p + '?ref=' + head); await storePut(env, 'twin:' + repo + ':src:' + b.p, b64utf8(j.content), 30 * 86400); }
+  const nowBy = {}; blobs.forEach((b) => { nowBy[b.p] = 1; });
+  for (const pp of Object.keys(oldBy)) if (!nowBy[pp]) await storePut(env, 'twin:' + repo + ':src:' + pp, '', 60);
+  const srcs = await twinSrcs(env, repo, blobs);
+  const symbols = [];
+  for (const [pp, c] of Object.entries(srcs)) {
+    if (!c) continue; let m;
+    if (/\.js$/i.test(pp)) {
+      const re = /(?:^|\n)\s*(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
+      while ((m = re.exec(c))) symbols.push({ f: pp, n: m[1], k: 'fn', l: c.slice(0, m.index).split('\n').length });
+      const re2 = /(?:^|\n)\s*(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:\([^)]*\)\s*=>|function)/g;
+      while ((m = re2.exec(c))) symbols.push({ f: pp, n: m[1], k: 'fn', l: c.slice(0, m.index).split('\n').length });
+      const re3 = /['"](\/api\/[a-z0-9_\/:-]+)['"]/gi;
+      while ((m = re3.exec(c))) symbols.push({ f: pp, n: m[1], k: 'route', l: c.slice(0, m.index).split('\n').length });
+    }
+    if (/\.html$/i.test(pp)) { const re = /id="([A-Za-z][\w-]*)"/g; while ((m = re.exec(c))) symbols.push({ f: pp, n: m[1], k: 'dom', l: c.slice(0, m.index).split('\n').length }); }
+  }
+  const names = [...new Set(symbols.map((x) => x.n))].filter((n) => n && n.length > 3).slice(0, 600);
+  const uses = {};
+  for (const n of names) { const re = new RegExp('\\b' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+    for (const [pp, c] of Object.entries(srcs)) { if (!c) continue; const cnt = (c.match(re) || []).length; if (cnt) (uses[n] = uses[n] || {})[pp] = cnt; } }
+  const deps = { entries: [], configs: [], hosts: {} };
+  for (const [pp, c] of Object.entries(srcs)) {
+    if (/index\.html$/.test(pp)) deps.entries.push(pp + ' (UI entry)');
+    if (/_worker\.js$/.test(pp)) deps.entries.push(pp + ' (backend entry)');
+    if (/sw\.js$/.test(pp)) deps.entries.push(pp + ' (PWA service worker)');
+    if (/\.ya?ml$|manifest|package\.json|tsconfig/i.test(pp)) deps.configs.push(pp);
+    let m; const re = /https?:\/\/([a-z0-9.-]+\.[a-z]{2,})/gi;
+    while ((m = re.exec(c || ''))) deps.hosts[m[1]] = (deps.hosts[m[1]] || 0) + 1;
+  }
+  const map = Object.keys(srcs).map((pp) => ({ f: pp, role: twinRole(pp), sy: symbols.filter((x) => x.f === pp).length, kb: Math.round((srcs[pp] || '').length / 1024) }));
+  await storePut(env, 'twin:' + repo + ':tree', JSON.stringify(blobs), 30 * 86400);
+  await storePut(env, 'twin:' + repo + ':symbols', JSON.stringify(symbols), 30 * 86400);
+  await storePut(env, 'twin:' + repo + ':uses', JSON.stringify(uses), 30 * 86400);
+  await storePut(env, 'twin:' + repo + ':deps', JSON.stringify(deps), 30 * 86400);
+  await storePut(env, 'twin:' + repo + ':map', JSON.stringify(map), 30 * 86400);
+  await storePut(env, 'twin:' + repo + ':meta', JSON.stringify({ sha: head, ts: Date.now(), files: blobs.length, symbols: symbols.length, changed: changed.length }), 30 * 86400);
+  return { cached: false, sha: head.slice(0, 8), files: blobs.length, symbols: symbols.length, changed: changed.length };
+}
+async function twinSearch(env, repo, q) {
+  repo = repo || TWIN_REPO;
+  const sy = (await storeGetJson(env, 'twin:' + repo + ':symbols', null)) || [];
+  const tree = (await storeGetJson(env, 'twin:' + repo + ':tree', null)) || [];
+  const ql = String(q || '').toLowerCase(); const out = [];
+  for (const t of tree) {
+    const c = (await storeGet(env, 'twin:' + repo + ':src:' + t.p)) || '';
+    if (!c) continue;
+    let score = t.p.toLowerCase().includes(ql) ? 3 : 0; const hits = [];
+    const lines = c.split('\n');
+    for (let i = 0; i < lines.length; i++) { if (lines[i].toLowerCase().includes(ql)) { score += 1; if (hits.length < 3) hits.push({ l: i + 1, s: lines[i].trim().slice(0, 110) }); } }
+    for (const x of sy) if (x.f === t.p && x.n.toLowerCase().includes(ql)) score += 2;
+    if (score) out.push({ f: t.p, score, hits });
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out.slice(0, 10);
+}
+async function twinImpact(env, repo, path) {
+  repo = repo || TWIN_REPO;
+  const uses = (await storeGetJson(env, 'twin:' + repo + ':uses', null)) || {};
+  const sy = (await storeGetJson(env, 'twin:' + repo + ':symbols', null)) || [];
+  const tree = (await storeGetJson(env, 'twin:' + repo + ':tree', null)) || [];
+  const defined = sy.filter((x) => x.f === path);
+  const dep = {};
+  for (const x of defined) { const u = uses[x.n] || {}; for (const [f, n] of Object.entries(u)) if (f !== path) dep[f] = (dep[f] || 0) + n; }
+  const base = path.split('/').pop();
+  for (const t of tree) { if (t.p !== path) { const c = (await storeGet(env, 'twin:' + repo + ':src:' + t.p)) || ''; if (c.includes(base)) dep[t.p] = (dep[t.p] || 0) + 1; } }
+  const n = Object.keys(dep).length;
+  const risk = /index\.html$|_worker\.js$|sw\.js$/.test(path) ? 'CRITICAL' : n >= 3 ? 'HIGH' : n >= 1 ? 'MEDIUM' : 'LOW';
+  return { path, dependents: dep, risk };
+}
+async function twinTime(keys, repo, path, kw) {
+  repo = repo || TWIN_REPO;
+  const list = await ghApi(keys, '/repos/' + repo + '/commits?per_page=12' + (path ? '&path=' + encodeURIComponent(path) : ''));
+  const out = [];
+  for (const c of (list || []).slice(0, 8)) {
+    let hit = !kw;
+    if (kw) { try { const d = await ghApi(keys, '/repos/' + repo + '/commits/' + c.sha); hit = JSON.stringify(d.files || []).toLowerCase().includes(String(kw).toLowerCase()) || String(c.commit.message || '').toLowerCase().includes(String(kw).toLowerCase()); } catch (e) {} }
+    out.push({ sha: String(c.sha || '').slice(0, 8), date: ((c.commit || {}).author || {}).date, msg: String((c.commit || {}).message || '').split('\n')[0].slice(0, 90), hit });
+  }
+  return out;
+}
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
@@ -579,6 +679,10 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
     const ltp = await storeGetJson(env, 'ctx:lasttool', null);
     if (ltp && Array.isArray(ltp.plan) && ltp.plan.length && (!ltp.chatId || ltp.chatId === chatId)) plan = ltp.plan.slice(0, 2);
   }
+  if (!plan.length && /(ম্যাপ|map|স্ট্রাকচার|structure)/i.test(t) && /(repo|রেপো|প্রজেক্ট|codebase|কোডবেস)/i.test(t)) plan.push({ tool: 'twin.map', args: {} });
+  if (!plan.length && /(কোথায়|where)/i.test(t) && /(কোড|ফাংশন|function|ফাইল|file|route)/i.test(t)) plan.push({ tool: 'twin.search', args: { query: t.slice(0, 120) } });
+  if (!plan.length && /(প্রভাব|impact)/i.test(t)) { const mm2 = t.match(/[\w/.-]+\.(js|html|css|md)/i); plan.push({ tool: 'twin.impact', args: { path: mm2 ? mm2[0] : 'web/index.html' } }); }
+  if (!plan.length && /(কোন কমিট|which commit|কবে থেকে)/i.test(t)) { const mm3 = t.match(/[\w/.-]+\.(js|html|css|md)/i); plan.push({ tool: 'twin.time', args: { path: mm3 ? mm3[0] : '', kw: t.slice(0, 60) } }); }
   if (!plan.length) return null;
   try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
@@ -727,6 +831,11 @@ async function visionCritique(keys, b64png, question) {
   return 'vision ব্যর্থ (' + last + ')';
 }
 async function runAgentTool(env, keys, tool, args, emit, ctx) {
+  if (tool === 'twin.index') return await twinIndex(env, keys, args.repo);
+  if (tool === 'twin.search') { const mi0 = await storeGetJson(env, 'twin:' + (args.repo || TWIN_REPO) + ':meta', null); if (!mi0) await twinIndex(env, keys, args.repo); return { q: args.query || args.q, results: await twinSearch(env, args.repo, args.query || args.q || '') }; }
+  if (tool === 'twin.map') { const repo0 = args.repo || TWIN_REPO; const mi1 = await storeGetJson(env, 'twin:' + repo0 + ':meta', null); if (!mi1) await twinIndex(env, keys, repo0); return { meta: mi1, deps: await storeGetJson(env, 'twin:' + repo0 + ':deps', null), map: (await storeGetJson(env, 'twin:' + repo0 + ':map', null)) || [] }; }
+  if (tool === 'twin.impact') { const repo1 = args.repo || TWIN_REPO; const mi2 = await storeGetJson(env, 'twin:' + repo1 + ':meta', null); if (!mi2) await twinIndex(env, keys, repo1); return await twinImpact(env, repo1, args.path || ''); }
+  if (tool === 'twin.time') return await twinTime(keys, args.repo, args.path || '', args.kw || '');
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
