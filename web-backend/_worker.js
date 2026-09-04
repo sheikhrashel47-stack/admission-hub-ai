@@ -1614,6 +1614,7 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     if (act === 'list') return { missions: (await storeGetJson(env, 'missions:index', [])) || [] };
     if (act === 'status') return { id: m.id, goal: m.goal, state: m.state, stage: m.stage, idx: m.idx, retries: m.retries, steps: m.steps, budget: m.budget, approved: m.approved, log: (m.log || []).slice(-12), ctxKeys: Object.keys(m.ctx || {}), gate: m.ctx && m.ctx.gate };
     if (act === 'cancel') { m.state = 'cancelled'; await msave(m); return { id: m.id, state: 'cancelled' }; }
+    if (act === 'retry') { if (m.state !== 'escalated' && m.state !== 'awaiting-approval') throw new Error('শুধু escalated/awaiting মিশন retry হয় — এখন state: ' + m.state); m.state = 'running'; m.retries = 0; await msave(m); await tgNotify(env, '🔄 মিশন ' + m.id + ' retry — মালিকের সিদ্ধান্তে আবার চলছে (' + m.stage + ' থেকে)'); return { id: m.id, state: 'running', stage: m.stage, note: 'human-in-the-loop resume' }; }
     if (act === 'approve') { m.approved = true; if (m.state === 'awaiting-approval') { m.state = 'running'; } await msave(m); return { id: m.id, approved: true, state: m.state }; }
     if (act === 'step') {
       if (m.state !== 'running') return { id: m.id, state: m.state, note: 'চালু নেই — step নয় (approve/cancel দেখুন)' };
