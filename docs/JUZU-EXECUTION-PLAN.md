@@ -117,17 +117,17 @@
 - [x] 6.8 **MD ↔ DB sync**: mem.syncmd (bullet→kind classify: LESSON→error, সিদ্ধান্ত→decision, পছন্দ→preference; redactSecrets; hash-dedupe) + mem.export (DB→markdown). Live: JUJU-MEMORY.md → 188 inserted; re-sync → skipped:188; export 195 rows ✅
 - [x] 6.9 Deployed gh-pages `0837afb6` (wv p6-v26) — ৫০ message পাঠানোর পরে পুরনো decision recall: MEMUSED:[5,75,10], উত্তর '১৫ অক্টোবর ২০২৬' ✅ (2026-09-04)
 
-## 🟦 PHASE 7 — Visual QA + Browser Pro
+## 🟦 PHASE 7 — Visual QA + Browser Pro ✅ COMPLETE (2026-09-04)
 **লক্ষ্য:** SEE→UNDERSTAND→REASON→ACT→OBSERVE→VERIFY→RECOVER loop (P4#50)। রেফ: P4#1-49,171-180; P2 Part I/J; P3#11,12।
-- [ ] 7.1 **Structured scene output**: screenshot → JSON (elements/hierarchy/states/interactive) (P4#1,6,7,9)
-- [ ] 7.2 **Visual baseline archive**: প্রতি deploy-এর screenshot set সংরক্ষণ (D1/Drive) (P4#46)
-- [ ] 7.3 **Visual regression compare**: baseline vs new → diff regions + score (P4#4,21,44)
-- [ ] 7.4 **Device matrix**: iPhone/Android/tablet/desktop viewport test (P3#12, P4#18-20)
-- [ ] 7.5 **Visual error localization**: region + severity + likely cause (P4#5)
-- [ ] 7.6 **Browser decision loop**: action→screenshot→interpret→continue/investigate (P4#37)
-- [ ] 7.7 **Browser recovery**: ভুল page → state recognize → ফিরে আসা (P4#38,180)
-- [ ] 7.8 **Visual QA gate**: deploy-এর আগে reference+responsive check → PASS/BLOCK (P4#49)
-- [ ] 7.9 Deploy → Admission Hub-এর ৫টা main page-এ live test
+- [x] 7.1 **qa.scene**: shotGrab (thum.io → browserless fallback) → visionAsk → structured JSON {page, elements[{name,region,state,interactive}], hierarchy, issues}. Live: app → 6 elements + hierarchy ✅
+- [x] 7.2 **qa.baseline**: per url×device shot → filebPut (KV) + `qa:base:<key>` meta (sha256, mime, ts, 90d). Live: app desktop+iphone saved ✅
+- [x] 7.3 **qa.compare**: sha match → identical PASS 100; ভিন্ন হলে 2-image vision diff → {score, diffs[{region,change,regression}], verdict}. Live: identical-PASS + time.is diff → BLOCK 'anti-scraping block page' ধরা ✅ (engine:'browserless' = fresh capture, thum cache bypass)
+- [x] 7.4 **qa.matrix**: 390×844/412×915/768×1024/1280×800 → per-device ok+score+issues. Live: iPhone/tablet/desktop 100, **Android 412px-এ আসল সমস্যা ধরা: cards squashed (score 60)** ✅
+- [x] 7.5 **qa.error**: vision error-hunt → [{region,severity,likelyCause,desc}]. Live: white-space + contrast LOW-severity রিপোর্ট ✅
+- [x] 7.6 **qa.browse**: bounded loop (max 5): shot → vision {pageTitle,matchesGoal,pageError,visibleLinks,action,nextUrl} → done/continue/back/investigate. Live: goal-yes → success:true ✅
+- [x] 7.7 **Recovery**: pageError/action=back → prev-URL-এ ফেরা (recovered counter, max 2, prev না থাকলে bounded stop). Live: /no-page → pageError:true → action:back → recovered:1 ✅
+- [x] 7.8 **qa.gate**: per URL desktop+iphone load/layout check → overall PASS/BLOCK. Live: app PASS-checks, pages.dev 404-page → **verdict BLOCK** (দুই check-ই fail ধরেছে) ✅
+- [x] 7.9 Deployed gh-pages `9288e550` (wv p7-v27) — ২০+ screenshot, ৫+ পেজ টেস্ট: app (gh.io, ৪ viewport), pages.dev 404-page, time.is, example.com, /no-page। নোট: gdrive-token tool পেজ gh-pages output-এ নেই (404) — repo-তে একমাত্র SPA-ই main page ✅
 
 ## 🟦 PHASE 8 — Background Ops (queue + scheduler + notify + observability)
 **লক্ষ্য:** owner offline থাকলেও জুজু কাজ করে, খবর দেয়। রেফ: P1#36-38,72,84,85,109,126; P3#8,19; P4#191-199,242,245; P2 BG-BJ,AC।
