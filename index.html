@@ -395,7 +395,7 @@ html.standalone #toolbar{padding-top:8px}
 html.standalone #drawer{padding-top:10px}
 html.standalone .cpHd{padding-top:10px}
 html.standalone #netBanner{top:6px}
-#modeRow{display:flex;gap:2px;justify-content:center;align-items:center;padding:0 0 6px;pointer-events:auto;flex-wrap:wrap}
+#modeRow{display:flex;gap:2px;justify-content:flex-start;align-items:center;padding:2px 2px 10px;flex-wrap:wrap}
 #modeRow button{font-size:10.5px;font-weight:700;color:var(--dim);padding:4px 9px;border-radius:999px;letter-spacing:.2px}
 #modeRow button.on{color:#6d5bf0;background:rgba(109,91,240,.10)}
 /* premium typography + gap kill */
@@ -540,7 +540,6 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
 
   <div id="glow" aria-hidden="true"></div>
   <footer id="compWrap">
-    <div id="modeRow"><button data-m="auto">অটো</button><button data-m="chat">চ্যাট</button><button data-m="research">রিসার্চ</button><button data-m="coding">কোড</button><button data-m="agent">এজেন্ট</button><button data-m="mission">মিশন</button></div>
     <div id="comp">
       <button id="fabBtn" aria-label="টুলস">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -629,6 +628,8 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
     <div class="grab"></div>
     <div class="hd"><div><span class="ttl">কী করতে চান?</span></div><button class="x" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="bd">
+      <div class="secLbl">উত্তর-মোড (না ছুঁলে অটো)</div>
+      <div id="modeRow"><button data-m="auto">অটো</button><button data-m="chat">চ্যাট</button><button data-m="research">রিসার্চ</button><button data-m="coding">কোড</button><button data-m="agent">এজেন্ট</button><button data-m="mission">মিশন</button></div>
       <div id="toolGrid">
         <button id="tUpload" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span><span><span class="tgt">ফাইল আপলোড</span><span class="tgs" style="display:block">PDF, TXT, CSV, JSON, কোড</span></span></button>
         <button id="tWeb" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span><span><span class="tgt">ওয়েব সার্চ</span><span class="tgs" style="display:block">সর্বশেষ তথ্য খুঁজুন</span></span></button>
@@ -1828,7 +1829,7 @@ async function updStatus(){
 /* ============ PWA ============ */
 let deferredPrompt=null;
 if('serviceWorker' in navigator){
-window.__SWV='ahai-v22';
+window.__SWV='ahai-v23';
 function clog(m){try{fetch(apiBase()+'/api/clog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({m:String(m).slice(0,400)})}).catch(()=>{})}catch(e){}}
 window.addEventListener('error',e=>clog('ERR '+e.message+' @'+(e.filename||'').split('/').pop()+':'+e.lineno));
 window.addEventListener('unhandledrejection',ev=>clog('REJ '+((ev.reason&&ev.reason.message)||ev.reason||'')));
