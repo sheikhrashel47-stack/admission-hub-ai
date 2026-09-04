@@ -99,7 +99,7 @@ const refreshBtn=document.getElementById('refreshBtn');
 
 async function fetchHealth(){
   try{
-    const r=await fetch('https://admission-hub-ai.pages.dev/api/health');
+    const r=await fetch('https://admission-hub-ai.pages.dev/api/health2');
     if(!r.ok) throw new Error();
     const d=await r.json();
     healthEl.textContent=`API LIVE • v${d.version||'?'}`;
