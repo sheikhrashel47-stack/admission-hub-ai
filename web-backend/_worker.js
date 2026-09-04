@@ -106,6 +106,7 @@ const PERM = {
   'agent.shell': { risk: 'HIGH', gate: 'POLICY' }, 'agent.test': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.repair': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.envcheck': { risk: 'LOW', gate: 'POLICY' },
   'mem.save': { risk: 'LOW', gate: 'AUTO' }, 'mem.search': { risk: 'LOW', gate: 'AUTO' }, 'mem.forget': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.correct': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.audit': { risk: 'LOW', gate: 'POLICY' }, 'mem.export': { risk: 'LOW', gate: 'POLICY' }, 'mem.syncmd': { risk: 'MEDIUM', gate: 'POLICY' },
   'qa.scene': { risk: 'LOW', gate: 'AUTO' }, 'qa.baseline': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.compare': { risk: 'LOW', gate: 'AUTO' }, 'qa.matrix': { risk: 'LOW', gate: 'AUTO' }, 'qa.error': { risk: 'LOW', gate: 'AUTO' }, 'qa.browse': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.gate': { risk: 'LOW', gate: 'AUTO' },
+  'ops.queue': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.jobs': { risk: 'LOW', gate: 'POLICY' }, 'ops.schedule': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.stats': { risk: 'LOW', gate: 'POLICY' }, 'ops.health': { risk: 'LOW', gate: 'POLICY' }, 'ops.tick': { risk: 'MEDIUM', gate: 'POLICY' }, 'ops.notify': { risk: 'LOW', gate: 'POLICY' }, 'ops.away': { risk: 'HIGH', gate: 'POLICY' }, 'ops.incident': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.branch': { risk: 'MEDIUM', gate: 'AUTO' }, 'gh.edit': { risk: 'MEDIUM', gate: 'POLICY' }, 'gh.test': { risk: 'MEDIUM', gate: 'POLICY' },
   'gh.commit': { risk: 'HIGH', gate: 'POLICY' }, 'gh.push': { risk: 'HIGH', gate: 'POLICY' }, 'agent.shell': { risk: 'HIGH', gate: 'POLICY' },
   'gh.merge': { risk: 'CRITICAL', gate: 'APPROVAL' },
@@ -809,6 +810,111 @@ async function visionAsk(keys, imgs, prompt) {
   throw new Error('vision ব্যর্থ (' + last + ')');
 }
 function jsonFromVision(t) { const m = String(t).match(/\{[\s\S]*\}/); if (!m) return null; try { return JSON.parse(m[0]); } catch { try { return JSON.parse(m[0].replace(/,\s*([\]}])/g, '$1')); } catch { return null; } } }
+/* ===== Phase 8 — Background Ops (queue + scheduler + notify + observability) ===== */
+let opsReady = false;
+async function opsEnsure(env) {
+  if (opsReady || !env.AH_DB) return;
+  try {
+    await env.AH_DB.batch([
+      env.AH_DB.prepare("CREATE TABLE IF NOT EXISTS jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, prio TEXT DEFAULT 'NORMAL', kind TEXT DEFAULT 'tool', payload TEXT DEFAULT '{}', status TEXT DEFAULT 'queued', result TEXT DEFAULT '', err TEXT DEFAULT '', tries INTEGER DEFAULT 0, maxtries INTEGER DEFAULT 2, created INTEGER NOT NULL, started INTEGER DEFAULT 0, finished INTEGER DEFAULT 0, notify INTEGER DEFAULT 1, mission TEXT DEFAULT '')"),
+      env.AH_DB.prepare("CREATE TABLE IF NOT EXISTS sched (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT '', spec TEXT NOT NULL, payload TEXT DEFAULT '{}', cond TEXT DEFAULT '', lastrun INTEGER DEFAULT 0, nextrun INTEGER DEFAULT 0, enabled INTEGER DEFAULT 1, ts INTEGER NOT NULL)"),
+      env.AH_DB.prepare("CREATE TABLE IF NOT EXISTS tasklog (id INTEGER PRIMARY KEY AUTOINCREMENT, jobid INTEGER DEFAULT 0, tool TEXT DEFAULT '', ms INTEGER DEFAULT 0, ok INTEGER DEFAULT 1, err TEXT DEFAULT '', tryn INTEGER DEFAULT 1, tokens INTEGER DEFAULT 0, ts INTEGER NOT NULL)")
+    ]);
+    opsReady = true;
+  } catch {}
+}
+async function tgNotify(env, text) {
+  try {
+    const tok = await storeGet(env, 'cfg:TELEGRAM_BOT_TOKEN'); const ch = await storeGet(env, 'cfg:TELEGRAM_CHANNEL');
+    if (!tok || !ch) return { sent: false, why: 'tg cfg নেই' };
+    const r = await fetch('https://api.telegram.org/bot' + tok + '/sendMessage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ch, text: String(text).slice(0, 4000), disable_web_page_preview: true }) });
+    const j = await r.json().catch(() => ({}));
+    return { sent: !!j.ok, err: j.ok ? undefined : String(j.description || r.status).slice(0, 80) };
+  } catch (e) { return { sent: false, err: String(e.message || e).slice(0, 80) }; }
+}
+const OPS_PRIO = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3, BACKGROUND: 4 };
+async function opsQueue(env, j) {
+  await opsEnsure(env); if (!env.AH_DB) return { error: 'D1 নেই' };
+  const prio = OPS_PRIO[j.prio] !== undefined ? j.prio : 'NORMAL';
+  const r = await env.AH_DB.prepare("INSERT INTO jobs (prio, kind, payload, status, notify, mission, maxtries, created) VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7)").bind(prio, String(j.kind || 'tool'), JSON.stringify(j.payload || {}).slice(0, 20000), j.notify === 0 ? 0 : 1, String(j.mission || '').slice(0, 60), Number(j.maxtries) || 2, Date.now()).run();
+  return { id: Number((r.meta || {}).last_row_id) || 0, prio };
+}
+function schedNext(spec) {
+  const mm = String(spec || '').match(/^(once|every|daily)@(.+)$/);
+  if (!mm) return { next: 0, enabled: 0 };
+  if (mm[1] === 'every') return { next: Date.now() + Math.max(1, Number(mm[2]) || 60) * 60000, enabled: 1 };
+  if (mm[1] === 'daily') { const pp = mm[2].split(':'); const d = new Date(); d.setUTCHours(Number(pp[0]) || 0, Number(pp[1]) || 0, 0, 0); let nx = d.getTime(); if (nx <= Date.now()) nx += 86400000; return { next: nx, enabled: 1 }; }
+  return { next: 0, enabled: 0 };
+}
+const OPS_PROD_RE = /(cf\.pages\.(deploy|rollback)|prod\.deploy|deploy\.prod)/;
+async function opsDrain(env, keys, opts) {
+  await opsEnsure(env); if (!env.AH_DB) return { error: 'D1 নেই' };
+  const O = opts || {};
+  const t0 = Date.now(); const budget = Number(O.budget) || 25000;
+  const away = await storeGetJson(env, 'ops:away', null);
+  const awayOn = !!(away && away.on && (!away.until || away.until > Date.now()));
+  const frozen = (await storeGet(env, 'ops:freeze')) === '1';
+  const ran = []; const scheduled = [];
+  try {
+    const due = ((await env.AH_DB.prepare('SELECT * FROM sched WHERE enabled = 1 AND nextrun > 0 AND nextrun <= ?1 LIMIT 8').bind(Date.now()).all()).results) || [];
+    for (const sc of due) {
+      let payload = {}; try { payload = JSON.parse(sc.payload || '{}'); } catch {}
+      let condOk = true; let condNote = '';
+      if (sc.cond) {
+        try {
+          const c = JSON.parse(sc.cond);
+          if (c && c.tool) { const rr = await runAgentTool(env, keys, String(c.tool), c.args || {}, () => {}, { owner: true, task: 'sched-cond:' + sc.name }); const flat = JSON.stringify(rr); condOk = !c.expect || flat.includes(String(c.expect)); condNote = condOk ? 'cond-ok' : 'cond-fail: ' + flat.slice(0, 80); }
+        } catch (e) { condOk = false; condNote = 'cond-error: ' + String(e.message || e).slice(0, 60); }
+      }
+      if (condOk) { const q = await opsQueue(env, { prio: payload.prio || 'NORMAL', kind: payload.kind || 'tool', payload: payload, notify: payload.notify === 0 ? 0 : 1, mission: sc.name || '' }); scheduled.push({ sched: sc.name, jobId: q.id, cond: condNote || 'ok' }); }
+      else scheduled.push({ sched: sc.name, skipped: condNote });
+      const nx = schedNext(sc.spec);
+      await env.AH_DB.prepare('UPDATE sched SET lastrun = ?1, nextrun = ?2, enabled = ?3 WHERE id = ?4').bind(Date.now(), nx.next, nx.enabled, sc.id).run();
+    }
+  } catch {}
+  while (Date.now() - t0 < budget) {
+    let job = null;
+    try { job = await env.AH_DB.prepare("SELECT * FROM jobs WHERE status = 'queued' ORDER BY CASE prio WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 WHEN 'LOW' THEN 3 ELSE 4 END, id LIMIT 1").first(); } catch { break; }
+    if (!job) break;
+    if (frozen && job.prio !== 'CRITICAL') break;
+    let payload = {}; try { payload = JSON.parse(job.payload || '{}'); } catch {}
+    const toolName = String(payload.tool || job.kind || '');
+    await env.AH_DB.prepare("UPDATE jobs SET status = 'running', started = ?1, tries = tries + 1 WHERE id = ?2").bind(Date.now(), job.id).run();
+    let st = 'done'; let res = ''; let err = '';
+    const isProd = OPS_PROD_RE.test(toolName);
+    const missionOk = awayOn && !!job.mission && (!away.missions || !away.missions.length || away.missions.indexOf(job.mission) >= 0);
+    const approved = (missionOk && !isProd) || !!(O.interactive && O.approved);
+    if (isProd && !O.interactive) { st = 'approval'; err = 'production deploy — owner approval লাগবে (away-mode নীতি)'; }
+    else {
+      try {
+        const r = await runAgentTool(env, keys, toolName, payload.args || {}, () => {}, { owner: true, approved: approved, task: 'job#' + job.id + (job.mission ? ':' + job.mission : '') });
+        res = JSON.stringify(r).slice(0, 4000);
+      } catch (e) { st = 'failed'; err = String(e.message || e).slice(0, 300); }
+    }
+    const retry = st === 'failed' && Number(job.tries) + 1 < Number(job.maxtries);
+    await env.AH_DB.prepare('UPDATE jobs SET status = ?1, result = ?2, err = ?3, finished = ?4 WHERE id = ?5').bind(retry ? 'queued' : st, res, err, Date.now(), job.id).run();
+    const msRun = Date.now() - (Number(job.started) || Date.now());
+    try { await env.AH_DB.prepare('INSERT INTO tasklog (jobid, tool, ms, ok, err, tryn, tokens, ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)').bind(job.id, toolName, msRun, st === 'done' ? 1 : 0, err.slice(0, 200), Number(job.tries) + 1, Math.ceil((res.length + err.length + String(job.payload || '').length) / 4), Date.now()).run(); } catch {}
+    if (job.notify) {
+      const icon = st === 'done' ? '✅' : st === 'failed' ? (retry ? '🔁' : '❌') : '🔐';
+      await tgNotify(env, icon + ' JUJU job#' + job.id + ' [' + job.prio + (job.mission ? ':' + job.mission : '') + '] ' + toolName + ' → ' + st + (err ? '\nerr: ' + err : '') + (res ? '\n' + res.slice(0, 500) : '') + (awayOn ? '\n🌙 away-mode' + (missionOk ? ' (pre-approved mission)' : '') : ''));
+    }
+    ran.push({ id: job.id, tool: toolName, st: st, ms: msRun });
+  }
+  return { ran: ran, scheduled: scheduled, awayOn: awayOn, frozen: frozen, ms: Date.now() - t0 };
+}
+async function opsHealth(env, keys) {
+  const problems = []; let score = 100;
+  try { const r = await fetch('https://admission-hub-ai.pages.dev/api/health'); const j = await r.json(); if (!j.ok) { score -= 25; problems.push('API health fail'); } } catch { score -= 25; problems.push('API পৌঁছানো যাচ্ছে না'); }
+  try { const r = await fetch('https://sheikhrashel47-stack.github.io/admission-hub-ai/'); if (!r.ok) { score -= 25; problems.push('UI HTTP ' + r.status); } } catch { score -= 25; problems.push('UI পৌঁছানো যাচ্ছে না'); }
+  const wl = (await storeGetJson(env, 'watch:log', null)) || [];
+  const bad = wl.slice(0, 7).filter((x) => x && !x.ok);
+  if (bad.length) { score -= bad.length * 5; problems.push('watchman ব্যর্থ ' + bad.length + '/7: ' + [...new Set(bad.flatMap((x) => x.bad || []))].join(',').slice(0, 80)); }
+  try { const f = await env.AH_DB.prepare('SELECT COUNT(*) c FROM tasklog WHERE ok = 0 AND ts > ?1').bind(Date.now() - 86400000).first(); const c = Number((f || {}).c) || 0; if (c) { score -= Math.min(15, c * 3); problems.push('২৪ ঘণ্টায় ' + c + 'টা job ব্যর্থ'); } } catch {}
+  try { const q = await env.AH_DB.prepare("SELECT COUNT(*) c FROM jobs WHERE status = 'queued'").first(); const c = Number((q || {}).c) || 0; if (c > 5) { score -= 5; problems.push('queue backlog ' + c); } } catch {}
+  if (score < 0) score = 0;
+  return { score: score, top3: problems.slice(0, 3), ts: Date.now() };
+}
 /* ===== Phase 2 — Intent Engine + Conversation Discipline ===== */
 function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
@@ -1245,6 +1351,76 @@ async function runAgentTool(env, keys, tool, args, emit, ctx) {
     }
     return { verdict: block ? 'BLOCK' : 'PASS', report };
   }
+  if (tool === 'ops.queue') return await opsQueue(env, { prio: args.prio, kind: args.kind || 'tool', payload: { tool: args.tool, args: args.args || {} }, notify: args.notify, mission: args.mission, maxtries: args.maxtries });
+  if (tool === 'ops.jobs') {
+    await opsEnsure(env);
+    const lim = Math.min(50, Number(args.limit) || 20);
+    const rows = args.status ? (((await env.AH_DB.prepare('SELECT id, prio, status, mission, err, created, finished, payload FROM jobs WHERE status = ?1 ORDER BY id DESC LIMIT ?2').bind(String(args.status), lim).all()).results) || []) : (((await env.AH_DB.prepare('SELECT id, prio, status, mission, err, created, finished, payload FROM jobs ORDER BY id DESC LIMIT ?1').bind(lim).all()).results) || []);
+    return { count: rows.length, jobs: rows.map((x) => { let tl = ''; try { tl = JSON.parse(x.payload).tool || ''; } catch {} return { id: x.id, prio: x.prio, st: x.status, mission: x.mission, tool: tl, err: String(x.err || '').slice(0, 100), created: x.created, finished: x.finished }; }) };
+  }
+  if (tool === 'ops.schedule') {
+    await opsEnsure(env);
+    const act = String(args.action || 'list');
+    if (act === 'add') {
+      const spec = String(args.spec || '');
+      if (!/^(once|every|daily)@.+/.test(spec)) throw new Error('spec লাগবে: once@ISO | every@মিনিট | daily@HH:MM(UTC)');
+      let next;
+      if (spec.indexOf('once@') === 0) { const tt = Date.parse(spec.slice(5)); if (!tt || tt < Date.now() - 60000) throw new Error('once@ সময় ভুল বা অতীতে'); next = tt; }
+      else next = schedNext(spec).next || (Date.now() + 60000);
+      const r = await env.AH_DB.prepare('INSERT INTO sched (name, spec, payload, cond, nextrun, enabled, ts) VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6)').bind(String(args.name || args.tool || 'task').slice(0, 60), spec, JSON.stringify({ tool: args.tool, args: args.args || {}, prio: args.prio, notify: args.notify }).slice(0, 20000), args.cond ? JSON.stringify(args.cond).slice(0, 500) : '', next, Date.now()).run();
+      return { id: Number((r.meta || {}).last_row_id) || 0, spec: spec, nextrun: new Date(next).toISOString() };
+    }
+    if (act === 'remove') { await env.AH_DB.prepare('UPDATE sched SET enabled = 0 WHERE id = ?1').bind(Number(args.id)).run(); return { removed: Number(args.id) }; }
+    const rows = ((await env.AH_DB.prepare('SELECT id, name, spec, cond, lastrun, nextrun, enabled FROM sched ORDER BY id DESC LIMIT 30').all()).results || []);
+    return { count: rows.length, sched: rows };
+  }
+  if (tool === 'ops.stats') {
+    await opsEnsure(env);
+    const hrs = Math.min(168, Number(args.hours) || 24);
+    try {
+      const rows = ((await env.AH_DB.prepare('SELECT tool, ms, ok, err, tryn, tokens FROM tasklog WHERE ts > ?1').bind(Date.now() - hrs * 3600000).all()).results) || [];
+      const byTool = {};
+      for (const r of rows) { const b = byTool[r.tool] = byTool[r.tool] || { n: 0, fails: 0, retries: 0, msSum: 0, tokens: 0 }; b.n++; if (!r.ok) b.fails++; if (Number(r.tryn) > 1) b.retries++; b.msSum += Number(r.ms) || 0; b.tokens += Number(r.tokens) || 0; }
+      for (const k of Object.keys(byTool)) { byTool[k].avgMs = Math.round(byTool[k].msSum / byTool[k].n); delete byTool[k].msSum; }
+      return { window: hrs + 'h', total: rows.length, ok: rows.filter((r) => r.ok).length, fails: rows.filter((r) => !r.ok).length, tokensEst: rows.reduce((a, r) => a + (Number(r.tokens) || 0), 0), byTool: byTool };
+    } catch (e) { return { error: String(e.message || e).slice(0, 100) }; }
+  }
+  if (tool === 'ops.health') return await opsHealth(env, keys);
+  if (tool === 'ops.tick') return await opsDrain(env, keys, { budget: Math.min(60000, Number(args.budget) || 25000), interactive: true, approved: !!(ctx && ctx.approved) });
+  if (tool === 'ops.notify') return await tgNotify(env, String(args.text || '🔔 JUJU টেস্ট নোটিফিকেশন'));
+  if (tool === 'ops.away') {
+    if (args.on === false || args.on === 'off') { await storePut(env, 'ops:away', JSON.stringify({ on: false, ts: Date.now() }), 90 * 86400); await tgNotify(env, '🏠 away-mode বন্ধ — মালিক ফিরেছেন, সব approval আবার হাতে'); return { on: false }; }
+    if (args.on === true || args.on === 'on') {
+      const hours = Math.min(72, Math.max(1, Number(args.hours) || 8));
+      const missions = (Array.isArray(args.missions) ? args.missions : []).map(String).slice(0, 10);
+      await storePut(env, 'ops:away', JSON.stringify({ on: true, until: Date.now() + hours * 3600000, missions: missions, ts: Date.now() }), hours * 3600 + 7200);
+      await tgNotify(env, '🌙 JUJU away-mode চালু (' + hours + ' ঘণ্টা)\npre-approved missions: ' + (missions.join(', ') || '(সব non-prod job)') + '\n⛔ production deploy সবসময় approval-gated\nপ্রতিটি job-এর রিপোর্ট এখানে আসবে');
+      return { on: true, hours: hours, missions: missions, until: new Date(Date.now() + hours * 3600000).toISOString() };
+    }
+    return await storeGetJson(env, 'ops:away', { on: false });
+  }
+  if (tool === 'ops.incident') {
+    await opsEnsure(env);
+    const reason = String(args.reason || 'manual drill');
+    await storePut(env, 'ops:freeze', '1', 6 * 3600);
+    const rep = { reason: reason, frozenAt: Date.now(), collect: {}, compare: null, recover: null };
+    try { rep.collect.health = await (await fetch('https://admission-hub-ai.pages.dev/api/health')).json(); } catch (e) { rep.collect.health = 'fail: ' + String(e.message || e).slice(0, 60); }
+    try { rep.collect.healthScore = await opsHealth(env, keys); } catch {}
+    try { rep.collect.watch = await storeGetJson(env, 'watch:latest', null); } catch {}
+    try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 12").all(); rep.collect.recentAudit = ((r.results || []).map((x) => { try { const a = JSON.parse(x.value); return { tool: a.tool, result: a.result, gate: a.gate }; } catch { return null; } }).filter(Boolean)); } catch {}
+    try { const r = await env.AH_DB.prepare('SELECT id, prio, kind, status, err, finished FROM jobs ORDER BY id DESC LIMIT 8').all(); rep.collect.recentJobs = r.results || []; } catch {}
+    try { const j = await cfApi(keys, '/accounts/' + CF_ACC + '/pages/projects/admission-hub-ai/deployments?per_page=3'); rep.compare = (j.result || []).map((d) => ({ id: d.id, short: String(d.id).slice(0, 8), env2: d.environment, status: (d.latest_stage || {}).status, branch: ((d.deployment_trigger || {}).metadata || {}).branch, created: d.created_on })); } catch (e) { rep.compare = 'cfApi fail: ' + String(e.message || e).slice(0, 80); }
+    if (args.recover) {
+      if (!(ctx && ctx.approved)) rep.recover = 'rollback-এর জন্য approved:true লাগবে';
+      else if (Array.isArray(rep.compare) && rep.compare[1]) { try { const rb = await cfApi(keys, '/accounts/' + CF_ACC + '/pages/projects/admission-hub-ai/deployments/' + rep.compare[1].id + '/rollback', { method: 'POST' }); rep.recover = { rolledBackTo: rep.compare[1].short, ok: rb.success !== false }; } catch (e) { rep.recover = { error: String(e.message || e).slice(0, 100) }; } }
+      else rep.recover = 'তুলনার মতো আগের deployment নেই';
+    }
+    if (!args.holdFreeze) await storePut(env, 'ops:freeze', '0', 60);
+    rep.unfrozen = !args.holdFreeze;
+    await storePut(env, 'ops:incident:latest', JSON.stringify(rep), 30 * 86400);
+    await tgNotify(env, '🚨 JUJU Incident: ' + reason.slice(0, 120) + '\nscore: ' + ((rep.collect.healthScore || {}).score || '?') + '/100, top3: ' + JSON.stringify((rep.collect.healthScore || {}).top3 || []) + '\ndeployments: ' + JSON.stringify((rep.compare || []).map ? (rep.compare || []).map((x) => x.short + ':' + x.status) : rep.compare).slice(0, 200) + '\nrecover: ' + JSON.stringify(rep.recover) + '\nfreeze: ' + (rep.unfrozen ? 'তোলা হয়েছে' : 'বহাল'));
+    return rep;
+  }
   const pm = permFor(tool); const cx = ctx || {};
   if (!gateAllows(pm.gate, cx)) {
     await audit(env, { tool: tool, action: tool, risk: pm.risk, gate: pm.gate, result: 'DENIED', approval: !!cx.approved, task: cx.task || '' });
@@ -1352,7 +1528,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p7-v27' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p8-v28' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -1399,6 +1575,15 @@ export default {
       });
       return new Response(stream, { headers: { 'Content-Type': 'text/event-stream', ...cors } });
     }
+    if (method === 'GET' && path === '/api/ops/tick') {
+      const want = keys.WATCH_SECRET; const got = req.headers.get('X-Watch') || '';
+      if (!want || got !== want) return json({ error: 'watch secret ভুল' }, 401);
+      const lockTs = Number(await storeGet(env, 'ops:ticklock')) || 0;
+      if (Date.now() - lockTs < 60000) return json({ ok: true, skipped: 'locked', ago: Math.round((Date.now() - lockTs) / 1000) + 's' });
+      await storePut(env, 'ops:ticklock', String(Date.now()), 300);
+      try { return json(Object.assign({ ok: true }, await opsDrain(env, keys, { budget: 25000 }))); }
+      catch (e) { return json({ ok: false, error: String(e.message || e).slice(0, 120) }, 500); }
+    }
     if (method === 'GET' && path === '/api/watch') {
       const want = keys.WATCH_SECRET; const got = req.headers.get('X-Watch') || '';
       if (!want || got !== want) return json({ error: 'watch secret ভুল' }, 401);
@@ -1429,6 +1614,8 @@ export default {
       const log = (await storeGetJson(env, 'watch:log', null)) || [];
       log.unshift({ ts: rep2.ts, ok: rep2.checks.every((c) => c.ok), bad: rep2.checks.filter((c) => !c.ok).map((c) => c.name) });
       await storePut(env, 'watch:log', JSON.stringify(log.slice(0, 30)));
+      try { const hs = await opsHealth(env, keys); rep2.health = hs; await storePut(env, 'ops:healthscore', JSON.stringify(hs), 7 * 86400); await tgNotify(env, '🩺 JUJU দৈনিক স্বাস্থ্য: ' + hs.score + '/100\nTop ৩ সমস্যা:\n' + (hs.top3.length ? hs.top3.map((x, i) => (i + 1) + '. ' + x).join('\n') : 'কোনো সমস্যা নেই 🎉')); } catch (e) { rep2.health = 'fail: ' + String(e.message || e).slice(0, 60); }
+      try { rep2.drain = await opsDrain(env, keys, { budget: 90000 }); } catch (e) { rep2.drain = { err: String(e.message || e).slice(0, 100) }; }
       return json(rep2);
     }
     if (method === 'POST' && path === '/api/owner/unlock') {
