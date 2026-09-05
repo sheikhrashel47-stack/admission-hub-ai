@@ -54,3 +54,23 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 
 নতুন রুট: `GET /api/pdf/<id>.pdf` (application/pdf, inline, 7d)।
 মোট এক্সটার্নাল টুল: **৭২** (v58)।
+
+---
+
+## JUJU-PC — নিজের বাস্তব কম্পিউটার (v59) 🖥️
+
+**আর্কিটেকচার:** GitHub Codespaces (ফ্রি 120 core-hours/মাস) → ভেতরে daemon (প্রাইভেট রেপো `juju-pc`) → worker-এর D1 job-queue-এর সাথে long-poll → JUJU চ্যাট থেকে pc.* টুল।
+
+| টুল | কাজ |
+|---|---|
+| pc.pair {code} | codespace টার্মিনালের ৬-অক্ষর কোড → সেশন টোকেন (7d) |
+| pc.status | daemon online/offline + pending jobs |
+| pc.run {cmd, timeout≤1800, async} | যেকোনো কমান্ড — ~/work পারসিস্টেন্ট |
+| pc.put / pc.get | ফাইল পাঠানো/আনা (get → /api/file/<id> ডাউনলোড 24h) |
+| pc.gui {screenshot/click/type/key} | Xvfb+xdotool — JUJU স্ক্রিন দেখে মাউস-কীবোর্ড চালায় (screenshot → /api/img হোস্ট) |
+| pc.desktop | Xfce+noVNC+Firefox ইনস্টল (setup-desktop.sh) → Ports 6080-এ লাইভ স্ক্রিন |
+| kit.result {runKey} | অ্যাসিংক স্যান্ডবক্স ফল (kit.code/kit.lab async:true → ৬ ঘণ্টা পর্যন্ত জব) |
+
+**নতুন পাবলিক এন্ডপয়েন্ট:** /api/pc/register, /api/pc/paircheck/<code>, /api/pc/ping, /api/pc/next, /api/pc/result (daemon টোকেন), GET /api/file/<id>।
+**E2E ভেরিফায়েড (সিমুলেটেড ডেমন):** pairing ✅, run ✅, put/get বাংলা কনটেন্ট ✅, gui screenshot/click ✅, async lab→kit.result ✅।
+**মালিকের ধাপ:** juju-pc রেপো → Code → Codespaces → Create → টার্মিনালের কোড JUJU-কে বলুন। ৩০ মিনিট idle-তে ঘুমায় (ডেটা থাকে), ক্লিক করে জাগানো যায়।
