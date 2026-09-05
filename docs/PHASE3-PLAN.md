@@ -8,21 +8,21 @@ JUJU-র জন্য ৫০টা কার্যকর টুলস — অয
 ## বর্তমান গণনা (আগে থেকে লাইভ = ১৫)
 web.search (Tavily) · web.read ৪-লেয়ার (Jina/Firecrawl/ScrapingBee/direct) · web.eye ২-লেয়ার (thum.io/Browserless) · web.now (রিসার্চ ইঞ্জিন) · bu.task/status/health (Browser-Use ×11 key) · agent.shell (GH Actions sandbox) · gh.* · cf.* · mem.* · verify.url
 
-## Batch B1 — keyless নতুন ২২ টুল (আমার কাজ, key লাগবে না) — v43
+## Batch B1 — ✅ সম্পন্ন (v43-v48, সব লাইভ-টেস্ট পাস)
 | টুল | কাজ | API (টেস্ট করা) |
 |---|---|---|
 | kit.weather | যেকোনো শহরের আবহাওয়া + ৩ দিনের পূর্বাভাস | Open-Meteo ✅ |
 | kit.currency | লাইভ এক্সচেঞ্জ রেট (BDT সহ) | open.er-api.com ✅ |
 | kit.wiki | উইকিপিডিয়া সারাংশ (বাংলা/ইংরেজি) | Wikipedia REST ✅ |
 | kit.dict | ইংরেজি শব্দার্থ/উচ্চারণ | dictionaryapi.dev ✅ |
-| kit.translate | অনুবাদ (60+ ভাষা) | MyMemory ✅ |
+| kit.translate | অনুবাদ (60+ ভাষা) | MyMemory + LLM ফলব্যাক ✅ |
 | kit.qr | QR কোড বানানো | qrserver ✅ |
 | kit.time | বিশ্বঘড়ি/টাইমজোন | timeapi ✅ |
 | kit.geo | ঠিকানা→কোঅর্ডিনেট | Nominatim ✅ |
-| kit.news | BD খবর (BBC বাংলা + প্রথম আলো RSS) | ✅ |
+| kit.news | BD খবর (BBC বাংলা + প্রথম আলো RSS) | ✅ টেস্ট পাস |
 | kit.rss | যেকোনো RSS ফিড পড়া | direct ✅ |
 | kit.hn | HackerNews টপ স্টোরি | Firebase API ✅ |
-| kit.stack | StackOverflow সার্চ | StackExchange ✅ |
+| kit.stack | StackOverflow সার্চ | Tavily-routed (SE API CF-edge থ্রটল করে) ✅ |
 | kit.npm | NPM প্যাকেজ তথ্য | registry ✅ |
 | kit.pypi | Python প্যাকেজ তথ্য | pypi.org ✅ |
 | kit.arxiv | গবেষণা-পেপার সার্চ | export.arxiv.org ✅ |
@@ -34,11 +34,11 @@ web.search (Tavily) · web.read ৪-লেয়ার (Jina/Firecrawl/ScrapingB
 | kit.img | আনলিমিটেড ফ্রি ছবি জেনারেশন | Pollinations ✅ |
 | kit.tts-free | ফ্রি ভয়েস (অডিও URL) | Pollinations audio ✅ |
 
-## Batch B2 — আমাদের key দিয়েই (মালিকের কিছু লাগবে না) — v44
+## Batch B2 — ✅ সম্পন্ন (kit.stt 0.9s-এ ট্রান্সক্রাইব টেস্ট পাস; kit.flux 658KB JPEG 5.7s + নিজস্ব /api/img হোস্টিং 7-দিন TTL)
 | kit.stt | ভয়েস→টেক্সট | Groq Whisper (key আছে ✅) |
 | kit.flux | AI ছবি (প্রিমিয়াম) | CF FLUX (টেস্ট সাপেক্ষে — free plan-এ না চললে বাদ) |
 
-## Batch B3 — মালিকের key দরকার (যেমনই key পাব, বসাবে)
+## Batch B3 — মালিকের key দরকার (যেমনই key পাব, বসাবে) — বাকি একমাত্র অংশ
 | টুল | কী লাগবে | ফ্রি লিমিট |
 |---|---|---|
 | kit.tts (প্রিমিয়াম ভয়েস) | **ElevenLabs** | ১০ হাজার ক্যারেক্টার/মাস |
