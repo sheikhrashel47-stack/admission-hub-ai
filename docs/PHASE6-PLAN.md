@@ -1,5 +1,5 @@
 # 🔗 PHASE 6 — Connectors (পরিকল্পনা)
-তারিখ: ২০২৬-০৯-০৫ · স্ট্যাটাস: শুরু (owner: "হুম গিটবাব ও" = Phase-5 অনুমোদন + GitHub কানেক্টর চাই)
+তারিখ: ২০২৬-০৯-০৫ · স্ট্যাটাস: ✅ COMPLETE — WAITING FOR OWNER APPROVAL
 
 ## লক্ষ্য
 জুজুকে বাইরের দুনিয়ার সাথে **দুই-মুখী সংযোগ**: outbound (জুজু → সার্ভিস) + inbound (সার্ভিস → জুজু)। সব ফ্রি টিয়ার; নতুন key লাগলে শুধু owner দেবেন।
@@ -16,11 +16,11 @@
 - Inbound: Telegram/Discord → JUJU reply-loop (CF cron poll)।
 
 ## Acceptance
-- [ ] /api/tool owner ছাড়া 401, owner-সহ gh.pr/gh.runs লাইভ ডেটা
-- [ ] gh.issue দিয়ে টেস্ট-ইশু খোলা → বন্ধ (প্রমাণ URL)
-- [ ] /api/hook/github: ভুল signature-তে 401; সঠিক HMAC-এ 200 + gh.events-এ ইভেন্ট
-- [ ] con.discord: key নেই → পরিষ্কার বাংলা সেটাপ-এরর
-- [ ] health wv p10-v76
+- [x] /api/tool owner ছাড়া 401, owner-সহ gh.pr/gh.runs লাইভ ডেটা
+- [x] gh.issue দিয়ে টেস্ট-ইশু খোলা → বন্ধ (প্রমাণ URL)
+- [x] /api/hook/github: ভুল signature-তে 401; সঠিক HMAC-এ 200 + gh.events-এ ইভেন্ট
+- [x] con.discord: key নেই → পরিষ্কার বাংলা সেটাপ-এরর
+- [x] health wv p10-v76
 
 ## Owner task list (ঐচ্ছিক, পরে)
 1. Discord: Server Settings → Integrations → Webhooks → New → URL কপি → JUJU-কে দিন (১ মিনিট)।

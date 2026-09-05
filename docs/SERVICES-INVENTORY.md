@@ -104,3 +104,10 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 - v75: POST /api/runner/start (owner-gated sandbox dispatch)।
 - OSS bench: smolagents 1.26.0 install 5s/import 1s; CodeAgent+Tool মিনি-রান Final answer 7 (run_448bc461…)। docs/PHASE5-OSS-BENCH.md।
 - Deploys: v73 178aef3/f4bbd08, v74 3d6e001/bb44aa1, v75 c06c285/4bd1031; health p10-v75।
+
+## v76–v78 (2026-09-05) — PHASE 6: Connectors
+- v76: GitHub outbound `gh.issue`(open/close)/`gh.pr`/`gh.runs` + `gh.events`; inbound `POST /api/hook/github` (HMAC sha256); owner গেটওয়ে `POST /api/tool`; `con.discord` scaffold; প্ল্যানার quick-rules ৫টি।
+- v77: `GET/POST /api/cfg` (owner-gated key management, _keysCache reset); loadKeys-এ GH_HOOK_SECRET+DISCORD_WEBHOOK।
+- v78: gh.events env-scope fix (runTool-এ env নেই → runAgentTool-এ সরানো)।
+- টেস্ট: /api/tool 401/200; issue #5 open→close (github.com/…/issues/5); gh.runs লাইভ; hook good-sig 200 + bad-sig 401 + gh.events-এ ইভেন্ট; con.discord বাংলা সেটাপ-এরর।
+- Deploys: v76 11b223f/0c017d7, v77 5a55abf/3e6f008, v78 c0aaf3f/5c0f6e9; health p10-v78।
