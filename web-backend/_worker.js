@@ -1618,7 +1618,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v40';
+  const AGENT_VERSION = 'p10-v41';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1882,6 +1882,7 @@ async function pingProviders(keys) {
       if (m.pid === 'gemini') ok = (await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`)).ok;
       else if (m.pid === 'openrouter') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000); const r = await fetch(`${PING_BASE.openrouter}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, stream: false, temperature: 0.6, max_tokens: 8, messages: [{ role: 'system', content: 'ping' }, { role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else if (m.pid === 'pollinations') { const r = await fetch('https://text.pollinations.ai/' + encodeURIComponent('ping')); ok = r.ok && (await r.text()).trim().length > 0; }
+      else if (m.pid === 'zai') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 25000); const r = await fetch(`${PING_BASE.zai}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: m.model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else if (m.pid === 'cfai') { const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 20000); const r = await fetch(`${PING_BASE.cfai}/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY || '' }, body: JSON.stringify({ model: m.model, max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }) }); clearTimeout(to); ok = r.ok; }
       else {
         const ac = new AbortController(); const to = setTimeout(() => ac.abort(), 9000);
@@ -1914,7 +1915,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v40' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v41' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
