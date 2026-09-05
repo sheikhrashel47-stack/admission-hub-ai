@@ -1790,7 +1790,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v78';
+  const AGENT_VERSION = 'p10-v79';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2551,7 +2551,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v78' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v79' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2715,6 +2715,22 @@ export default {
       if (value) await storePut(env, 'cfg:' + name, value, 0); else { try { await env.AH_DB.prepare('DELETE FROM kv WHERE key = ?1').bind('cfg:' + name).run(); } catch {} }
       _keysCache = null;
       return json({ ok: true, name, set: !!value });
+    }
+    if (method === 'GET' && path === '/api/connectors') {
+      let okOwn = await ownerOk(env, req);
+      if (!okOwn) { const oc = String(req.headers.get('x-owner-code') || '').trim(); if (oc) { const un = await ownerUnlock(env, oc); okOwn = !!(un && un.session); } }
+      if (!okOwn) return json({ error: '🔒 মালিক পরিচয় লাগবে' }, 401);
+      const ev = await storeGetJson(env, 'gh:lastevents', []);
+      const list = [
+        { id: 'github', name: 'GitHub', desc: 'repo, issue, PR, Actions — জুজু পড়ে/লেখ', on: !!keys.GITHUB_PAT },
+        { id: 'webhook', name: 'GitHub Webhook', desc: 'push/issue/PR ইভেন্ট নিজে থেকে আসে', on: !!keys.GH_HOOK_SECRET, last: (ev[0] && ev[0].ts) || null, events: ev.length },
+        { id: 'web', name: 'লাইভ ওয়েব সার্চ', desc: 'Tavily → wiki ফলব্যাক', on: !!keys.TAVILY_API_KEY },
+        { id: 'discord', name: 'Discord', desc: '', on: !!keys.DISCORD_WEBHOOK, note: keys.DISCORD_WEBHOOK ? '' : 'webhook URL দিলে চালু' },
+        { id: 'email', name: 'Email', desc: 'পরিকল্পিত (free tier key লাগবে)', on: false },
+        { id: 'telegram', name: 'Telegram', desc: 'পরিকল্পিত (bot token লাগবে)', on: false }
+      ];
+      list[3].desc = keys.DISCORD_WEBHOOK ? 'চ্যানেলে মেসেজ পাঠায়' : 'চ্যানেলে মেসেজ পাঠাবে';
+      return json({ list });
     }
     if (method === 'POST' && path === '/api/tool') {
       let okOwn = await ownerOk(env, req);
