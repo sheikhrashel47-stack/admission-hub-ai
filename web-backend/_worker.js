@@ -1620,7 +1620,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v45';
+  const AGENT_VERSION = 'p10-v46';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1916,7 +1916,17 @@ async function kitTool(env, keys, tool, args) {
     case 'kit.news': { const FEEDS = { bangla: 'https://feeds.bbci.co.uk/bengali/rss.xml', prothomalo: 'https://www.prothomalo.com/feed/' }; const f = FEEDS[String(args.feed || 'bangla')] || String(args.url || FEEDS.bangla); const xml = await tget(f); return { feed: f, items: rssParse(xml) }; }
     case 'kit.rss': { const u = String(args.url || ''); if (!u) throw new Error('url লাগবে'); return { feed: u, items: rssParse(await tget(u)) }; }
     case 'kit.hn': { const ids = (await jget('https://hacker-news.firebaseio.com/v0/topstories.json')).slice(0, 8); const items = await Promise.all(ids.map((i) => jget('https://hacker-news.firebaseio.com/v0/item/' + i + '.json').catch(() => null))); return items.filter(Boolean).map((x) => ({ title: x.title, url: x.url, score: x.score, comments: x.descendants })); }
-    case 'kit.stack': { const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const sr = await fetch('https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=' + encodeURIComponent(q) + '&site=' + (args.site || 'stackoverflow'), { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!sr.ok) throw new Error('kit.stack HTTP ' + sr.status + ': ' + (await sr.text()).slice(0, 150)); const j = await sr.json(); return (j.items || []).slice(0, 5).map((x) => ({ title: x.title, url: x.link, score: x.score, answers: x.answer_count })); }
+    case 'kit.stack': {
+      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
+      // StackExchange API CF-edge IP থ্রটল করে → Tavily দিয়ে stackoverflow.com সার্চ
+      if (keys.TAVILY_API_KEY) {
+        const tr = await fetch('https://api.tavily.com/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ api_key: keys.TAVILY_API_KEY, query: q + ' ' + (args.site || 'stackoverflow'), max_results: 5, include_domains: ['stackoverflow.com', 'stackexchange.com'] }) });
+        if (tr.ok) { const tj = await tr.json(); const rs = (tj.results || []).slice(0, 5).map((x) => ({ title: x.title, url: x.url, snippet: String(x.content || '').slice(0, 220) })); if (rs.length) return rs; }
+      }
+      const sr = await fetch('https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=' + encodeURIComponent(q) + '&site=' + (args.site || 'stackoverflow'), { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } });
+      if (!sr.ok) throw new Error('kit.stack HTTP ' + sr.status + ': ' + (await sr.text()).slice(0, 150));
+      const j = await sr.json(); return (j.items || []).slice(0, 5).map((x) => ({ title: x.title, url: x.link, score: x.score, answers: x.answer_count }));
+    }
     case 'kit.npm': { const p = String(args.pkg || ''); if (!p) throw new Error('pkg লাগবে'); const j = await jget('https://registry.npmjs.org/' + encodeURIComponent(p).replace('%40', '@')); return { name: j.name, latest: j['dist-tags'] && j['dist-tags'].latest, description: String(j.description || '').slice(0, 200) }; }
     case 'kit.pypi': { const p = String(args.pkg || ''); if (!p) throw new Error('pkg লাগবে'); const j = await jget('https://pypi.org/pypi/' + encodeURIComponent(p) + '/json'); return { name: j.info.name, version: j.info.version, summary: String(j.info.summary || '').slice(0, 200) }; }
     case 'kit.arxiv': { const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const xml = await tget('https://export.arxiv.org/api/query?search_query=all:' + encodeURIComponent(q) + '&max_results=4'); const re = /<entry>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<id>([\s\S]*?)<\/id>[\s\S]*?<summary>([\s\S]*?)<\/summary>/g; const out = []; let m; while ((m = re.exec(xml)) && out.length < 4) out.push({ title: m[1].replace(/\s+/g, ' ').trim().slice(0, 140), url: m[2].trim(), abs: m[3].replace(/\s+/g, ' ').trim().slice(0, 280) }); return out; }
@@ -1933,7 +1943,7 @@ async function kitTool(env, keys, tool, args) {
       const r = await fetch('https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/run/@cf/black-forest-labs/flux-1-schnell', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY }, body: JSON.stringify({ prompt: p.slice(0, 800), steps: Math.min(8, Number(args.steps) || 4) }) });
       if (!r.ok) throw new Error('flux HTTP ' + r.status);
       const buf = new Uint8Array(await r.arrayBuffer());
-      if (buf.length < 500 || buf[0] === 0x7b) throw new Error('flux ছবি তৈরি করেনি (সম্ভবত মডেল-সীমা)');
+      if (buf.length < 500 || buf[0] === 0x7b) throw new Error('flux: ' + new TextDecoder().decode(buf.slice(0, 240)));
       let bin = ''; for (let i = 0; i < buf.length; i += 8192) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
       const b64 = btoa(bin);
       if (b64.length > 1400000) throw new Error('ছবি অনেক বড় — w/h ছোট দিন');
@@ -2006,7 +2016,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v45' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v46' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
