@@ -129,6 +129,7 @@ const PERM = {
 };
 function permFor(tool) {
   const p = PERM[tool]; if (p) return p;
+  if (/^kit\./.test(tool)) return { risk: 'LOW', gate: 'AUTO' };
   if (/^gh\./.test(tool)) {
     if (/(delete|force|rewrite|purge)/.test(tool)) return { risk: 'CRITICAL', gate: 'BLOCK' };
     if (/merge/.test(tool)) return { risk: 'CRITICAL', gate: 'APPROVAL' };
@@ -572,7 +573,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1619,7 +1620,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v42';
+  const AGENT_VERSION = 'p10-v43';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1846,6 +1847,7 @@ if (tool === 'brain.critic') {
     try { return { results: await searchWeb(keys.TAVILY_API_KEY, args.query || '', 5), source: 'tavily' }; }
     catch (e) { const ddg = await ddgSearch(args.query || ''); if (ddg.length) return { results: ddg, source: 'duckduckgo (fallback)' }; throw e; }
   }
+  if (tool.startsWith('kit.')) return await kitTool(env, keys, tool, args);
   if (tool === 'web.read') return await readPage(env, String(args.url || ''));
   if (tool === 'web.now') {
     // Phase 2 — রিয়েল-টাইম তথ্য-ইঞ্জিন (Google AI-overview স্টাইল): সার্চ → সোর্স পড়া → উদ্ধৃতিসহ সংশ্লেষণ
@@ -1880,6 +1882,41 @@ if (tool === 'brain.critic') {
   return runTool(keys, tool, args);
 }
 let _pingCache = null;
+/* ===== Phase 3 — kit.* টুল-প্যাক (keyless public APIs, সব লাইভ-টেস্ট করা) ===== */
+async function kitTool(env, keys, tool, args) {
+  const jget = async (u) => { const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!r.ok) throw new Error(tool + ' HTTP ' + r.status); return r.json(); };
+  const tget = async (u) => { const r = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!r.ok) throw new Error(tool + ' HTTP ' + r.status); return r.text(); };
+  const rssParse = (xml) => String(xml).split(/<item[\s>]/).slice(1, 9).map((blk) => {
+    const g = (re) => { const m = blk.match(re); return m ? m[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim() : ''; };
+    return { title: g(/<title>([\s\S]*?)<\/title>/).slice(0, 160), url: g(/<link>([\s\S]*?)<\/link>/), date: g(/<pubDate>([\s\S]*?)<\/pubDate>/) };
+  }).filter((x) => x.title);
+  switch (tool) {
+    case 'kit.weather': { const loc = String(args.location || 'Dhaka'); const g = await jget('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(loc) + '&count=1&language=bn'); const p = (g.results || [])[0]; if (!p) throw new Error('লোকেশন পাওয়া যায়নি: ' + loc); const w = await jget('https://api.open-meteo.com/v1/forecast?latitude=' + p.latitude + '&longitude=' + p.longitude + '&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=3'); return { location: p.name + ', ' + (p.country_code || ''), current: w.current, daily: w.daily }; }
+    case 'kit.currency': { const base = String(args.base || 'USD').toUpperCase(); const j = await jget('https://open.er-api.com/v6/latest/' + encodeURIComponent(base)); if (j.result !== 'success') throw new Error('currency ব্যর্থ'); const want = ['BDT', 'USD', 'EUR', 'GBP', 'INR', 'SAR', 'AED', 'MYR', 'JPY', 'CNY', 'PKR']; return { base: base, updated: j.time_last_update_utc, rates: Object.fromEntries(want.filter((c) => j.rates[c]).map((c) => [c, j.rates[c]])) }; }
+    case 'kit.wiki': { const lang = ['bn', 'en', 'hi'].includes(String(args.lang)) ? String(args.lang) : 'bn'; const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const j = await jget('https://' + lang + '.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(q)); return { title: j.title, extract: j.extract, url: j.content_urls && j.content_urls.desktop && j.content_urls.desktop.page }; }
+    case 'kit.dict': { const w = encodeURIComponent(String(args.word || '')); if (!w) throw new Error('word লাগবে'); const j = await jget('https://api.dictionaryapi.dev/api/v2/entries/en/' + w); const e = Array.isArray(j) ? j[0] : null; if (!e) throw new Error('শব্দ পাওয়া যায়নি'); return { word: e.word, phonetic: e.phonetic || ((e.phonetics || []).map((x) => x.text).filter(Boolean)[0] || ''), meanings: (e.meanings || []).slice(0, 3).map((m) => ({ pos: m.partOfSpeech, def: (m.definitions || []).slice(0, 2).map((d) => d.definition) })) }; }
+    case 'kit.translate': { const txt = String(args.text || '').slice(0, 500); if (!txt) throw new Error('text লাগবে'); const j = await jget('https://api.mymemory.translated.net/get?q=' + encodeURIComponent(txt) + '&langpair=' + (args.from || 'en') + '|' + (args.to || 'bn')); const out = j.responseData && j.responseData.translatedText; if (!out) throw new Error('অনুবাদ ব্যর্থ'); return { translated: out, from: args.from || 'en', to: args.to || 'bn', quality: j.responseMatch }; }
+    case 'kit.qr': { const d = String(args.text || args.url || ''); if (!d) throw new Error('text/url লাগবে'); const sz = Number(args.size) || 300; return { qr: 'https://api.qrserver.com/v1/create-qr-code/?size=' + sz + 'x' + sz + '&data=' + encodeURIComponent(d) }; }
+    case 'kit.time': { return await jget('https://timeapi.io/api/Time/current/zone?timeZone=' + encodeURIComponent(String(args.timezone || 'Asia/Dhaka'))); }
+    case 'kit.geo': { const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const j = await jget('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) + '&format=json&limit=3'); return (Array.isArray(j) ? j : []).map((x) => ({ name: x.display_name, lat: x.lat, lon: x.lon })); }
+    case 'kit.news': { const FEEDS = { bangla: 'https://feeds.bbci.co.uk/bengali/rss.xml', prothomalo: 'https://www.prothomalo.com/feed/' }; const f = FEEDS[String(args.feed || 'bangla')] || String(args.url || FEEDS.bangla); const xml = await tget(f); return { feed: f, items: rssParse(xml) }; }
+    case 'kit.rss': { const u = String(args.url || ''); if (!u) throw new Error('url লাগবে'); return { feed: u, items: rssParse(await tget(u)) }; }
+    case 'kit.hn': { const ids = (await jget('https://hacker-news.firebaseio.com/v0/topstories.json')).slice(0, 8); const items = await Promise.all(ids.map((i) => jget('https://hacker-news.firebaseio.com/v0/item/' + i + '.json').catch(() => null))); return items.filter(Boolean).map((x) => ({ title: x.title, url: x.url, score: x.score, comments: x.descendants })); }
+    case 'kit.stack': { const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const j = await jget('https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=' + encodeURIComponent(q) + '&site=' + (args.site || 'stackoverflow')); return (j.items || []).slice(0, 5).map((x) => ({ title: x.title, url: x.link, score: x.score, answers: x.answer_count })); }
+    case 'kit.npm': { const p = String(args.pkg || ''); if (!p) throw new Error('pkg লাগবে'); const j = await jget('https://registry.npmjs.org/' + encodeURIComponent(p).replace('%40', '@')); return { name: j.name, latest: j['dist-tags'] && j['dist-tags'].latest, description: String(j.description || '').slice(0, 200) }; }
+    case 'kit.pypi': { const p = String(args.pkg || ''); if (!p) throw new Error('pkg লাগবে'); const j = await jget('https://pypi.org/pypi/' + encodeURIComponent(p) + '/json'); return { name: j.info.name, version: j.info.version, summary: String(j.info.summary || '').slice(0, 200) }; }
+    case 'kit.arxiv': { const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const xml = await tget('https://export.arxiv.org/api/query?search_query=all:' + encodeURIComponent(q) + '&max_results=4'); const re = /<entry>[\s\S]*?<title>([\s\S]*?)<\/title>[\s\S]*?<id>([\s\S]*?)<\/id>[\s\S]*?<summary>([\s\S]*?)<\/summary>/g; const out = []; let m; while ((m = re.exec(xml)) && out.length < 4) out.push({ title: m[1].replace(/\s+/g, ' ').trim().slice(0, 140), url: m[2].trim(), abs: m[3].replace(/\s+/g, ' ').trim().slice(0, 280) }); return out; }
+    case 'kit.dns': { const n = String(args.name || ''); if (!n) throw new Error('name লাগবে'); return await jget('https://dns.google/resolve?name=' + encodeURIComponent(n) + '&type=' + (args.type || 'A')); }
+    case 'kit.youtube': { const u = String(args.url || ''); if (!u) throw new Error('url লাগবে'); return await jget('https://www.youtube.com/oembed?url=' + encodeURIComponent(u) + '&format=json'); }
+    case 'kit.math': { const e = String(args.expr || ''); if (!e) throw new Error('expr লাগবে'); return await jget('https://api.mathjs.org/v4/?expr=' + encodeURIComponent(e)); }
+    case 'kit.grammar': { const txt = String(args.text || '').slice(0, 2000); if (!txt) throw new Error('text লাগবে'); const r = await fetch('https://api.languagetool.org/v2/check', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'text=' + encodeURIComponent(txt) + '&language=' + (args.lang || 'en-US') }); const j = await r.json().catch(() => ({})); return (j.matches || []).slice(0, 8).map((m) => ({ msg: m.message, issue: String(txt).slice(m.offset, (m.offset || 0) + (m.length || 0)), fix: (m.replacements || [])[0] && m.replacements[0].value })); }
+    case 'kit.ia': { const q = String(args.query || ''); if (!q) throw new Error('query লাগবে'); const j = await jget('https://archive.org/advancedsearch.php?q=' + encodeURIComponent(q) + '&fl[]=identifier&fl[]=title&fl[]=year&rows=6&output=json'); return (((j.response || {}).docs) || []).map((d) => ({ id: d.identifier, title: d.title, year: d.year, url: 'https://archive.org/details/' + d.identifier })); }
+    case 'kit.img': { const p = String(args.prompt || ''); if (!p) throw new Error('prompt লাগবে'); return { image: 'https://image.pollinations.ai/prompt/' + encodeURIComponent(p) + '?width=' + (Number(args.w) || 768) + '&height=' + (Number(args.h) || 768) + '&nologo=true' }; }
+    case 'kit.tts-free': { const t = String(args.text || '').slice(0, 1000); if (!t) throw new Error('text লাগবে'); return { audio: 'https://text.pollinations.ai/' + encodeURIComponent(t) + '?model=openai-audio&voice=' + (args.voice || 'nova') }; }
+    case 'kit.stt': { const u = String(args.audioUrl || ''); if (!u) throw new Error('audioUrl লাগবে'); if (!keys.GROQ_API_KEY) throw new Error('GROQ key নেই'); const ar = await fetch(u); if (!ar.ok) throw new Error('audio ডাউনলোড HTTP ' + ar.status); const blob = await ar.blob(); const fd = new FormData(); fd.append('file', blob, 'audio.webm'); fd.append('model', 'whisper-large-v3-turbo'); fd.append('response_format', 'json'); const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: fd }); const j = await r.json().catch(() => ({})); if (!j.text) throw new Error('stt HTTP ' + r.status); return { text: j.text, language: j.language }; }
+    default: throw new Error('অজানা kit টুল: ' + tool);
+  }
+}
 async function pingCached(keys) {
   const now = Date.now();
   if (_pingCache && now - _pingCache.ts < 60000) return _pingCache.list;
@@ -1933,7 +1970,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v42' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v43' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
