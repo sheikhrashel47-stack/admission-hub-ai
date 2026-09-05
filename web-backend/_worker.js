@@ -1620,7 +1620,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v47';
+  const AGENT_VERSION = 'p10-v48';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1958,7 +1958,7 @@ async function kitTool(env, keys, tool, args) {
       await storePut(env, 'img:' + id, b64, 7 * 86400);
       return { image: 'https://admission-hub-ai.pages.dev/api/img/' + id + (bytes[0] === 0xff ? '.jpg' : '.png'), bytes: bytes.length, ttl: '7d' };
     }
-    case 'kit.stt': { const u = String(args.audioUrl || ''); if (!u) throw new Error('audioUrl লাগবে'); if (!keys.GROQ_API_KEY) throw new Error('GROQ key নেই'); const ar = await fetch(u); if (!ar.ok) throw new Error('audio ডাউনলোড HTTP ' + ar.status); const blob = await ar.blob(); const fd = new FormData(); fd.append('file', blob, 'audio.webm'); fd.append('model', 'whisper-large-v3-turbo'); fd.append('response_format', 'json'); const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: fd }); const j = await r.json().catch(() => ({})); if (!j.text) throw new Error('stt HTTP ' + r.status); return { text: j.text, language: j.language }; }
+    case 'kit.stt': { const u = String(args.audioUrl || ''); if (!u) throw new Error('audioUrl লাগবে'); if (!keys.GROQ_API_KEY) throw new Error('GROQ key নেই'); const ar = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ahai-kit/1.0)' } }); if (!ar.ok) throw new Error('audio ডাউনলোড HTTP ' + ar.status); const blob = await ar.blob(); const fd = new FormData(); fd.append('file', blob, 'audio.webm'); fd.append('model', 'whisper-large-v3-turbo'); fd.append('response_format', 'json'); const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: fd }); const j = await r.json().catch(() => ({})); if (!j.text) throw new Error('stt HTTP ' + r.status); return { text: j.text, language: j.language }; }
     default: throw new Error('অজানা kit টুল: ' + tool);
   }
 }
@@ -2024,7 +2024,7 @@ export default {
       const isJpg = arr.length > 2 && arr[0] === 0xff && arr[1] === 0xd8;
       return new Response(arr, { headers: { 'Content-Type': isJpg ? 'image/jpeg' : 'image/png', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v47' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v48' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
