@@ -101,6 +101,7 @@ svg{width:20px;height:20px;display:block}
 .heroOrb .eyeL,.heroOrb .eyeR{width:11px;height:17px;border-radius:8px;top:36%}
 .heroOrb .eyeL{left:30%}.heroOrb .eyeR{left:54%}
 #agBar{cursor:pointer}
+body::before{content:'';position:fixed;top:0;left:0;right:0;height:calc(var(--safe-t) + 2px);background:#FCFCFE;z-index:120;pointer-events:none}
 #agBar.run::after{content:'˅';color:var(--dim2);font-size:13px;flex:none}
 #modelLabel,#mModel{display:none!important}.msgWrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
 .row.ai .msgWrap{background:transparent;border:0;border-radius:0;padding:2px 0 0;box-shadow:none}
@@ -691,7 +692,6 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
       <div id="agMain" style="display:none">
         <div class="secLbl">এজেন্ট স্ট্যাটাস</div>
         <div class="dRow"><span class="k">সেশন</span><span class="v" id="agSessLbl">সক্রিয় ✓</span></div>
-        <div class="mItem" id="agSwitchRow"><span class="mi g">⚡</span><div>এজেন্ট সক্রিয়<small>বন্ধ থাকলে কোনো কাজ চলবে না</small></div><span class="agSw" id="agSw"><i></i></span></div>
         <button id="agTasksBtn" class="mItem"><span class="mi">📋</span><div>টাস্ক প্যানেল<small>সব এজেন্ট টাস্ক + রিজিউম</small></div><span class="right">›</span></button>
         <div id="agTaskBox" style="display:none">
           <div class="secLbl">কাজের নির্দেশ</div>
@@ -1007,6 +1007,9 @@ async function go(text){
     body.appendChild(card);tset(card,0,'now');shell._card=card;
   }
   const payload=quote?('> '+quote.text.replace(/\n/g,'\n> ')+'\n\n'+text):text;
+  const stepLine=document.createElement('div');stepLine.id='stepLine';stepLine.style.cssText='font-size:11.5px;color:var(--dim);padding:2px 2px 0';stepLine.textContent='💭 ভাবছি…';
+  body.appendChild(stepLine);
+  const _cyc=['💭 ভাবছি…','🔧 টুল চালাচ্ছি…','📖 সোর্স পড়ছি…','✍️ উত্তর সাজাচ্ছি…'];let _ci=0;const _civ=setInterval(()=>{if(stepLine.isConnected)stepLine.textContent=_cyc[(_ci++)%_cyc.length]},2600);
   const typing=document.createElement('div');typing.id='typing';typing.style.display='flex';typing.innerHTML='<i></i><i></i><i></i>';
   body.appendChild(typing);
   streaming=true;sendBtn.disabled=true;sendBtn.style.display='none';stopBtn.style.display='flex';
@@ -1027,13 +1030,14 @@ async function go(text){
         if(ev.step){
           const map=shell._mediaWork?{'READING':0,'SEARCHING':0,'ANALYZING':1}:{'SEARCHING':0,'READING':1,'ANALYZING':2};
           if(shell._card)tset(shell._card,map[ev.step]??0,'now');
+          if(stepLine.isConnected)stepLine.textContent=(ev.step==='SEARCHING'?'🔎 সোর্স খোঁজা হচ্ছে…':ev.step==='READING'?'📖 সোর্স পড়া হচ্ছে…':ev.step==='ANALYZING'?'🧠 বিশ্লেষণ চলছে…':String(ev.step));
           stepsShown=true;
         }
         if(ev.sources){curSources=ev.sources}
         if(ev.attempt&&!acc){}
         if(ev.token){
           if(!stepsShown&&shell._card){const li=shell._steps.length-1;tset(shell._card,Math.max(0,li-1),'done');tset(shell._card,li,'now');stepsShown=true}
-          typing.style.display='none';
+          typing.style.display='none';clearInterval(_civ);if(stepLine.isConnected)stepLine.remove();
           acc+=ev.token;
           body.innerHTML=mdLive(acc);
           if(shell._card)body.appendChild(shell._card);
@@ -1050,7 +1054,6 @@ async function go(text){
             c.onclick=()=>{openSources(curSources)};
             body.appendChild(c);
           }
-          if(ev.suggestions&&ev.suggestions.length)renderFollowUps(body,ev.suggestions);
           const foot=document.createElement('div');foot.className='meta';
           foot.innerHTML=(meta.provider?'<span>⚡ '+esc(meta.provider)+'</span>':'')+(meta.seconds?'<span>⏱ '+meta.seconds+'s</span>':'');
           body.appendChild(foot);
@@ -1754,7 +1757,6 @@ function mountMsg(m,absIdx){
   const srcs=m.sources||[];
   if(srcs.length){const bt=document.createElement('button');bt.className='srcChip';bt.textContent='🔗 '+srcs.length+'টি সোর্স';bt.onclick=()=>openSources(srcs);body.appendChild(bt)}
   if(m.model){const f=document.createElement('div');f.className='meta';f.innerHTML='<span>⚡ '+esc(m.model)+'</span>';body.appendChild(f)}
-  if(m.suggestions&&m.suggestions.length)renderFollowUps(body,m.suggestions);
   if(m.partial){
     if((m.content||'').trim())body.innerHTML+='<div class="meta" style="margin-top:6px">⏸ স্ট্রিম অসম্পূর্ণ — আংশিক উত্তর সংরক্ষিত</div>';
     const chip=document.createElement('button');chip.className='partialChip';
@@ -1877,7 +1879,7 @@ window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPro
 
 /* ============ জুজু Agent Workspace (Phase 1) ============ */
 const AG_SESS='ahai_owner_sess',AG_TASKS='ahai_tasks';
-let agOn=false,agRunning=false,agAbort=null,agCardRef=null;
+let agOn=true,agRunning=false,agAbort=null,agCardRef=null;
 function agSess(){return localStorage.getItem(AG_SESS)||''}
 function agTasks(){try{return JSON.parse(localStorage.getItem(AG_TASKS)||'[]')}catch(e){return[]}}
 function agTasksSave(l){try{localStorage.setItem(AG_TASKS,JSON.stringify(l.slice(0,50)))}catch(e){}}
@@ -2040,7 +2042,7 @@ $('#agUnlockBtn').onclick=async()=>{
   $('#agUnlockBtn').disabled=false;
 };
 $('#agCode').addEventListener('keydown',e=>{if(e.key==='Enter')$('#agUnlockBtn').click()});
-$('#agSwitchRow').onclick=()=>{if(agRunning)return;agOn=!agOn;$('#agSw').classList.toggle('on',agOn);$('#agTaskBox').style.display=agOn?'':'none';toast(agOn?'⚡ এজেন্ট সক্রিয় — নির্দেশ লেখো (কাজ এখন চ্যাটেই চলবে)':'এজেন্ট নিষ্ক্রিয়')};
+const _asr=$('#agSwitchRow');if(_asr)_asr.onclick=()=>{if(agRunning)return;agOn=!agOn;$('#agSw').classList.toggle('on',agOn);$('#agTaskBox').style.display=agOn?'':'none';toast(agOn?'⚡ এজেন্ট সক্রিয় — নির্দেশ লেখো (কাজ এখন চ্যাটেই চলবে)':'এজেন্ট নিষ্ক্রিয়')};
 $('#agRun').onclick=()=>{if(!$('#agTask').value.trim())return toast('আগে কাজের নির্দেশ লেখো');$('#agConfirm').style.display='';$('#agRun').style.display='none'};
 $('#agNo').onclick=()=>{$('#agConfirm').style.display='none';$('#agRun').style.display=''};
 $('#agGo').onclick=()=>{const t=$('#agTask').value.trim();if(!t||agRunning)return;$('#agTask').value='';$('#agConfirm').style.display='none';$('#agRun').style.display='';closeSheets();runAgent(t)};
@@ -2125,7 +2127,7 @@ function openCodeFs(code,lang){
     const ml=$('#modelLabel');if(ml)ml.textContent=cfg.models[0]?'Auto':'—';
     const mms=$('#mModelSub');if(mms)mms.textContent='Auto — কাজ অনুযায়ী সেরা মডেল';
     if(!cfg.features.research){['#tWeb','#tResearch'].forEach(s=>{const e=$(s);if(e)e.style.display='none'})}
-    if(!cfg.features.agent){['#agentPill','#agentMini','#tAgent','#mAgent'].forEach(s=>{const e=$(s);if(e)e.style.display='none'})}else{const ma=$('#mAgent');if(ma)ma.style.display=''}
+    if(!cfg.features.agent){['#agentPill','#agentMini','#tAgent','#mAgent'].forEach(s=>{const e=$(s);if(e)e.style.display='none'})}else{const ma=$('#mAgent');if(ma)ma.style.display='none'}
     if(!cfg.features.image){const ti=$('#tImage');if(ti)ti.style.display='none'}
     if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){const tv=$('#tVoice');if(tv)tv.style.display='none'}
     const sa=$('#setApi');if(sa)sa.textContent=API.replace(/^https?:\/\//,'');
