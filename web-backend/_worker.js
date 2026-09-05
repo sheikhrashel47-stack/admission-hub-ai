@@ -585,7 +585,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v49';
+  const AGENT_VERSION = 'p10-v50';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2009,6 +2009,134 @@ async function kitTool(env, keys, tool, args) {
       const j = await r.json(); const seg = ((((j.routes || [])[0] || {}).segments) || [])[0] || {};
       return { from: from, to: to, distance_km: +(((seg.distance || 0)) / 1000).toFixed(1), duration_min: Math.round((seg.duration || 0) / 60) };
     }
+    case 'kit.code': {
+      const code = String(args.code || ''); const lang = String(args.language || 'python');
+      if (!code) throw new Error('code লাগবে');
+      const r = await fetch('https://emkc.org/api/v2/piston/execute', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: JSON.stringify({ language: lang, version: '*', files: [{ content: code.slice(0, 20000) }], stdin: String(args.stdin || '') }) });
+      if (!r.ok) throw new Error('piston HTTP ' + r.status);
+      const j = await r.json();
+      return { language: j.language, run: (j.run && j.run.stdout || '').slice(0, 4000), err: ((j.run && j.run.stderr || '') + (j.compile && j.compile.stderr || '')).slice(0, 1500), code: j.run && j.run.code };
+    }
+    case 'kit.prayer': {
+      const city = String(args.city || 'Dhaka'), country = String(args.country || 'Bangladesh');
+      const j = await jget('https://api.aladhan.com/v1/timingsByCity?city=' + encodeURIComponent(city) + '&country=' + encodeURIComponent(country) + '&method=' + (Number(args.method) || 2));
+      const d = j.data || {};
+      return { city: (d.meta || {}).city || city, date: (d.date || {}).readable, timings: d.timings };
+    }
+    case 'kit.quran': {
+      const ref = String(args.ref || args.ayah || '1:1');
+      const j = await jget('https://api.alquran.cloud/v1/ayah/' + encodeURIComponent(ref) + '/editions/quran-uthmani,bn.bengali');
+      const eds = (j.data || []);
+      const ar = eds.find((x) => x.edition && x.edition.identifier === 'quran-uthmani');
+      const bn = eds.find((x) => x.edition && x.edition.identifier === 'bn.bengali');
+      if (!ar && !bn) throw new Error('আয়াত পাওয়া যায়নি: ' + ref);
+      return { ref: ref, arabic: ar && ar.text, bangla: bn && bn.text, surah: (bn || ar || {}).surah && { n: bn.surah.number, name: bn.surah.name } };
+    }
+    case 'kit.whois': {
+      const d = String(args.domain || ''); if (!d) throw new Error('domain লাগবে');
+      const r = await fetch('https://rdap.org/domain/' + encodeURIComponent(d), { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } });
+      if (r.status === 404) throw new Error('ডোমেইন পাওয়া যায়নি: ' + d);
+      if (!r.ok) throw new Error('rdap HTTP ' + r.status);
+      const j = await r.json();
+      const ev = {}; (j.events || []).forEach((e) => { ev[e.eventAction] = e.eventDate; });
+      return { domain: j.ldhName, status: j.status, registered: ev.registration, expires: ev.expiration, registrar: ((j.entities || [])[0] || {}).vcardArray ? undefined : undefined, ns: (j.nameservers || []).slice(0, 4).map((n) => n.ldhName) };
+    }
+    case 'kit.ip': {
+      let ip = String(args.ip || '');
+      if (!ip && args.domain) { const dj = await jget('https://dns.google/resolve?name=' + encodeURIComponent(String(args.domain)) + '&type=A'); ip = ((dj.Answer || []).find((a) => a.type === 1) || {}).data || ''; }
+      if (!ip) throw new Error('ip বা domain লাগবে');
+      const j = await jget('http://ip-api.com/json/' + encodeURIComponent(ip) + '?lang=en');
+      if (j.status !== 'success') throw new Error('ip তথ্য পাওয়া যায়নি');
+      return { ip: j.query, country: j.country, city: j.city, isp: j.isp, org: j.org, lat: j.lat, lon: j.lon };
+    }
+    case 'kit.holidays': {
+      const y = Number(args.year) || new Date().getFullYear(); const c = String(args.country || 'BD').toUpperCase();
+      const j = await jget('https://date.nager.at/api/v3/PublicHolidays/' + y + '/' + c);
+      return (Array.isArray(j) ? j : []).map((h) => ({ date: h.date, name: h.localName || h.name, en: h.name })).slice(0, 25);
+    }
+    case 'kit.crypto': {
+      const ids = String(args.coins || 'bitcoin').toLowerCase();
+      const j = await jget('https://api.coingecko.com/api/v3/simple/price?ids=' + encodeURIComponent(ids) + '&vs_currencies=usd,bdt&include_24hr_change=true');
+      return j;
+    }
+    case 'kit.stock': {
+      const sym = String(args.symbol || ''); if (!sym) throw new Error('symbol লাগবে');
+      const j = await jget('https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?range=' + (args.range || '5d') + '&interval=1d');
+      const m = ((((j.chart || {}).result) || [])[0] || {}).meta || {};
+      if (!m.symbol) throw new Error('সিম্বল পাওয়া যায়নি: ' + sym);
+      return { symbol: m.symbol, price: m.regularMarketPrice, prevClose: m.chartPreviousClose, currency: m.currency, exchange: m.exchangeName };
+    }
+    case 'kit.books': {
+      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
+      const j = await jget('https://openlibrary.org/search.json?q=' + encodeURIComponent(q) + '&limit=5&fields=title,author_name,first_publish_year,key');
+      return { found: j.numFound, books: (j.docs || []).map((d) => ({ title: d.title, author: (d.author_name || []).slice(0, 2).join(', '), year: d.first_publish_year, url: 'https://openlibrary.org' + d.key })) };
+    }
+    case 'kit.ddg': {
+      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
+      const j = await jget('https://api.duckduckgo.com/?q=' + encodeURIComponent(q) + '&format=json&no_html=1&skip_disambig=1');
+      return { heading: j.Heading, abstract: (j.AbstractText || '').slice(0, 800), answer: j.Answer, url: j.AbstractURL, related: (j.RelatedTopics || []).slice(0, 5).map((x) => x.Text || (x.Topics || [])[0] && x.Topics[0].Text).filter(Boolean).map((t) => String(t).slice(0, 160)) };
+    }
+    case 'kit.countries': {
+      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
+      const j = await jget('https://restcountries.com/v3.1/name/' + encodeURIComponent(q));
+      return (Array.isArray(j) ? j : []).slice(0, 3).map((c) => ({ name: (c.name || {}).common, capital: (c.capital || [])[0], population: c.population, currencies: Object.keys(c.currencies || {}), languages: Object.values(c.languages || {}).slice(0, 4), flag: (c.flags || {}).png }));
+    }
+    case 'kit.devto': {
+      const tag = args.tag ? '&tag=' + encodeURIComponent(String(args.tag)) : '';
+      const j = await jget('https://dev.to/api/articles?per_page=' + (Number(args.max) || 5) + tag);
+      return (Array.isArray(j) ? j : []).slice(0, 6).map((a) => ({ title: a.title, url: a.url, author: (a.user || {}).name, tags: (a.tag_list || []).slice(0, 3), reactions: a.positive_reactions_count }));
+    }
+    case 'kit.trivia': {
+      const j = await jget('https://opentdb.com/api.php?amount=' + Math.min(5, Number(args.amount) || 2) + (args.category ? '&category=' + Number(args.category) : '') + '&type=multiple');
+      return (j.results || []).map((x) => ({ q: x.question, correct: x.correct_answer, wrong: x.incorrect_answers, diff: x.difficulty }));
+    }
+    case 'kit.music': {
+      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
+      const j = await jget('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=4');
+      return (j.artists || []).map((a) => ({ name: a.name, type: a.type, country: a.country, score: a.score, disambig: a.disambiguation || '' }));
+    }
+    case 'kit.color': {
+      const hex = String(args.hex || '').replace('#', ''); const name = String(args.name || '');
+      const u = hex ? 'https://www.thecolorapi.com/id?hex=' + encodeURIComponent(hex) : 'https://www.thecolorapi.com/id?name=' + encodeURIComponent(name || 'red');
+      const j = await jget(u);
+      return { hex: (j.hex || {}).value, name: (j.name || {}).value, rgb: (j.rgb || {}).value, hsl: (j.hsl || {}).value };
+    }
+    case 'kit.universities': {
+      const c = String(args.country || 'Bangladesh');
+      const j = await jget('http://universities.hipolabs.com/search?country=' + encodeURIComponent(c) + (args.name ? '&name=' + encodeURIComponent(args.name) : ''));
+      return (Array.isArray(j) ? j : []).slice(0, 10).map((u) => ({ name: u.name, web: (u.web_pages || [])[0], domains: (u.domains || [])[0] }));
+    }
+    case 'kit.nearby': {
+      let lat = args.lat, lon = args.lon;
+      if ((lat === undefined || lon === undefined) && args.place) { const g = await jget('https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(String(args.place)) + '&format=json&limit=1'); const p = (Array.isArray(g) ? g : [])[0]; if (!p) throw new Error('জায়গা পাওয়া যায়নি'); lat = p.lat; lon = p.lon; }
+      if (lat === undefined || lon === undefined) throw new Error('place বা lat/lon লাগবে');
+      const what = String(args.what || 'hospital'); const rad = Math.min(10000, Number(args.radius) || 3000);
+      const ql = '[out:json][timeout:15];(node["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + ');way["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + '););out center 6;';
+      const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) });
+      if (!r.ok) throw new Error('overpass HTTP ' + r.status);
+      const j = await r.json();
+      return { around: { lat: Number(lat), lon: Number(lon), radius_m: rad, what: what }, found: (j.elements || []).map((e) => ({ name: (e.tags || {}).name || '(নাম নেই)', type: e.type, lat: e.lat || (e.center || {}).lat, lon: e.lon || (e.center || {}).lon, addr: [(e.tags || {})['addr:street'], (e.tags || {})['addr:city']].filter(Boolean).join(', ') })) };
+    }
+    case 'kit.qrread': {
+      const u = String(args.imageUrl || args.url || ''); if (!u) throw new Error('imageUrl লাগবে');
+      const j = await jget('https://api.qrserver.com/v1/read-qr-code/?fileurl=' + encodeURIComponent(u));
+      const sym = (((j || [])[0] || {}).symbol || [])[0] || {};
+      if (sym.error) throw new Error('QR পড়া যায়নি: ' + sym.error);
+      return { data: sym.data, type: ((j || [])[0] || {}).type };
+    }
+    case 'kit.upload': {
+      const u = String(args.url || ''); if (!u) throw new Error('url লাগবে');
+      const fr = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!fr.ok) throw new Error('ফাইল ডাউনলোড HTTP ' + fr.status);
+      const blob = await fr.blob();
+      if (blob.size > 8000000) throw new Error('ফাইল 8MB-এর বড়');
+      const fname = (u.split('/').pop() || 'file.bin').slice(0, 60).split('?')[0] || 'file.bin';
+      const fd = new FormData(); fd.append('file', blob, fname);
+      const r = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
+      if (!r.ok) throw new Error('tmpfiles HTTP ' + r.status);
+      const j = await r.json();
+      const pageUrl = (j.data || {}).url || '';
+      return { page: pageUrl, direct: pageUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/'), bytes: blob.size, ttl: '60 মিনিট' };
+    }
     default: throw new Error('অজানা kit টুল: ' + tool);
   }
 }
@@ -2082,7 +2210,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v49' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v50' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
