@@ -585,7 +585,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v57';
+  const AGENT_VERSION = 'p10-v58';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2257,6 +2257,52 @@ async function kitTool(env, keys, tool, args) {
       while (cnt < n) { const len = 8 + Math.floor(Math.random() * 5); const w = []; for (let k = 0; k < len && cnt < n; k++) { w.push(W[Math.floor(Math.random() * W.length)]); cnt++; } out += (out ? ' ' : '') + w.join(' ') + (lang === 'en' ? '.' : '।'); }
       return { lang: lang, words: cnt, text: out };
     }
+    case 'kit.gpu': {
+      if (!keys.CF_EMAIL || !keys.CF_GLOBAL_KEY) throw new Error('CF creds নেই');
+      const MODEL = { llama8: '@cf/meta/llama-3.1-8b-instruct', llama70: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', qwencoder: '@cf/qwen/qwen2.5-coder-32b-instruct' };
+      const m = String(args.model || 'llama8').toLowerCase();
+      const model = MODEL[m] || MODEL.llama8;
+      let msgs = Array.isArray(args.messages) ? args.messages.slice(-10).map((x) => ({ role: String(x.role || 'user'), content: String(x.content || '').slice(0, 8000) })) : [{ role: 'user', content: String(args.prompt || '') }];
+      if (!msgs.length || !msgs[msgs.length - 1].content) throw new Error('prompt বা messages লাগবে');
+      if (args.system) msgs = [{ role: 'system', content: String(args.system).slice(0, 2000) }].concat(msgs);
+      const t0 = Date.now();
+      const r = await fetch('https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/run/' + model, { method: 'POST', headers: { 'X-Auth-Email': keys.CF_EMAIL, 'X-Auth-Key': keys.CF_GLOBAL_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: msgs, max_tokens: Math.min(Number(args.max_tokens) || 512, 2048) }) });
+      if (!r.ok) throw new Error('workers-ai HTTP ' + r.status);
+      const j = await r.json();
+      const c = (((j.result || {}).choices) || [])[0] || {};
+      return { model: m, reply: ((c.message || {}).content || '').slice(0, 4000), finish: c.finish_reason, ms: Date.now() - t0 };
+    }
+    case 'kit.pdf': {
+      const u = String(args.url || ''); if (!/^https?:\/\//i.test(u)) throw new Error('url লাগবে (http/https)');
+      const bt = await storeGet(env, 'cfg:BROWSERLESS_API_KEY');
+      if (!bt) throw new Error('BROWSERLESS key নেই');
+      const t0 = Date.now();
+      const r = await fetch('https://production-sfo.browserless.io/pdf?token=' + encodeURIComponent(bt), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: u, options: { format: String(args.format || 'A4'), printBackground: true }, gotoOptions: { waitUntil: 'networkidle2' } }) });
+      if (!r.ok) throw new Error('browserless pdf HTTP ' + r.status);
+      const raw = new Uint8Array(await r.arrayBuffer());
+      if (raw.length < 500 || raw[0] !== 0x25) throw new Error('PDF তৈরি হয়নি');
+      let bin = ''; for (let i = 0; i < raw.length; i += 8192) bin += String.fromCharCode.apply(null, raw.subarray(i, i + 8192));
+      const b64 = btoa(bin);
+      if (b64.length > 2500000) throw new Error('PDF অনেক বড় (~1.9MB+)');
+      const id = [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('');
+      await storePut(env, 'pdf:' + id, b64, 7 * 86400);
+      return { pdf: 'https://admission-hub-ai.pages.dev/api/pdf/' + id + '.pdf', bytes: raw.length, ms: Date.now() - t0, ttl: '7d' };
+    }
+    case 'kit.lab': {
+      const run = String(args.run || ''); if (!run) throw new Error('run কমান্ড লাগবে');
+      const files = (args.files && typeof args.files === 'object') ? args.files : {};
+      const names = Object.keys(files).slice(0, 20);
+      let script = 'mkdir -p lab && cd lab\n';
+      for (const nm of names) {
+        const safe = String(nm).replace(/[^A-Za-z0-9._\/-]/g, '_').replace(/^\/+/, '').slice(0, 80);
+        if (!safe || safe.includes('..')) continue;
+        script += 'mkdir -p "$(dirname ' + JSON.stringify(safe) + ')" 2>/dev/null; echo ' + b64utf8enc(String(files[nm])) + ' | base64 -d > ' + JSON.stringify(safe) + '\n';
+      }
+      if (args.setup) script += '(' + String(args.setup).slice(0, 400) + ') > setup.log 2>&1 || { echo SETUP-FAIL; tail -5 setup.log; }\n';
+      script += 'timeout ' + Math.min(Number(args.timeout) || 90, 120) + ' bash -c ' + JSON.stringify(run.slice(0, 600)) + '\n';
+      const r = await runSandbox(env, keys, script);
+      return { exit: r.exit, out: String(r.out || '').slice(0, 6000), err: String(r.err || '').slice(0, 2000), ms: r.ms, files: names, note: 'GH Actions ubuntu (python3/node/pip/npm/curl); cold ~40s' };
+    }
     default: throw new Error('অজানা kit টুল: ' + tool);
   }
 }
@@ -2313,6 +2359,14 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
+    if (method === 'GET' && path.startsWith('/api/pdf/')) {
+      const id = path.slice(9).replace(/\.pdf$/, '');
+      if (!/^[0-9a-f]{8,32}$/.test(id)) return json({ error: 'bad id' }, 400);
+      const b64 = await storeGet(env, 'pdf:' + id);
+      if (!b64) return json({ error: 'মেয়াদ শেষ বা পাওয়া যায়নি' }, 404);
+      const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Response(arr, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="' + id + '.pdf"', 'Cache-Control': 'public, max-age=604800', ...cors } });
+    }
     if (method === 'GET' && path.startsWith('/api/img/')) {
       const id = path.slice(9).replace(/\.(png|jpg|jpeg)$/, '');
       if (!/^[0-9a-f]{8,32}$/.test(id)) return json({ error: 'bad id' }, 400);
@@ -2330,7 +2384,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v57' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v58' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
