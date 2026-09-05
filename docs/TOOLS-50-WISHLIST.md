@@ -107,3 +107,32 @@ web.search (Tavily) ✅ · web.read ৪ লেয়ার (Jina/Firecrawl/Scrap
 2. **গ্রুপ B (৫টা):** existing key টেস্ট করে যেগুলো চলে সেগুলো — v50-এ
 3. **বাকি গ্রুপ A (২২টা):** ধাপে ধাপে v51-v53
 4. **গ্রুপ C:** মালিক key দিলেই সাথে সাথে (প্রতিটা ৫ মিনিটের কাজ)
+
+---
+
+## ✅ গ্রুপ A ব্যাচ-১ সম্পন্ন (v50–v56, লাইভ-টেস্টেড ১৮/১৮)
+
+| # | টুল | ইঞ্জিন | লাইভ ফলাফল |
+|---|---|---|---|
+| 1 | kit.code | **নিজস্ব GH Actions রানার** (Piston মরেছে) | Python 3.12, 10.4s, pip/npm/curl আছে ✅ |
+| 2 | kit.prayer | Aladhan | ঢাকা নামাজের সময় ✅ |
+| 3 | kit.quran | AlQuran.cloud | ২:২৫৫ আরবি+বাংলা ✅ |
+| 4 | kit.whois | RDAP | google.com ✅ |
+| 5 | kit.ip | ip-api + dns.google | google.com→142.250.69.174 ✅ |
+| 6 | kit.holidays | nager.date | BD বাংলা নাম (শহিদ দিবস...) ✅ |
+| 7 | kit.crypto | Yahoo Finance + er-api (CoinGecko CF-তে 429) | BTC $79,606 = ৯৭.৮ লাখ টাকা ✅ |
+| 8 | kit.stock | Yahoo Finance | BTC-USD 79590 ✅ |
+| 9 | kit.books | OpenLibrary | ইংরেজি ✅ (বাংলা লেখক খোঁজে না) |
+| 10 | kit.ddg | DuckDuckGo Instant | Bangladesh heading+abstract, kl=lang ✅ |
+| 11 | kit.devto | dev.to API | AI ট্যাগ আর্টিকেল ✅ |
+| 12 | kit.trivia | OpenTriviaDB | প্রশ্ন+উত্তর ✅ |
+| 13 | kit.music | MusicBrainz | Tahsan (BD, score 100) ✅, query/artist দুটোই চলে |
+| 14 | kit.color | thecolorapi | #006A4E → Tropical Rain Forest ✅ |
+| 15 | kit.universities | hipolabs | BD বিশ্ববিদ্যালয় (AIUB...) ✅ |
+| 16 | kit.nearby | Overpass ৪-মিরর চেইন (non-empty preferred) | ধানমন্ডি ২km-এ ৬ রেস্তোরাঁ 1.9s ✅ |
+| 17 | kit.qrread | qrserver **multipart POST** (fileurl fetcher মরা) | ফুল লুপ: create→upload→পড়া ✅ |
+| 18 | kit.upload | ছবি→**নিজস্ব D1 host** (7d, র-বাইট); অন্য→tmpfiles | PNG 566B + readme.md দুটোই ✅ |
+
+**মৃত/বাতিল (আর চেষ্টা করো না):** Piston (whitelist-only 2026-02-15), Wandbox (cpython/node ভাঙা), restcountries (success:false envelope), Binance 451, GoogleBooks 429, Reddit 403, dpaste 405, CoinGecko (CF-edge 429), overpass-api.de (CF-edge 521 — মিরর চেইনে আছে), **osm.ch মিরর ফাঁকা ডেটা দেয়** (বার্লিনেও 0!), tmpfiles /dl/ বটকে HTML দেয় (তাই নিজস্ব host)।
+
+**মোট: ৬২ এক্সটার্নাল টুল (v56)।** বাকি গ্রুপ A: Wikidata SPARQL, 0x0.st, Agify/Genderize, random-data, Unicode BN converter, BN lorem — v57+। গ্রুপ B (৫টা existing-key) এরপর।
