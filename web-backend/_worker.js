@@ -76,7 +76,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','ZAI_API_KEY','TAVILY_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','ZAI_API_KEY','TAVILY_API_KEY','SERPER_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GNEWS_API_KEY','ORS_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -532,6 +532,18 @@ async function searchWeb(key, query, max = 5) {
   const j = await r.json();
   return (j.results || []).slice(0, max).map((x, i) => ({ n: i + 1, title: x.title || 'সোর্স ' + (i + 1), url: x.url, content: (x.content || '').slice(0, 1500) }));
 }
+async function searchSerper(keys, query, max = 5) {
+  // Serper.dev = আসল Google SERP (gl=bd, hl=bn) — ২৫০০ ফ্রি কেরি
+  const r = await fetch('https://google.serper.dev/search', { method: 'POST', headers: { 'X-API-KEY': keys.SERPER_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ q: query, num: Math.min(10, max || 5), gl: 'bd', hl: 'bn' }) });
+  if (!r.ok) throw new Error('serper HTTP ' + r.status);
+  const j = await r.json();
+  return (j.organic || []).slice(0, max || 5).map((x, i) => ({ n: i + 1, title: x.title || '', url: x.link || '', content: String(x.snippet || '').slice(0, 1500) })).filter((x) => x.url);
+}
+async function searchAny(keys, query, max = 5) {
+  if (keys.TAVILY_API_KEY) { try { return await searchWeb(keys.TAVILY_API_KEY, query, max); } catch {} }
+  if (keys.SERPER_API_KEY) return await searchSerper(keys, query, max);
+  throw new Error('সার্চ key নেই');
+}
 
 const SUM_SYS = `তুমি একটি চ্যাট-সংক্ষেপক। নিচের কথোপকথনের গুরুত্বপূর্ণ তথ্য, সিদ্ধান্ত, ব্যবহারকারীর পছন্দ, নাম/সংখ্যা ও উল্লেখযোগ্য বিষয়গুলো বাংলায় সংক্ষিপ্ত বুলেটে নোট করো (সর্বোচ্চ ~৪০০ শব্দ)। শুধু সারাংশ লিখো — কোনো ভূমিকা, শিরোনাম বা মন্তব্য নয়।`;
 async function summarize(keys, lines, prev) {
@@ -573,7 +585,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1620,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v48';
+  const AGENT_VERSION = 'p10-v49';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1844,8 +1856,12 @@ if (tool === 'brain.critic') {
     return { ok: true, status: r.status, matched, bytes: t.length };
   }
   if (tool === 'web.search') {
+    if (String(args.source || '') === 'serper' && keys.SERPER_API_KEY) return { results: await searchSerper(keys, args.query || '', 5), source: 'serper (google)' };
     try { return { results: await searchWeb(keys.TAVILY_API_KEY, args.query || '', 5), source: 'tavily' }; }
-    catch (e) { const ddg = await ddgSearch(args.query || ''); if (ddg.length) return { results: ddg, source: 'duckduckgo (fallback)' }; throw e; }
+    catch (e) {
+      if (keys.SERPER_API_KEY) { try { return { results: await searchSerper(keys, args.query || '', 5), source: 'serper (google fallback)' }; } catch {} }
+      const ddg = await ddgSearch(args.query || ''); if (ddg.length) return { results: ddg, source: 'duckduckgo (fallback)' }; throw e;
+    }
   }
   if (tool.startsWith('kit.')) return await kitTool(env, keys, tool, args);
   if (tool === 'web.read') return await readPage(env, String(args.url || ''));
@@ -1853,8 +1869,8 @@ if (tool === 'brain.critic') {
     // Phase 2 — রিয়েল-টাইম তথ্য-ইঞ্জিন (Google AI-overview স্টাইল): সার্চ → সোর্স পড়া → উদ্ধৃতিসহ সংশ্লেষণ
     const q = String(args.query || '').trim();
     if (!q) throw new Error('query লাগবে');
-    if (!keys.TAVILY_API_KEY) throw new Error('TAVILY_API_KEY নেই');
-    const sres = await searchWeb(keys.TAVILY_API_KEY, q, Number(args.max) || 6);
+    if (!keys.TAVILY_API_KEY && !keys.SERPER_API_KEY) throw new Error('সার্চ key নেই');
+    const sres = await searchAny(keys, q, Number(args.max) || 6);
     if (!sres.length) return { query: q, answer: 'কোনো সোর্স পাওয়া যায়নি', sources: [] };
     const nSrc = Math.min(sres.length, Number(args.sources) || 3);
     const reads = await Promise.all(sres.slice(0, nSrc).map(async (sr) => {
@@ -1959,6 +1975,40 @@ async function kitTool(env, keys, tool, args) {
       return { image: 'https://admission-hub-ai.pages.dev/api/img/' + id + (bytes[0] === 0xff ? '.jpg' : '.png'), bytes: bytes.length, ttl: '7d' };
     }
     case 'kit.stt': { const u = String(args.audioUrl || ''); if (!u) throw new Error('audioUrl লাগবে'); if (!keys.GROQ_API_KEY) throw new Error('GROQ key নেই'); const ar = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ahai-kit/1.0)' } }); if (!ar.ok) throw new Error('audio ডাউনলোড HTTP ' + ar.status); const blob = await ar.blob(); const fd = new FormData(); fd.append('file', blob, 'audio.webm'); fd.append('model', 'whisper-large-v3-turbo'); fd.append('response_format', 'json'); const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: fd }); const j = await r.json().catch(() => ({})); if (!j.text) throw new Error('stt HTTP ' + r.status); return { text: j.text, language: j.language }; }
+    case 'kit.tts': {
+      const t = String(args.text || '').slice(0, 2000); if (!t) throw new Error('text লাগবে');
+      if (!keys.ELEVENLABS_API_KEY) throw new Error('ELEVENLABS key নেই');
+      const vid = String(args.voice || keys.ELEVENLABS_VOICE_ID || ''); if (!vid) throw new Error('voice id নেই');
+      const r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(vid), { method: 'POST', headers: { 'xi-api-key': keys.ELEVENLABS_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t, model_id: 'eleven_multilingual_v2' }) });
+      if (!r.ok) throw new Error('tts HTTP ' + r.status + ': ' + (await r.text()).slice(0, 130));
+      const buf = new Uint8Array(await r.arrayBuffer());
+      if (buf.length < 500) throw new Error('tts খালি অডিও');
+      let bin = ''; for (let i = 0; i < buf.length; i += 8192) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
+      const b64 = btoa(bin);
+      if (b64.length > 1400000) throw new Error('টেক্সট বড় — ছোট করুন');
+      const id = [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('');
+      await storePut(env, 'aud:' + id, b64, 7 * 86400);
+      return { audio: 'https://admission-hub-ai.pages.dev/api/aud/' + id + '.mp3', bytes: buf.length, ttl: '7d' };
+    }
+    case 'kit.gnews': {
+      if (!keys.GNEWS_API_KEY) throw new Error('GNEWS key নেই');
+      const q = String(args.query || '');
+      const u = q
+        ? 'https://gnews.io/api/v4/search?q=' + encodeURIComponent(q) + '&lang=' + (args.lang || 'bn') + '&max=' + (Number(args.max) || 5) + '&token=' + keys.GNEWS_API_KEY
+        : 'https://gnews.io/api/v4/top-headlines?category=' + (args.category || 'general') + '&lang=' + (args.lang || 'bn') + '&country=' + (args.country || 'bd') + '&max=' + (Number(args.max) || 5) + '&token=' + keys.GNEWS_API_KEY;
+      const j = await jget(u);
+      return { total: j.totalArticles, articles: (j.articles || []).slice(0, 6).map((a) => ({ title: a.title, url: a.url, src: (a.source || {}).name, at: a.publishedAt, desc: String(a.description || '').slice(0, 200) })) };
+    }
+    case 'kit.route': {
+      const from = String(args.from || ''), to = String(args.to || ''); if (!from || !to) throw new Error('from ও to লাগবে');
+      if (!keys.ORS_API_KEY) throw new Error('ORS key নেই');
+      const geo = async (place) => { const g = await jget('https://api.openrouteservice.org/geocode/autocomplete?api_key=' + keys.ORS_API_KEY + '&text=' + encodeURIComponent(place) + '&size=1'); const f = (((g.features || [])[0] || {}).geometry || {}).coordinates; if (!f) throw new Error('লোকেশন পাওয়া যায়নি: ' + place); return f; };
+      const a = await geo(from); const b = await geo(to);
+      const r = await fetch('https://api.openrouteservice.org/v2/directions/driving-car', { method: 'POST', headers: { Authorization: keys.ORS_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ coordinates: [a, b] }) });
+      if (!r.ok) throw new Error('route HTTP ' + r.status);
+      const j = await r.json(); const seg = ((((j.routes || [])[0] || {}).segments) || [])[0] || {};
+      return { from: from, to: to, distance_km: +(((seg.distance || 0)) / 1000).toFixed(1), duration_min: Math.round((seg.duration || 0) / 60) };
+    }
     default: throw new Error('অজানা kit টুল: ' + tool);
   }
 }
@@ -2024,7 +2074,15 @@ export default {
       const isJpg = arr.length > 2 && arr[0] === 0xff && arr[1] === 0xd8;
       return new Response(arr, { headers: { 'Content-Type': isJpg ? 'image/jpeg' : 'image/png', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v48' });
+    if (method === 'GET' && path.startsWith('/api/aud/')) {
+      const id = path.slice(9).replace(/\.mp3$/, '');
+      if (!/^[0-9a-f]{8,32}$/.test(id)) return json({ error: 'bad id' }, 400);
+      const b64 = await storeGet(env, 'aud:' + id);
+      if (!b64) return json({ error: 'মেয়াদ শেষ বা পাওয়া যায়নি' }, 404);
+      const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
+    }
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v49' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
