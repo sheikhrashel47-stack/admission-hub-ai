@@ -113,7 +113,7 @@ async function storePut(env, key, val, ttlSec) {
 /* ===== Phase 3 — Security Firewall + Audit + Error Memory ===== */
 const PERM = {
   'gh.repos': { risk: 'LOW', gate: 'AUTO' }, 'gh.read': { risk: 'LOW', gate: 'AUTO' },
-  'web.search': { risk: 'LOW', gate: 'AUTO' }, 'web.read': { risk: 'LOW', gate: 'AUTO' }, 'web.eye': { risk: 'LOW', gate: 'AUTO' },
+  'web.search': { risk: 'LOW', gate: 'AUTO' }, 'web.read': { risk: 'LOW', gate: 'AUTO' }, 'web.eye': { risk: 'LOW', gate: 'AUTO' }, 'web.now': { risk: 'LOW', gate: 'AUTO' },
   'verify.url': { risk: 'LOW', gate: 'AUTO' }, 'bu.health': { risk: 'LOW', gate: 'AUTO' },
   'twin.index': { risk: 'LOW', gate: 'AUTO' }, 'twin.search': { risk: 'LOW', gate: 'AUTO' }, 'twin.map': { risk: 'LOW', gate: 'AUTO' }, 'twin.impact': { risk: 'LOW', gate: 'AUTO' }, 'twin.time': { risk: 'LOW', gate: 'AUTO' },
   'agent.shell': { risk: 'HIGH', gate: 'POLICY' }, 'agent.test': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.repair': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.envcheck': { risk: 'LOW', gate: 'POLICY' },
@@ -572,7 +572,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1034,7 +1034,8 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   if (ghOk && /(গিটহাব|github|repo|রিপো)/i.test(t) && /(কতটি|কয়টি|লিস্ট|list|কী কী|কি কি|নাম|আছে|দেখো|check)/i.test(t)) plan.push({ tool: 'gh.repos', args: {} });
   if (webOk && um && /(পড়ো|read|খোলো|সাইট|site|website|page|লিংক|link)/i.test(t)) plan.push({ tool: 'web.read', args: { url: um[0] } });
   else if (webOk && um && /(স্ক্রিনশট|ছবি|eye|দেখো)/i.test(t)) plan.push({ tool: 'web.eye', args: { url: um[0] } });
-  if (webOk && !plan.length && /(খবর|search|খুঁজ|খোজ|research|রিসার্চ|সাম্প্রতিক|latest|নিয়ম|ভর্তি)/i.test(t)) plan.push({ tool: 'web.search', args: { query: t.slice(0, 200) } });
+  if (webOk && !plan.length && /(আজকের|খবর|সাম্প্রতিক|সর্বশেষ|latest|news|বর্তমান|এখনকার)/i.test(t)) plan.push({ tool: 'web.now', args: { query: t.slice(0, 300) } });
+  if (webOk && !plan.length && /(search|খুঁজ|খোজ|research|রিসার্চ|নিয়ম|ভর্তি)/i.test(t)) plan.push({ tool: 'web.search', args: { query: t.slice(0, 200) } });
   if (!plan.length && PRON_RE.test(t)) {           /* 2.3 pronoun → আগের tool-প্রসঙ্গ inherit */
     const ltp = await storeGetJson(env, 'ctx:lasttool', null);
     if (ltp && Array.isArray(ltp.plan) && ltp.plan.length && (!ltp.chatId || ltp.chatId === chatId)) plan = ltp.plan.slice(0, 2);
@@ -1618,7 +1619,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v41';
+  const AGENT_VERSION = 'p10-v42';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1846,6 +1847,23 @@ if (tool === 'brain.critic') {
     catch (e) { const ddg = await ddgSearch(args.query || ''); if (ddg.length) return { results: ddg, source: 'duckduckgo (fallback)' }; throw e; }
   }
   if (tool === 'web.read') return await readPage(env, String(args.url || ''));
+  if (tool === 'web.now') {
+    // Phase 2 — রিয়েল-টাইম তথ্য-ইঞ্জিন (Google AI-overview স্টাইল): সার্চ → সোর্স পড়া → উদ্ধৃতিসহ সংশ্লেষণ
+    const q = String(args.query || '').trim();
+    if (!q) throw new Error('query লাগবে');
+    if (!keys.TAVILY_API_KEY) throw new Error('TAVILY_API_KEY নেই');
+    const sres = await searchWeb(keys.TAVILY_API_KEY, q, Number(args.max) || 6);
+    if (!sres.length) return { query: q, answer: 'কোনো সোর্স পাওয়া যায়নি', sources: [] };
+    const nSrc = Math.min(sres.length, Number(args.sources) || 3);
+    const reads = await Promise.all(sres.slice(0, nSrc).map(async (sr) => {
+      try { const p = await readPage(env, sr.url); return { title: sr.title, url: sr.url, via: p.source, text: String(p.text || '').slice(0, 5500) }; }
+      catch { return { title: sr.title, url: sr.url, via: 'search-snippet', text: String(sr.content || '').slice(0, 1400) }; }
+    }));
+    const wctx = reads.map((r, i) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.text}`).join('\n\n---\n\n');
+    const prompt = `তুমি একজন গবেষণা সহকারী। নিচের প্রশ্নের উত্তর শুধুমাত্র দেওয়া ওয়েব-সোর্সগুলো থেকে বাংলায় দাও।\nনিয়ম: প্রতিটি তথ্যের শেষে [1], [2] এর মতো উদ্ধৃতি দাও। সোর্সে তথ্য না থাকলে স্পষ্ট বলো। সোর্স পরস্পরবিরোধী হলে দুটোই উল্লেখ করো। তারিখ/সংখ্যা থাকলে অবশ্যই দাও। সংক্ষিপ্ত ও সুসংগঠিত রাখো (~১৫০-২৫০ শব্দ)।\n\nপ্রশ্ন: ${q}\n\nসোর্স:\n\n${wctx}`;
+    const answer = await gemText(keys, prompt.slice(0, 26000), 1500);
+    return { query: q, answer: answer, sources: reads.map((r, i) => ({ n: i + 1, title: r.title, url: r.url, via: r.via })), extra: sres.slice(nSrc).map((sr) => ({ title: sr.title, url: sr.url })) };
+  }
   if (tool === 'review.diff') {
     let out = '';
     const msgs = [{ role: 'system', content: REVIEW_SYS }, { role: 'user', content: String(args.diff || '').slice(0, 6000) }];
@@ -1915,7 +1933,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v41' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v42' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
