@@ -1757,7 +1757,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v69';
+  const AGENT_VERSION = 'p10-v70';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2518,7 +2518,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v69' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v70' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2975,7 +2975,7 @@ export default {
       const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') + (lt ? '\n\n## জুজুর সর্বশেষ কাজ (প্রসঙ্গ ধরে রাখো — follow-up হলে এর সাথে মিলিয়ে বুঝো)\n- নির্দেশ: ' + String(lt.task || '').slice(0, 300) + '\n- স্ট্যাটাস: ' + lt.status + '\n- ফলাসার: ' + String(lt.report || '').slice(0, 500) : '');
       let sysAdd = '';
-      const IM_MODE = { research: 'research', coding: 'coding', instruction: 'agent', critical: 'critical' };
+      const IM_MODE = { research: 'research', coding: 'coding', instruction: 'agent', critical: 'critical', question: 'research' };
       if (IM_MODE[intent] && MODE_SYS[IM_MODE[intent]]) sysAdd += MODE_SYS[IM_MODE[intent]];
       sysAdd += STYLE_SYS[intent] || '';
       if (/(তুই|ইয়ার|দোস্ত|ভাই)/.test(imsg)) sysAdd += '\n[TONE: একদম বন্ধুর মতো সহজ বাংলা]';
@@ -3035,7 +3035,8 @@ export default {
         (async () => {
           finalMsgs.splice(finalMsgs.length - 1, 0, { role: 'system', content: '[LIVE CLOCK] বর্তমান তারিখ ও সময় (বাংলাদেশ, Asia/Dhaka): ' + new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '। ইউজার "আজ/এখন/বর্তমান/কতটা বাজে/কত তারিখ" জিজ্ঞেস করলে একমাত্র এটাই সত্য ধরবে — অনুমান নয়।' });
           try {
-            const effWeb = (body.web || (intent === 'research' && !/(আবহাওয়া|weather|forecast|নামাজের সময়|prayer time)/i.test(imsg))) && intent !== 'greeting';
+            const factQ = intent === 'question' && /(কত|সংখ্যা|তালিকা|তারিখ|কবে|কোথায়|কোন)/.test(imsg) && !/(তুমি|তোমার|আমি|আমার|who are you)/i.test(imsg);
+            const effWeb = (body.web || ((intent === 'research' || factQ) && !/(আবহাওয়া|weather|forecast|নামাজের সময়|prayer time)/i.test(imsg))) && intent !== 'greeting';
             if (effWeb) {
               const lastC = finalMsgs[finalMsgs.length - 1].content;
               const q = typeof lastC === 'string' ? lastC : lastC.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
