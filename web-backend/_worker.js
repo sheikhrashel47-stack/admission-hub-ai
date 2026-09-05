@@ -1620,7 +1620,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v46';
+  const AGENT_VERSION = 'p10-v47';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1943,13 +1943,20 @@ async function kitTool(env, keys, tool, args) {
       const r = await fetch('https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/run/@cf/black-forest-labs/flux-1-schnell', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY }, body: JSON.stringify({ prompt: p.slice(0, 800), steps: Math.min(8, Number(args.steps) || 4) }) });
       if (!r.ok) throw new Error('flux HTTP ' + r.status);
       const buf = new Uint8Array(await r.arrayBuffer());
-      if (buf.length < 500 || buf[0] === 0x7b) throw new Error('flux: ' + new TextDecoder().decode(buf.slice(0, 240)));
-      let bin = ''; for (let i = 0; i < buf.length; i += 8192) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 8192));
+      let bytes = buf;
+      if (buf.length >= 1 && buf[0] === 0x7b) {
+        const jj = JSON.parse(new TextDecoder().decode(buf));
+        const b64img = jj && jj.result && jj.result.image;
+        if (!b64img) throw new Error('flux: ' + new TextDecoder().decode(buf.slice(0, 220)));
+        const bin2 = atob(b64img); bytes = new Uint8Array(bin2.length); for (let i = 0; i < bin2.length; i++) bytes[i] = bin2.charCodeAt(i);
+      }
+      if (bytes.length < 500) throw new Error('flux ছবি তৈরি করেনি');
+      let bin = ''; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
       const b64 = btoa(bin);
-      if (b64.length > 1400000) throw new Error('ছবি অনেক বড় — w/h ছোট দিন');
+      if (b64.length > 1400000) throw new Error('ছবি অনেক বড়');
       const id = [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('');
       await storePut(env, 'img:' + id, b64, 7 * 86400);
-      return { image: 'https://admission-hub-ai.pages.dev/api/img/' + id + '.png', bytes: buf.length, ttl: '7d' };
+      return { image: 'https://admission-hub-ai.pages.dev/api/img/' + id + (bytes[0] === 0xff ? '.jpg' : '.png'), bytes: bytes.length, ttl: '7d' };
     }
     case 'kit.stt': { const u = String(args.audioUrl || ''); if (!u) throw new Error('audioUrl লাগবে'); if (!keys.GROQ_API_KEY) throw new Error('GROQ key নেই'); const ar = await fetch(u); if (!ar.ok) throw new Error('audio ডাউনলোড HTTP ' + ar.status); const blob = await ar.blob(); const fd = new FormData(); fd.append('file', blob, 'audio.webm'); fd.append('model', 'whisper-large-v3-turbo'); fd.append('response_format', 'json'); const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', { method: 'POST', headers: { Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: fd }); const j = await r.json().catch(() => ({})); if (!j.text) throw new Error('stt HTTP ' + r.status); return { text: j.text, language: j.language }; }
     default: throw new Error('অজানা kit টুল: ' + tool);
@@ -2009,14 +2016,15 @@ export default {
       return json({ ok: true, audit: rows });
     }
     if (method === 'GET' && path.startsWith('/api/img/')) {
-      const id = path.slice(9).replace(/\.png$/, '');
+      const id = path.slice(9).replace(/\.(png|jpg|jpeg)$/, '');
       if (!/^[0-9a-f]{8,32}$/.test(id)) return json({ error: 'bad id' }, 400);
       const b64 = await storeGet(env, 'img:' + id);
       if (!b64) return json({ error: 'মেয়াদ শেষ বা পাওয়া যায়নি' }, 404);
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-      return new Response(arr, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800', ...cors } });
+      const isJpg = arr.length > 2 && arr[0] === 0xff && arr[1] === 0xd8;
+      return new Response(arr, { headers: { 'Content-Type': isJpg ? 'image/jpeg' : 'image/png', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v46' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v47' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
