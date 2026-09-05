@@ -601,6 +601,7 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
       <button id="mModel" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l1.9 5.7L19.6 10l-5.7 1.9L12 17.6l-1.9-5.7L4.4 10l5.7-1.9Z"/></svg></span><div>AI মডেল<small id="mModelSub">Auto</small></div><span class="right">›</span></button>
       <button id="mSettings" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-.9c.6.5 1.3.9 2 1.2l.4 2.6h4l.4-2.6c.7-.3 1.4-.7 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg></span><div>সেটিংস</div><span class="right">›</span></button>
       <button id="mAgent" class="mItem" style="display:none"><span class="mi g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4M9 4h6"/></svg></span><div>AI Agent Control<small>🤖 জুজু — লাইভ সাইট আপডেট</small></div><span class="right">›</span></button>
+      <button id="mRepo" class="mItem"><span class="mi g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 3v12a3 3 0 1 0 2 2.8V9l8-3v9a3 3 0 1 0 2 2.8V3l-10 3.5z"/></svg></span><div>রেপো কাজ<small>রেপো বেছে জুজু দিয়ে কোড-কাজ</small></div><span class="right">›</span></button>
       <button id="mConn" class="mItem"><span class="mi g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 12a4 4 0 0 1 4-4h1m-3 8h1a4 4 0 0 0 4-4M8 8l-2 2a4 4 0 0 0 0 6l2 2m8-10 2-2a4 4 0 0 1 0 6l-2 2"/></svg></span><div>কানেক্টর<small>GitHub/Discord/Webhook স্ট্যাটাস</small></div><span class="right">›</span></button>
       <button id="mSystem" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><div>সিস্টেম স্ট্যাটাস</div><span class="right">›</span></button>
       <button id="mHelp" class="mItem"><span class="mi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1-1.3 1.9M12 17h.01"/></svg></span><div>Help / About</div><span class="right">›</span></button>
@@ -721,6 +722,15 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
       <div id="taskSearchRes" style="display:none"></div>
       <div class="secLbl">সাম্প্রতিক এজেন্ট টাস্ক</div>
       <div id="taskList"></div>
+    </div>
+  </div>
+  <div id="sRepo" class="sheet">
+    <div class="grab"></div>
+    <div class="hd"><div><span class="ttl">রেপো কাজ</span><span class="sub">রেপো বাছো → কাজ লেখো → জুজু branch+PR করবে</span></div><button class="x" onclick="closeSheets()">✕</button></div>
+    <div class="bd"><div id="repoList"></div>
+      <div style="padding:10px 4px 0"><textarea id="repoTask" rows="3" placeholder="যেমন: login পেজের বাগ ঠিক করো / README-এ ফিচার লিস্ট যোগ করো" style="width:100%;border:1px solid var(--line);border-radius:12px;padding:10px;font:inherit;background:var(--card)"></textarea>
+      <button id="repoGo" style="margin-top:8px;width:100%;background:var(--green);color:#fff;border:none;border-radius:12px;padding:12px;font:inherit;font-weight:600">কাজ শুরু করো →</button>
+      <div style="color:var(--dim);font-size:11px;padding:6px 2px">জুজু feature branch বানিয়ে কাজ করবে, PR খুলবে — main-এ সরাসরি পরিবর্তন করবে না। merge আপনার অনুমোদনে।</div></div>
     </div>
   </div>
   <div id="sConn" class="sheet">
@@ -1270,6 +1280,13 @@ function setModel(id){
 $('#mModel').onclick=openModelSheet;
 $('#mNew').onclick=()=>{closeSheets();$('#newChatBtn').click()};
 $('#mSearch').onclick=()=>{closeSheets();$('#chatSearchWrap').style.display='block';$('#chatSearch').focus()};
+let selRepo='';
+$('#mRepo').onclick=async()=>{closeSheets();openSheet('#sRepo');const box=$('#repoList');box.innerHTML='<div class="agMsg">রেপো লোড হচ্ছে…</div>';
+  try{const r=await fetch(API+'/api/tool',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+agSess()},body:JSON.stringify({tool:'gh.repos',args:{}})});const j=await r.json();
+    const rs=(j.result&&j.result.repos)||[];box.innerHTML=rs.map(x=>'<button class="mItem repoRow" data-r="'+x.name+'" style="text-align:left"><span class="mi '+(selRepo===x.name?'g':'')+'">'+(selRepo===x.name?'✅':'')+'</span><div>'+x.name+'<small>'+(x.private?'প্রাইভেট':'পাবলিক')+' · '+String(x.updated||'').slice(0,10)+'</small></div></button>').join('')||'<div class="agMsg">রেপো নেই</div>';
+    box.querySelectorAll('.repoRow').forEach(b=>b.onclick=()=>{selRepo=b.dataset.r;$('#mRepo').onclick()});
+  }catch(e){box.innerHTML='<div class="agMsg">লোড ব্যর্থ — লগইন লাগতে পারে</div>'}};
+$('#repoGo').onclick=()=>{const t=$('#repoTask').value.trim();if(!selRepo){toast('আগে একটা রেপো বাছো');return}if(!t){toast('কাজ লেখো');return}$('#repoTask').value='';closeSheets();inp.value='মিশন: '+selRepo+' রেপোতে: '+t;send()};
 $('#mConn').onclick=async()=>{closeSheets();openSheet('#sConn');const box=$('#connList');box.innerHTML='<div class="agMsg">লোড হচ্ছে…</div>';
   try{const r=await fetch(API+'/api/connectors',{headers:{Authorization:'Bearer '+agSess()}});const j=await r.json();
     box.innerHTML=(j.list||[]).map(c=>'<div class="mItem" style="pointer-events:none"><span class="mi '+(c.on?'g':'')+'">'+(c.on?'🟢':'')+'</span><div>'+c.name+'<small>'+c.desc+(c.events?' · '+c.events+' ইভেন্ট':'')+(c.note?' · '+c.note:'')+'</small></div><span class="right" style="color:'+(c.on?'var(--green)':'var(--dim2)')+'">'+(c.on?'চালু':'বন্ধ')+'</span></div>').join('');
