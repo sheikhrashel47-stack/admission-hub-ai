@@ -1757,7 +1757,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v71';
+  const AGENT_VERSION = 'p10-v72';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2518,7 +2518,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v71' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v72' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -3067,8 +3067,19 @@ export default {
             req.signal?.addEventListener('abort', () => ac.abort());
             let answer = '', attempt = null;
             const t0 = Date.now();
+            const JUNK = (x) => /^\s*[{[]/.test(x) && /"(action|tool|parameters|function)"|web\.search|\bquery\b/i.test(x) && !/[।!?]/.test(x.slice(0, 120));
+            let junk = false;
             for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal, hasMulti)) {
-              answer += tok; emit({ token: tok });
+              answer += tok;
+              if (!junk && answer.length <= 160 && JUNK(answer)) { junk = true; emit({ clear: 1 }); ac.abort(); break; }
+              emit({ token: tok });
+            }
+            if (junk) {
+              answer = '';
+              finalMsgs.push({ role: 'system', content: 'টুল-কল JSON লিখবে না — এখানে কোনো টুল নেই; সোর্স-তথ্য ব্যবহার করে সরাসরি বাংলা গদ্যে উত্তর দাও।' });
+              const ac2 = new AbortController();
+              req.signal?.addEventListener('abort', () => ac2.abort());
+              for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac2.signal, hasMulti)) { answer += tok; emit({ token: tok }); }
             }
             if (!answer) throw new Error('খালি');
             const parsed = parseSuggestions(answer);
