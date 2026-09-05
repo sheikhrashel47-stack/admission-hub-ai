@@ -585,7 +585,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v56';
+  const AGENT_VERSION = 'p10-v57';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2172,6 +2172,91 @@ async function kitTool(env, keys, tool, args) {
       const pageUrl = (j.data || {}).url || '';
       return { page: pageUrl, direct: pageUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/'), bytes: blob.size, ttl: '60 মিনিট' };
     }
+    case 'kit.embed': {
+      let texts = args.texts || (args.text ? [args.text] : null);
+      if (!Array.isArray(texts) || !texts.length) throw new Error('texts লাগবে (array, max 10)');
+      texts = texts.slice(0, 10).map((t) => String(t).slice(0, 2000));
+      const q = String(args.query || '').slice(0, 2000);
+      const all = q ? [q].concat(texts) : texts;
+      const engine = String(args.engine || (keys.GEMINI_API_KEY ? 'gemini' : 'cf')).toLowerCase();
+      let vecs = [];
+      if (engine === 'gemini') {
+        if (!keys.GEMINI_API_KEY) throw new Error('GEMINI key নেই');
+        const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents', { method: 'POST', headers: { 'x-goog-api-key': keys.GEMINI_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests: all.map((t) => ({ model: 'models/gemini-embedding-001', content: { parts: [{ text: t }] } })) }) });
+        if (!r.ok) throw new Error('gemini embed HTTP ' + r.status);
+        const j = await r.json(); vecs = (j.embeddings || []).map((e) => e.values);
+      } else {
+        if (!keys.CF_EMAIL || !keys.CF_GLOBAL_KEY) throw new Error('CF creds নেই');
+        const r = await fetch('https://api.cloudflare.com/client/v4/accounts/abb783e456e51a5d338419de93d5e576/ai/run/@cf/baai/bge-m3', { method: 'POST', headers: { 'X-Auth-Email': keys.CF_EMAIL, 'X-Auth-Key': keys.CF_GLOBAL_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ text: all }) });
+        if (!r.ok) throw new Error('cf embed HTTP ' + r.status);
+        const j = await r.json(); vecs = ((j.result || {}).data) || [];
+      }
+      if (!vecs.length || !vecs[0]) throw new Error('ভেক্টর আসেনি');
+      const dot = (a, b) => { let x = 0; for (let i = 0; i < a.length; i++) x += a[i] * b[i]; return x; };
+      if (q) {
+        const qv = vecs[0]; const qn = Math.sqrt(dot(qv, qv)) || 1;
+        const ranked = vecs.slice(1).map((v, i) => ({ i: i, text: texts[i].slice(0, 80), sim: +(dot(qv, v) / (qn * (Math.sqrt(dot(v, v)) || 1))).toFixed(4) })).sort((a, b) => b.sim - a.sim);
+        return { engine: engine, dims: qv.length, query: q.slice(0, 80), ranked: ranked };
+      }
+      return { engine: engine, dims: vecs[0].length, count: vecs.length, vectors_preview: vecs.map((v) => v.slice(0, 8).map((x) => +x.toFixed(4))), note: 'পূর্ণ ভেক্টর অনেক বড় — প্রথম ৮ ডাইমেনশন দেখানো হলো' };
+    }
+    case 'kit.wikidata': {
+      const lang = String(args.lang || 'bn').slice(0, 8);
+      let qid = String(args.qid || '').toUpperCase();
+      let hits = [];
+      if (!/^Q\d+$/.test(qid)) {
+        const sq = String(args.q || args.query || args.search || ''); if (!sq) throw new Error('q বা qid লাগবে');
+        const sj = await jget('https://www.wikidata.org/w/api.php?action=wbsearchentities&search=' + encodeURIComponent(sq) + '&language=' + lang + '&format=json&limit=5');
+        hits = (sj.search || []).map((x) => ({ id: x.id, label: x.label, desc: x.description || '' }));
+        if (!hits.length) return { found: 0, hits: [] };
+        qid = hits[0].id;
+        if (args.listOnly) return { found: hits.length, hits: hits };
+      }
+      const ej = await jget('https://www.wikidata.org/wiki/Special:EntityData/' + qid + '.json');
+      const e = (ej.entities || {})[qid]; if (!e) throw new Error('এনটিটি পাওয়া যায়নি');
+      const lab = (e.labels || {})[lang] || (e.labels || {}).en || {};
+      const des = (e.descriptions || {})[lang] || (e.descriptions || {}).en || {};
+      const al = (((e.aliases || {})[lang]) || []).slice(0, 3).map((x) => x.value);
+      const sl = e.sitelinks || {};
+      const wl = (k, dom) => sl[k] ? 'https://' + dom + '/wiki/' + encodeURIComponent(String(sl[k].title).replace(/ /g, '_')) : '';
+      return { id: qid, label: lab.value, desc: des.value, aliases: al, bnwiki: wl('bnwiki', 'bn.wikipedia.org'), enwiki: wl('enwiki', 'en.wikipedia.org'), url: 'https://www.wikidata.org/wiki/' + qid, also: hits.slice(1, 4) };
+    }
+    case 'kit.wsearch': {
+      const q = String(args.query || args.q || ''); if (!q) throw new Error('query লাগবে');
+      const lang = String(args.lang || 'bn').slice(0, 8);
+      const lim = Math.min(Number(args.limit) || 5, 10) || 5;
+      const j = await jget('https://' + lang + '.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + encodeURIComponent(q) + '&srlimit=' + lim + '&format=json&utf8=1');
+      const res = (((j.query || {}).search) || []).map((x) => ({ title: x.title, snippet: String(x.snippet || '').replace(/<[^>]+>/g, ''), words: x.wordcount, url: 'https://' + lang + '.wikipedia.org/wiki/' + encodeURIComponent(String(x.title).replace(/ /g, '_')) }));
+      return { query: q, lang: lang, total: ((j.query || {}).searchinfo || {}).totalhits, results: res };
+    }
+    case 'kit.name': {
+      const n = String(args.name || '').trim(); if (!n) throw new Error('name লাগবে');
+      const res = await Promise.all([jget('https://api.agify.io/?name=' + encodeURIComponent(n)).catch(() => ({})), jget('https://api.genderize.io/?name=' + encodeURIComponent(n)).catch(() => ({})), jget('https://api.nationalize.io/?name=' + encodeURIComponent(n)).catch(() => ({}))]);
+      const a = res[0], g = res[1], c = res[2];
+      return { name: n, age: a.age, age_samples: a.count, gender: g.gender, gender_prob: g.probability, countries: (c.country || []).slice(0, 3).map((x) => ({ id: x.country_id, prob: x.probability })) };
+    }
+    case 'kit.httpbin': {
+      const p = String(args.path || 'get').replace(/^\/+/, '').slice(0, 40);
+      if (!/^(get|headers|ip|user-agent|encoding\/utf8|status\/\d{3})$/.test(p)) throw new Error('path: get|headers|ip|user-agent|status/NNN');
+      let qs = '';
+      if (args.query && typeof args.query === 'object') { const sp = new URLSearchParams(); for (const k of Object.keys(args.query)) sp.set(k, String(args.query[k])); qs = '?' + sp.toString(); }
+      return await jget('https://httpbin.org/' + p + qs);
+    }
+    case 'kit.bn': {
+      const t = String(args.text || ''); if (!t) throw new Error('text লাগবে');
+      const EN = '0123456789', BN = '০১২৩৪৫৬৭৮৯';
+      const to = String(args.to || 'bn');
+      const out = to === 'en' ? Array.from(t).map((ch) => { const i = BN.indexOf(ch); return i >= 0 ? EN[i] : ch; }).join('') : Array.from(t).map((ch) => { const i = EN.indexOf(ch); return i >= 0 ? BN[i] : ch; }).join('');
+      return { to: to, text: out };
+    }
+    case 'kit.lorem': {
+      const n = Math.min(Math.max(Number(args.n) || Number(args.words) || 30, 5), 300);
+      const lang = String(args.lang || 'bn');
+      const W = lang === 'en' ? ['lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit', 'sed', 'do', 'eiusmod', 'tempor', 'incididunt', 'ut', 'labore', 'et', 'dolore', 'magna', 'aliqua', 'enim', 'ad', 'minim', 'veniam', 'quis', 'nostrud'] : ['শিক্ষা', 'জ্ঞান', 'আলো', 'স্বপ্ন', 'পরিশ্রম', 'সাফল্য', 'বাংলাদেশ', 'নদী', 'মাঠ', 'আকাশ', 'বৃষ্টি', 'সবুজ', 'গ্রাম', 'শহর', 'বিদ্যালয়', 'বিশ্ববিদ্যালয়', 'পরীক্ষা', 'বই', 'লেখা', 'পড়া', 'গবেষণা', 'প্রযুক্তি', 'কম্পিউটার', 'ইঞ্জিনিয়ারিং', 'চিকিৎসা', 'কৃষি', 'অর্থনীতি', 'সমাজ', 'সংস্কৃতি', 'ইতিহাস', 'ঐতিহ্য', 'মুক্তিযুদ্ধ', 'ভাষা', 'সাহিত্য', 'কবিতা', 'গল্প'];
+      let out = ''; let cnt = 0;
+      while (cnt < n) { const len = 8 + Math.floor(Math.random() * 5); const w = []; for (let k = 0; k < len && cnt < n; k++) { w.push(W[Math.floor(Math.random() * W.length)]); cnt++; } out += (out ? ' ' : '') + w.join(' ') + (lang === 'en' ? '.' : '।'); }
+      return { lang: lang, words: cnt, text: out };
+    }
     default: throw new Error('অজানা kit টুল: ' + tool);
   }
 }
@@ -2245,7 +2330,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v56' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v57' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
