@@ -9,18 +9,13 @@
 
 ## 📋 এখন আপনার কাছে যা দরকার (মাত্র ২টা + ২টা ঐচ্ছিক)
 
-### ১) NVIDIA — নতুন করে key নিন ⚠️ (আপনার দেওয়া key-টা inference-এ 401 দিচ্ছে)
-1. **https://build.nvidia.com** → Sign In (Google)
-2. ডান-উপরে আপনার ছবি/আইকন → **API Keys** → **Generate API Key**
-3. সঠিক key **`nvapi-`** দিয়ে শুরু হবে — ওটাই পাঠান: `NVIDIA_API_KEY: nvapi-...`
-- ক্যাটালগে এখন যা আছে (টেস্ট করা): DeepSeek-V4 Pro/Flash, Kimi-K3, Kimi-K2.6, Nemotron-3 Super/Ultra, GPT-OSS-20B
+### ~~১) NVIDIA~~ — বাদ ✅ (ফোন ভেরিফিকেশনে বাংলাদেশি নম্বরের অপশন নেই)
+- চিন্তা নেই: NVIDIA-র সেরা মডেল (Nemotron-3 Ultra 550B) OpenRouter ফ্রি রুটে আগেই যোগ হয়ে গেছে ✅
 
-### ২) Z.ai (GLM অফিসিয়াল) — GLM 4.7 Flash একদম ফ্রি, লিমিট ছাড়া ⭐
-1. **https://z.ai** → Sign up (Gmail)
-2. **https://z.ai/manage-apikey/apikey-list** → Create API Key
-3. পাঠান: `ZAI_API_KEY: ...`
-- পাবেন: GLM 4.7 Flash + 4.5 Flash **$0 প্রাইসে** (কোনো কার্ড লাগে না) + নতুন অ্যাকাউন্টে GLM 5.2-এর জন্য স্টার্টার ক্রেডিট
-- সিস্টেমে আগে থেকে wired (v39)
+### ~~২) Z.ai~~ — হয়ে গেছে ✅ (key বসানো, GLM 4.5 Flash UI-তে লাইভ)
+- GLM 4.5 Flash: ফ্রি, চলছে ✅ (free tier-এ মাঝে মাঝে overload/ধীর — fallback chain সামলে নেয়)
+- GLM 4.7 Flash: hidden backup (Z.ai সাইডে overload কাটলে অটো ব্যবহারযোগ্য)
+- GLM 5.2: এই অ্যাকাউন্টে ব্যালেন্স নেই — কিন্তু OpenRouter-এ ফ্রি চলছে ✅
 
 ### ৩) DeepSeek — শুধু টপ-আপ (ঐচ্ছা)
 - আপনার key বসানো ✅ কিন্তু ব্যালেন্স $0। platform.deepseek.com → **Top Up** → মিনিমাম (~$1-৫) দিলেই অটো চলবে। "৫ মিলিয়ন ফ্রি টোকেন" দাবিটা ২০২৬-এ সত্যি না — আপনার নিজের অ্যাকাউন্টেই প্রমাণ মিলেছে।
