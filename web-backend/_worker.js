@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v54';
+  const AGENT_VERSION = 'p10-v55';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2133,9 +2133,11 @@ async function kitTool(env, keys, tool, args) {
       if (!fr.ok) throw new Error('ছবি ডাউনলোড HTTP ' + fr.status);
       const raw = new Uint8Array(await fr.arrayBuffer());
       if (raw.length > 8000000) throw new Error('ছবি 8MB-এর বড়');
-      const ext = (u.split('?')[0].split('.').pop() || 'png').toLowerCase();
-      const imgType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/png';
-      const fd = new FormData(); fd.append('file', new Blob([raw], { type: imgType }), 'qr.' + (ext === 'jpeg' ? 'jpg' : ext));
+      let ext = 'png', imgType = 'image/png';
+      if (raw[0] === 0xFF && raw[1] === 0xD8) { ext = 'jpg'; imgType = 'image/jpeg'; }
+      else if (raw[0] === 0x47 && raw[1] === 0x49) { ext = 'gif'; imgType = 'image/gif'; }
+      else if (raw[0] === 0x52 && raw[1] === 0x49 && raw[8] === 0x57) { ext = 'webp'; imgType = 'image/webp'; }
+      const fd = new FormData(); fd.append('file', new Blob([raw], { type: imgType }), 'qr.' + ext);
       const rr = await fetch('https://api.qrserver.com/v1/read-qr-code/', { method: 'POST', body: fd });
       if (!rr.ok) throw new Error('qrserver HTTP ' + rr.status);
       const j = await rr.json();
@@ -2233,7 +2235,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v54' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v55' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
