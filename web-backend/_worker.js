@@ -27,8 +27,9 @@ const MODELS = [
   { pid: 'deepseek', id: 'dsk', label: 'DeepSeek · Chat', model: 'deepseek-chat', speed: 4, quality: 4, coding: 5, hide: 1 },
   { pid: 'nvidia', id: 'nv', label: 'NVIDIA NIM · DeepSeek-R1', model: 'deepseek-ai/deepseek-r1', speed: 3, quality: 4, coding: 4, hide: 1 },
   { pid: 'xai', id: 'grok', label: 'xAI · Grok 4 Fast', model: 'grok-4-fast-reasoning', speed: 4, quality: 4, coding: 4, hide: 1 },
+  { pid: 'zai', id: 'glmf', label: 'Z.ai · GLM 4.5 Flash (free)', model: 'glm-4.5-flash', speed: 5, quality: 3, coding: 4 },
+  { pid: 'zai', id: 'glm47', label: 'Z.ai · GLM 4.7 Flash (free)', model: 'glm-4.7-flash', speed: 5, quality: 4, coding: 4, hide: 1 },
   { pid: 'zai', id: 'glm52', label: 'Z.ai · GLM 5.2 (1M ctx)', model: 'glm-5.2', speed: 3, quality: 5, coding: 5, hide: 1 },
-  { pid: 'zai', id: 'glmf', label: 'Z.ai · GLM 4.7 Flash (free)', model: 'glm-4.7-flash', speed: 5, quality: 3, coding: 4, hide: 1 },
   { pid: 'sambanova', id: 'snova', label: 'SambaNova · Llama 3.3 70B', model: 'Meta-Llama-3.3-70B-Instruct', speed: 3, quality: 4, coding: 4 },
   { pid: 'gemini', id: 'flash', label: 'Gemini · 3.1 Flash-Lite', model: 'gemini-3.1-flash-lite', speed: 4, quality: 3, coding: 3 },
   { pid: 'mistral', id: 'm2', label: 'Mistral · Small 3.1', model: 'mistral-small-latest', speed: 4, quality: 3, coding: 3 },
@@ -1617,7 +1618,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v39';
+  const AGENT_VERSION = 'p10-v40';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -1913,7 +1914,7 @@ export default {
       try { const r = await env.AH_DB.prepare("SELECT key, value FROM kv WHERE key LIKE 'audit:%' ORDER BY key DESC LIMIT 60").all(); rows = (r.results || []).map((x) => { try { return JSON.parse(x.value); } catch (e2) { return { raw: x.value }; } }); } catch (e2) {}
       return json({ ok: true, audit: rows });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v39' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v40' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
