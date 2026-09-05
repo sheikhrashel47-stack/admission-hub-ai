@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v53';
+  const AGENT_VERSION = 'p10-v54';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2080,7 +2080,7 @@ async function kitTool(env, keys, tool, args) {
     }
     case 'kit.ddg': {
       const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
-      const j = await jget('https://api.duckduckgo.com/?q=' + encodeURIComponent(q) + '&format=json&no_html=1&skip_disambig=1');
+      const j = await jget('https://api.duckduckgo.com/?q=' + encodeURIComponent(q) + '&format=json&no_html=1&skip_disambig=1' + (String(args.kl || args.lang || '').trim() ? '&kl=' + encodeURIComponent(String(args.kl || args.lang).trim()) : ''));
       return { heading: j.Heading, abstract: (j.AbstractText || '').slice(0, 800), answer: j.Answer, url: j.AbstractURL, related: (j.RelatedTopics || []).slice(0, 5).map((x) => x.Text || (x.Topics || [])[0] && x.Topics[0].Text).filter(Boolean).map((t) => String(t).slice(0, 160)) };
     }
     case 'kit.devto': {
@@ -2093,7 +2093,7 @@ async function kitTool(env, keys, tool, args) {
       return (j.results || []).map((x) => ({ q: x.question, correct: x.correct_answer, wrong: x.incorrect_answers, diff: x.difficulty }));
     }
     case 'kit.music': {
-      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
+      const q = String(args.query || args.artist || ''); if (!q) throw new Error('query লাগবে');
       const j = await jget('https://musicbrainz.org/ws/2/artist?query=' + encodeURIComponent(q) + '&fmt=json&limit=4');
       return (j.artists || []).map((a) => ({ name: a.name, type: a.type, country: a.country, score: a.score, disambig: a.disambiguation || '' }));
     }
@@ -2129,7 +2129,16 @@ async function kitTool(env, keys, tool, args) {
     }
     case 'kit.qrread': {
       const u = String(args.imageUrl || args.url || ''); if (!u) throw new Error('imageUrl লাগবে');
-      const j = await jget('https://api.qrserver.com/v1/read-qr-code/?fileurl=' + encodeURIComponent(u));
+      const fr = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' }, redirect: 'follow' });
+      if (!fr.ok) throw new Error('ছবি ডাউনলোড HTTP ' + fr.status);
+      const raw = new Uint8Array(await fr.arrayBuffer());
+      if (raw.length > 8000000) throw new Error('ছবি 8MB-এর বড়');
+      const ext = (u.split('?')[0].split('.').pop() || 'png').toLowerCase();
+      const imgType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/png';
+      const fd = new FormData(); fd.append('file', new Blob([raw], { type: imgType }), 'qr.' + (ext === 'jpeg' ? 'jpg' : ext));
+      const rr = await fetch('https://api.qrserver.com/v1/read-qr-code/', { method: 'POST', body: fd });
+      if (!rr.ok) throw new Error('qrserver HTTP ' + rr.status);
+      const j = await rr.json();
       const sym = (((j || [])[0] || {}).symbol || [])[0] || {};
       if (sym.error) throw new Error('QR পড়া যায়নি: ' + sym.error);
       return { data: sym.data, type: ((j || [])[0] || {}).type };
@@ -2224,7 +2233,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v53' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v54' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
