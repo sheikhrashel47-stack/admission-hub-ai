@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v55';
+  const AGENT_VERSION = 'p10-v56';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2133,6 +2133,7 @@ async function kitTool(env, keys, tool, args) {
       if (!fr.ok) throw new Error('ছবি ডাউনলোড HTTP ' + fr.status);
       const raw = new Uint8Array(await fr.arrayBuffer());
       if (raw.length > 8000000) throw new Error('ছবি 8MB-এর বড়');
+      if (raw[0] === 0x3C) throw new Error('url টি ছবির বদলে HTML পেজ দিচ্ছে (tmpfiles.org/dl বট ঠেকায়); kit.upload এর নিজস্ব image লিংক বা সরাসরি ছবির url দিন');
       let ext = 'png', imgType = 'image/png';
       if (raw[0] === 0xFF && raw[1] === 0xD8) { ext = 'jpg'; imgType = 'image/jpeg'; }
       else if (raw[0] === 0x47 && raw[1] === 0x49) { ext = 'gif'; imgType = 'image/gif'; }
@@ -2150,6 +2151,15 @@ async function kitTool(env, keys, tool, args) {
       const fr = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!fr.ok) throw new Error('ফাইল ডাউনলোড HTTP ' + fr.status);
       const raw = new Uint8Array(await fr.arrayBuffer());
       if (raw.length > 8000000) throw new Error('ফাইল 8MB-এর বড়');
+      const isImg = (raw[0] === 0x89 && raw[1] === 0x50) || (raw[0] === 0xFF && raw[1] === 0xD8) || (raw[0] === 0x47 && raw[1] === 0x49) || (raw[0] === 0x52 && raw[1] === 0x49 && raw[8] === 0x57);
+      if (isImg && raw.length <= 1000000) {
+        let bin = ''; for (let i = 0; i < raw.length; i += 8192) bin += String.fromCharCode.apply(null, raw.subarray(i, i + 8192));
+        const b64 = btoa(bin);
+        const id = [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('');
+        await storePut(env, 'img:' + id, b64, 7 * 86400);
+        const ie = (raw[0] === 0xFF && raw[1] === 0xD8) ? 'jpg' : (raw[0] === 0x47) ? 'gif' : (raw[0] === 0x52) ? 'webp' : 'png';
+        return { image: 'https://admission-hub-ai.pages.dev/api/img/' + id + '.' + ie, bytes: raw.length, ttl: '7d', host: 'নিজস্ব (র-বাইট, নির্ভরযোগ্য)' };
+      }
       let fname = (u.split('/').pop() || 'file.bin').slice(0, 60).split('?')[0] || 'file.bin';
       if (!/\.(txt|png|jpg|jpeg|gif|pdf|mp3|mp4|zip|csv|json|webp|md)$/i.test(fname)) fname += '.txt';
       const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf', mp3: 'audio/mpeg', mp4: 'video/mp4', zip: 'application/zip', csv: 'text/csv', json: 'application/json', txt: 'text/plain', md: 'text/plain' };
@@ -2235,7 +2245,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v55' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v56' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
