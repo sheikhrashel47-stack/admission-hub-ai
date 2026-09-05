@@ -636,8 +636,7 @@ html[data-theme="light"] body{background:linear-gradient(180deg,#fcfcfe 0%,#f7f8
     <div class="grab"></div>
     <div class="hd"><div><span class="ttl">কী করতে চান?</span></div><button class="x" data-close><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="bd">
-      <div class="secLbl">উত্তর-মোড (না ছুঁলে অটো)</div>
-      <div id="modeRow"><button data-m="auto">অটো</button><button data-m="chat">চ্যাট</button><button data-m="research">রিসার্চ</button><button data-m="coding">কোড</button><button data-m="agent">এজেন্ট</button><button data-m="mission">মিশন</button></div>
+      <div class="secLbl">✨ সব অটো — আপনি শুধু লিখুন; সার্চ/লেখা/কোড/এজেন্ট-এর কাজ নিজেই সঠিক ইঞ্জিনে চলে যাবে</div>
       <div id="toolGrid">
         <button id="tUpload" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg></span><span><span class="tgt">ফাইল আপলোড</span><span class="tgs" style="display:block">PDF, TXT, CSV, JSON, কোড</span></span></button>
         <button id="tWeb" class="tg"><span class="tgi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></span><span><span class="tgt">ওয়েব সার্চ</span><span class="tgs" style="display:block">সর্বশেষ তথ্য খুঁজুন</span></span></button>
@@ -1014,7 +1013,7 @@ async function go(text){
   abort=new AbortController();let acc='';const sTarget=curId;
   try{
     const r=await fetch(API+'/api/chat',{method:'POST',headers:Object.assign({'Content-Type':'application/json'},agSess()?{'Authorization':'Bearer '+agSess()}:{}),signal:abort.signal,
-      body:JSON.stringify({chatId:curId,message:payload,model,mode,web,imode:(localStorage.getItem('juzuMode')||'auto'),project:currentProject||undefined,media:sendMedia,images:sendImages})});
+      body:JSON.stringify({chatId:curId,message:payload,model,mode,web,imode:'auto',project:currentProject||undefined,media:sendMedia,images:sendImages})});
     const reader=r.body.getReader();const dec=new TextDecoder();let buf='';
     if(!r.ok||!r.body){let j={};try{j=await r.json()}catch{};throw new Error(j.error||'সংযোগ সমস্যা')}
     let stepsShown=false;
