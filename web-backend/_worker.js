@@ -1762,7 +1762,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v73';
+  const AGENT_VERSION = 'p10-v74';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2523,7 +2523,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v73' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v74' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2672,7 +2672,9 @@ export default {
     }
     const mRun = path.match(/^\/api\/runner\/(run_[0-9a-f]{6,40})$/);
     if (method === 'GET' && mRun) {
-      if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক পরিচয় লাগবে' }, 401);
+      let okOwn = await ownerOk(env, req);
+      if (!okOwn) { const oc = String(req.headers.get('x-owner-code') || '').trim(); if (oc) { const un = await ownerUnlock(env, oc); okOwn = !!(un && un.session); } }
+      if (!okOwn) return json({ error: '🔒 মালিক পরিচয় লাগবে' }, 401);
       const j = await storeGetJson(env, 'runner:' + mRun[1], null);
       return json(j || { status: 'pending' });
     }
@@ -3047,7 +3049,7 @@ export default {
           finalMsgs.splice(finalMsgs.length - 1, 0, { role: 'system', content: '[LIVE CLOCK] বর্তমান তারিখ ও সময় (বাংলাদেশ, Asia/Dhaka): ' + new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '। ইউজার "আজ/এখন/বর্তমান/কতটা বাজে/কত তারিখ" জিজ্ঞেস করলে একমাত্র এটাই সত্য ধরবে — অনুমান নয়।' });
           try {
             const factQ = intent === 'question' && /(কত|সংখ্যা|তালিকা|তারিখ|কবে|কোথায়|কোন)/.test(imsg) && !/(তুমি|তোমার|আমি|আমার|who are you)/i.test(imsg);
-            const misWeb = intent === 'mission' && /(খবর|তথ্য|সার্চ|গবেষণা|research|news|কত)/i.test(imsg);
+            const misWeb = intent === 'mission' && /(খবর|সংবাদ|তথ্য|সার্চ|গবেষণা|research|news|কত|আজকের|সর্বশেষ)/i.test(imsg);
             const effWeb = (body.web || ((intent === 'research' || factQ || misWeb) && !/(আবহাওয়া|weather|forecast|নামাজের সময়|prayer time)/i.test(imsg))) && intent !== 'greeting';
             if (effWeb) {
               const lastC = finalMsgs[finalMsgs.length - 1].content;
