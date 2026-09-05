@@ -588,7 +588,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1, 'kit.result': 1, 'pc.pair': 1, 'pc.status': 1, 'pc.run': 1, 'pc.result': 1, 'pc.put': 1, 'pc.get': 1, 'pc.gui': 1, 'pc.desktop': 1, 'gh.issue': 1, 'gh.pr': 1, 'gh.runs': 1, 'gh.events': 1, 'con.discord': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1, 'kit.result': 1, 'pc.pair': 1, 'pc.status': 1, 'pc.run': 1, 'pc.result': 1, 'pc.put': 1, 'pc.get': 1, 'pc.gui': 1, 'pc.desktop': 1, 'gh.issue': 1, 'gh.pr': 1, 'gh.runs': 1, 'gh.events': 1, 'con.discord': 1, 'gh.branch': 1, 'gh.write': 1, 'gh.prc': 1, 'gh.diff': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1039,6 +1039,22 @@ const STYLE_SYS={
   critical:'\n[STYLE: শুধু নিশ্চিতকরণ/সতর্কবার্তা]'
 };
 const PRON_RE=/(ওটা|ওইটা|ঐটা|সেটা|এটা|that|it|আগেরটা|আগের টা|same|একই|আবার)/i;
+const PLAN_CATALOG = 'gh.repos{}|gh.read{repo,path}|gh.write{repo,path,content,branch,message}|gh.branch{repo,name}|gh.prc{repo,head,base,title,body}|gh.diff{repo,pr}|gh.issue{title,body}|gh.pr{}|gh.runs{}|gh.events{}|web.now{query}|web.read{url}|web.search{query}|kit.lab{run,setup,async}|kit.code{code,lang}|kit.weather{location}|mem.save{text}|mem.search{q}|con.discord{content}|twin.map{}|twin.search{query}';
+async function llmPlan(keys, goal) {
+  const sys = 'তুমি JUJU-র প্ল্যানার। ইউজার-কাজ থেকে সর্বোচ্চ ৪ ধাপের টুল-প্ল্যান বানাও। ক্যাটালগ: ' + PLAN_CATALOG + ' । আউটপুট শুধু JSON অ্যারে: [{"tool":"gh.branch","args":{"repo":"x","name":"y"}}] — টুল লাগলে না, শুধু []।';
+  const bod = { model: '', temperature: 0.2, max_tokens: 300, messages: [{ role: 'system', content: sys }, { role: 'user', content: String(goal).slice(0, 900) }] };
+  let txt = '';
+  if (keys.GROQ_API_KEY) {
+    try { const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: JSON.stringify(Object.assign({}, bod, { model: 'llama-3.1-8b-instant' })) }); if (r.ok) { const j = await r.json(); txt = ((j.choices || [])[0].message || {}).content || ''; } } catch {}
+  }
+  if (!txt && keys.CF_GLOBAL_KEY) {
+    try { const r = await fetch('https://api.cloudflare.com/client/v4/accounts/' + CF_ACC + '/ai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY }, body: JSON.stringify(Object.assign({}, bod, { model: '@cf/meta/llama-3.1-8b-instruct' })) }); if (r.ok) { const j = await r.json(); txt = ((j.result || {}).choices || [])[0]?.message?.content || ((j.choices || [])[0].message || {}).content || ''; } } catch {}
+  }
+  const m = String(txt).match(/\[[\s\S]*\]/); if (!m) return [];
+  let arr = []; try { arr = JSON.parse(m[0]); } catch { return []; }
+  if (!Array.isArray(arr)) return [];
+  return arr.filter((x) => x && typeof x === 'object' && CHAT_TOOLS[String(x.tool)]).map((x) => ({ tool: String(x.tool), args: (x.args && typeof x.args === 'object') ? x.args : {} })).slice(0, 4);
+}
 async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   const t = String(msg || '').trim();
   if (t.length < 6) return null;
@@ -1079,6 +1095,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   if (!plan.length && /(pull request|\bpr\b)/i.test(t) && /(লিস্ট|list|দেখো|status|স্ট্যাটাস)/i.test(t)) plan.push({ tool: 'gh.pr', args: {} });
   if (!plan.length && /(actions|ওয়ার্কফ্লো|workflow)/i.test(t) && /(রান|run|স্ট্যাটাস|status|ফল|result)/i.test(t)) plan.push({ tool: 'gh.runs', args: {} });
   if (!plan.length && /(গিটহাব|github)/i.test(t) && /(webhook|হুক|ইভেন্ট|events)/i.test(t)) plan.push({ tool: 'gh.events', args: {} });
+  if (!plan.length && (intent === 'mission' || intent === 'instruction') && t.length > 12) { try { plan = await llmPlan(keys, t); if (stepsOut && plan.length) stepsOut.push('🧠 LLM প্ল্যানার: ' + plan.map((p) => p.tool).join(' → ')); } catch {} }
   if (!plan.length) return null;
   try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
@@ -1156,6 +1173,43 @@ async function runTool(keys, tool, args) {
       if (args.close) { const r = await ghApi(keys, '/repos/' + repo + '/issues/' + Number(args.close), { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) }); return { closed: r.number, url: r.html_url }; }
       const r = await ghApi(keys, '/repos/' + repo + '/issues', { method: 'POST', body: JSON.stringify({ title: String(args.title || 'টাইটেল নেই').slice(0, 200), body: String(args.body || '').slice(0, 5000) }) });
       return { number: r.number, url: r.html_url };
+    }
+    case 'gh.branch': {
+      const repo = String(args.repo || TWIN_REPO);
+      if (args.del) { await ghApi(keys, '/repos/' + repo + '/git/refs/heads/' + String(args.del), { method: 'DELETE' }); return { deleted: args.del }; }
+      const nm = String(args.name || '').replace(/[^\w./-]/g, '-').slice(0, 60); if (!nm) throw new Error('branch নাম লাগবে');
+      let base = String(args.from || '');
+      if (!base) { const r0 = await ghApi(keys, '/repos/' + repo); base = r0.default_branch; }
+      const rf = await ghApi(keys, '/repos/' + repo + '/git/ref/heads/' + base);
+      const r = await ghApi(keys, '/repos/' + repo + '/git/refs', { method: 'POST', body: JSON.stringify({ ref: 'refs/heads/' + nm, sha: rf.object.sha }) });
+      return { branch: nm, from: base, sha: rf.object.sha, url: r.html_url || '' };
+    }
+    case 'gh.write': {
+      const repo = String(args.repo || TWIN_REPO);
+      const path = String(args.path || '').replace(/^\/+/, '').slice(0, 200); if (!path || path.includes('..')) throw new Error('path ঠিক নয়');
+      let branch = String(args.branch || '');
+      if (/^(main|master)$/.test(branch) && !args.force) throw new Error('সেফটি-গেট: main/master-এ সরাসরি লেখা নিষেধ — feature branch দিন');
+      const r0 = await ghApi(keys, '/repos/' + repo); const def = r0.default_branch;
+      if (!branch) branch = 'juju/edit-' + Date.now().toString(36);
+      let sha = null;
+      try { await ghApi(keys, '/repos/' + repo + '/git/ref/heads/' + branch); }
+      catch { const rf = await ghApi(keys, '/repos/' + repo + '/git/ref/heads/' + def); await ghApi(keys, '/repos/' + repo + '/git/refs', { method: 'POST', body: JSON.stringify({ ref: 'refs/heads/' + branch, sha: rf.object.sha }) }); }
+      try { const cur = await ghApi(keys, '/repos/' + repo + '/contents/' + path + '?ref=' + branch); sha = cur.sha; } catch {}
+      const r = await ghApi(keys, '/repos/' + repo + '/contents/' + path, { method: 'PUT', body: JSON.stringify({ message: String(args.message || 'juju edit').slice(0, 150), content: b64utf8enc(String(args.content || '')), branch, ...(sha ? { sha } : {}) }) });
+      return { path, branch, url: (r.content && r.content.html_url) || '', created: !sha };
+    }
+    case 'gh.prc': {
+      const repo = String(args.repo || TWIN_REPO);
+      if (args.close) { const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.close), { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) }); return { closed: r.number, url: r.html_url }; }
+      if (args.merge) { const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.merge) + '/merge', { method: 'PUT', body: '{}' }); return { merged: r.merged, url: '' }; }
+      const r0 = await ghApi(keys, '/repos/' + repo);
+      const r = await ghApi(keys, '/repos/' + repo + '/pulls', { method: 'POST', body: JSON.stringify({ title: String(args.title || 'JUJU change').slice(0, 150), head: String(args.head || ''), base: String(args.base || r0.default_branch), body: String(args.body || '').slice(0, 4000) }) });
+      return { number: r.number, url: r.html_url };
+    }
+    case 'gh.diff': {
+      const repo = String(args.repo || TWIN_REPO);
+      const j = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.pr || 0) + '/files?per_page=10');
+      return { files: j.map((f) => ({ file: f.filename, status: f.status, adds: f.additions, dels: f.deletions, patch: String(f.patch || '').slice(0, 1500) })) };
     }
     case 'gh.pr': {
       const repo = String(args.repo || TWIN_REPO); const st = String(args.state || 'open');
@@ -1790,7 +1844,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v79';
+  const AGENT_VERSION = 'p10-v80';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2551,7 +2605,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v79' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v80' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2726,6 +2780,9 @@ export default {
         { id: 'webhook', name: 'GitHub Webhook', desc: 'push/issue/PR ইভেন্ট নিজে থেকে আসে', on: !!keys.GH_HOOK_SECRET, last: (ev[0] && ev[0].ts) || null, events: ev.length },
         { id: 'web', name: 'লাইভ ওয়েব সার্চ', desc: 'Tavily → wiki ফলব্যাক', on: !!keys.TAVILY_API_KEY },
         { id: 'discord', name: 'Discord', desc: '', on: !!keys.DISCORD_WEBHOOK, note: keys.DISCORD_WEBHOOK ? '' : 'webhook URL দিলে চালু' },
+        { id: 'browser', name: 'My Browser (ক্লাউড)', desc: 'আসল ব্রাউজার: লগইন সাইট, ফর্ম, স্ক্রিনশট', on: !!keys.BU_KEY_1 },
+        { id: 'lab', name: 'টার্মিনাল / Sandbox', desc: 'GH Actions Linux VM — pip/npm/python/bash', on: true },
+        { id: 'pages', name: 'হোস্টিং (CF Pages)', desc: 'জুজুর নিজের ডিপ্লয় পাইপলাইন', on: true },
         { id: 'email', name: 'Email', desc: 'পরিকল্পিত (free tier key লাগবে)', on: false },
         { id: 'telegram', name: 'Telegram', desc: 'পরিকল্পিত (bot token লাগবে)', on: false }
       ];
