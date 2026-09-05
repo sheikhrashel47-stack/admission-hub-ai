@@ -88,15 +88,15 @@ web.search (Tavily) ✅ · web.read ৪ লেয়ার (Jina/Firecrawl/Scrap
 ### গ্রুপ C — মালিকের ফ্রি সাইনআপ দরকার (১৩টা)
 | # | টুল | ফ্রি লিমিট | সাইনআপ |
 |---|---|---|---|
-| 38 | **Serper.dev** ⭐ | ২৫০০ Google সার্চ | serper.dev (Gmail) |
-| 39 | **ElevenLabs** ⭐ | ১০ক ক্যারেক্টার/মাস TTS | elevenlabs.io |
+| ~~38~~ | **Serper.dev** ✅ চালু (v49) | ২৫০০ Google সার্চ — বাংলা SERP টেস্ট পাস | বসানো শেষ |
+| ~~39~~ | **ElevenLabs** ✅ চালু (v49) | বাংলা TTS ১.৫s-এ MP3 + নিজস্ব /api/aud হোস্টিং | বসানো শেষ |
 | 40 | **Brave Search API** | ২০০০/মাস | brave.com/search/api (কার্ড লাগে না) |
 | 41 | **Wolfram Alpha** | ২০০০ কল/মাস | products.wolframalpha.com |
 | 42 | **Cohere Trial** | ১০০০ কল/মাস (Embed/Rerank) | dashboard.cohere.com |
-| 43 | **GNews** | ১০০ রিকোয়েস্ট/দিন (BD সংবাদ) | gnews.io |
+| ~~43~~ | **GNews** ✅ চালু (v49) | বাংলা টপ-হেডলাইন (ফ্রি প্ল্যানে ১২ ঘণ্টা ডিলে) | বসানো শেষ |
 | 44 | **NewsAPI.org** | ১০০/দিন ডেভ টিয়ার | newsapi.org |
 | 45 | **Alpha Vantage** | ২৫/দিন স্টক+ফরেক্স | alphavantage.co |
-| 46 | **OpenRouteService** | ২০০০/দিন ডিরেকশন+ম্যাপ | openrouteservice.org |
+| ~~46~~ | **OpenRouteService** ✅ চালু (v49) | ঢাকা→চট্টগ্রাম ২৪৩km/১৭৩min টেস্ট পাস | বসানো শেষ |
 | 47 | **SiliconFlow** | ফ্রি ক্রেডিট (Qwen/ছবি) | siliconflow.cn |
 | 48 | **Discord webhook** | ফ্রি নোটিফিকেশন | discord.com (সার্ভার থাকলে) |
 | 49 | **TMDB** | ফ্রি সিনেমা/সিরিজ DB | themoviedb.org |
