@@ -1045,13 +1045,13 @@ async function llmPlan(keys, goal) {
   const bod = { model: '', temperature: 0.2, max_tokens: 300, messages: [{ role: 'system', content: sys }, { role: 'user', content: String(goal).slice(0, 900) }] };
   let txt = '';
   if (keys.GROQ_API_KEY) {
-    for (const mdl of ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant']) {
+    for (const mdl of ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b']) {
       if (txt) break;
       try { const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + keys.GROQ_API_KEY }, body: JSON.stringify(Object.assign({}, bod, { model: mdl })) }); if (r.ok) { const j = await r.json(); txt = ((j.choices || [])[0].message || {}).content || ''; } } catch {}
     }
   }
   if (!txt && keys.CF_GLOBAL_KEY) {
-    try { const r = await fetch('https://api.cloudflare.com/client/v4/accounts/' + CF_ACC + '/ai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY }, body: JSON.stringify(Object.assign({}, bod, { model: '@cf/meta/llama-3.1-8b-instruct' })) }); if (r.ok) { const j = await r.json(); txt = ((j.result || {}).choices || [])[0]?.message?.content || ((j.choices || [])[0].message || {}).content || ''; } } catch {}
+    try { const r = await fetch('https://api.cloudflare.com/client/v4/accounts/' + CF_ACC + '/ai/v1/chat/completions', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Auth-Email': keys.CF_EMAIL || '', 'X-Auth-Key': keys.CF_GLOBAL_KEY }, body: JSON.stringify(Object.assign({}, bod, { model: '@cf/meta/llama-3.1-8b-instruct-fp8' })) }); if (r.ok) { const j = await r.json(); txt = ((j.result || {}).choices || [])[0]?.message?.content || ((j.choices || [])[0].message || {}).content || ''; } } catch {}
   }
   const m = String(txt).match(/\[[\s\S]*\]/);
   let arr = []; if (m) { try { arr = JSON.parse(m[0]); } catch {} }
@@ -1855,7 +1855,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v82';
+  const AGENT_VERSION = 'p10-v83';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2616,7 +2616,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v82' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v83' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
