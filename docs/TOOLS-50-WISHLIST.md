@@ -136,3 +136,27 @@ web.search (Tavily) ✅ · web.read ৪ লেয়ার (Jina/Firecrawl/Scrap
 **মৃত/বাতিল (আর চেষ্টা করো না):** Piston (whitelist-only 2026-02-15), Wandbox (cpython/node ভাঙা), restcountries (success:false envelope), Binance 451, GoogleBooks 429, Reddit 403, dpaste 405, CoinGecko (CF-edge 429), overpass-api.de (CF-edge 521 — মিরর চেইনে আছে), **osm.ch মিরর ফাঁকা ডেটা দেয়** (বার্লিনেও 0!), tmpfiles /dl/ বটকে HTML দেয় (তাই নিজস্ব host)।
 
 **মোট: ৬২ এক্সটার্নাল টুল (v56)।** বাকি গ্রুপ A: Wikidata SPARQL, 0x0.st, Agify/Genderize, random-data, Unicode BN converter, BN lorem — v57+। গ্রুপ B (৫টা existing-key) এরপর।
+
+---
+
+## ✅ ব্যাচ-২ (v57): গ্রুপ B + গ্রুপ A বাকিরা — ৭ নতুন টুল, ৮/৮ লাইভ-পাস
+
+| টুল | ইঞ্জিন | লাইভ ফলাফল |
+|---|---|---|
+| kit.embed (engine=gemini) | gemini-embedding-001 | 3072-dim; বাংলা semantic র‍্যাংকিং sim 0.79 ✅ |
+| kit.embed (engine=cf) | @cf/baai/bge-m3 REST | 1024-dim ✅ |
+| kit.wikidata | wbsearchentities+EntityData | তাজউদ্দীন আহমদ → "বাংলাদেশের প্রথম প্রধানমন্ত্রী" ✅ |
+| kit.wsearch | MediaWiki list=search | মুক্তিযুদ্ধ → ৩৯৯৪ হিট, বাংলা স্নিপেট ✅ |
+| kit.name | agify+genderize+nationalize | Rashel → 36 বছর, BD 27.5% ✅ |
+| kit.httpbin | httpbin.org | ip/headers/get echo ✅ |
+| kit.bn | লোকাল | 1995 → ১৯৯৫ (দুই দিকেই) ✅ |
+| kit.lorem | লোকাল (বাংলা শব্দতালিকা) | ২০ শব্দ বাংলা lorem ✅ |
+
+**গ্রুপ B বাকিদের অবস্থা:**
+- ❌ **Gemini nano-banana ছবি**: ফ্রি টিয়ারে 429 quota (ছবি জেনারেশন পেড) — CF FLUX (kit.flux) আগে থেকেই আছে
+- ⏸ **Groq Orpheus TTS**: মডেল আছে কিন্তু **terms acceptance লাগবে** — মালিককে https://console.groq.com/playground?model=canopylabs%2Forpheus-v1-english-এ গিয়ে accept করতে হবে; PlayAI মডেল লিস্টেই নেই
+- ❌ **HF Inference**: hf-inference প্রোভাইডারে কোনো মডেলই সাপোর্টেড নয় (FLUX deprecated 410, Qwen/SDXL "not supported") — HF চ্যাট প্রোভাইডার (Qwen2.5-72B via /v1 router) আগের মতোই সচল
+
+**গ্রুপ A মৃতরা (আর চেষ্টা নেই):** 0x0.st (আপলোড বন্ধ — "AI botnet spam"), random-data-api.com (কানেকশন ডেড), CanIUse (JSON অনেক ভারী), OSRM (ORS route আগেই আছে)।
+
+**মোট: ৬৯ এক্সটার্নাল টুল (v57)। গ্রুপ A+B ইনস্টলেশন সম্পূর্ণ — শুধু গ্রুপ C বাকি (মালিকের key চাই)।**
