@@ -40,3 +40,17 @@ BRIGHTDATA (রিজার্ভ, কোডে ব্যবহৃত নয়)
 
 ## E) মৃত/বাদ (আর সময় দেবেন না)
 NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্তু Nemotron 550B OR-এ ফ্রি আছে) · GitHub Models (বন্ধ হচ্ছে) · Cerebras · Together · SambaNova · DeepInfra · xAI · Kimi/MiniMax ডাইরেক্ট · Perplexity
+
+---
+
+## Phase 4 — GPU / Sandbox / Computer (v58, সব লাইভ-ভেরিফায়েড ✅)
+
+| স্তম্ভ | টুল | ইঞ্জিন | লাইভ প্রমাণ |
+|---|---|---|---|
+| **GPU** | kit.gpu {prompt, model: llama8/llama70/qwencoder, system, max_tokens} | CF Workers AI REST (X-Auth-Email/Key) | llama8 বাংলা 566ms; **llama70 244ms "SEVENTY-B-OK"** ✅ |
+| **Sandbox** | kit.lab {files{}, setup, run, timeout} + kit.code | GH Actions ubuntu রানার (runSandbox) | ২ ফাইল লিখে python3 → {"sum":50} 11s ✅; pip/npm/curl আছে |
+| **Computer** | bu.task/bu.status (আগেই ছিল) | browser-use.com cloud (key rotation, 11 keys) | "Example Domain" — আসল ব্রাউজার টাস্ক 15s-এ finished ✅ |
+| **Computer** | kit.pdf {url, format} | Browserless /pdf → **নিজস্ব /api/pdf/<id>.pdf** (7d, %PDF verified) | example.com → 31KB PDF 1.8s ✅ |
+
+নতুন রুট: `GET /api/pdf/<id>.pdf` (application/pdf, inline, 7d)।
+মোট এক্সটার্নাল টুল: **৭২** (v58)।
