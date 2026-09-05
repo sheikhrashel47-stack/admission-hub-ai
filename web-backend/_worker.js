@@ -1103,7 +1103,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   if (!plan.length) return null;
   try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
-  for (const st of plan.slice(0, 2)) {
+  for (const st of plan.slice(0, intent === 'mission' ? 4 : 2)) {
     const tool = st.tool;
     if (!CHAT_TOOLS[tool]) continue;
     try { const r = await runAgentTool(env, keys, tool, st.args || {}, () => {}, { owner: true, task: 'chat-tool' }); notes.push(tool + ' → ' + JSON.stringify(r).slice(0, 1500)); if (stepsOut) stepsOut.push('🔧 ' + tool + ' চালানো হয়েছে ✅'); } catch (e) {
@@ -1213,7 +1213,7 @@ async function runTool(keys, tool, args) {
     case 'gh.prc': {
       const repo = repoOf(args);
       if (args.close) { const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.close), { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) }); return { closed: r.number, url: r.html_url }; }
-      if (args.merge) { const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.merge) + '/merge', { method: 'PUT', body: '{}' }); return { merged: r.merged, url: '' }; }
+      if (args.merge) { if (!args.force) throw new Error('সেফটি-গেট: merge মালিকের অনুমোদন ছাড়া নয় (force:true দিন)'); const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.merge) + '/merge', { method: 'PUT', body: '{}' }); return { merged: r.merged, url: '' }; }
       const r0 = await ghApi(keys, '/repos/' + repo);
       const r = await ghApi(keys, '/repos/' + repo + '/pulls', { method: 'POST', body: JSON.stringify({ title: String(args.title || 'JUJU change').slice(0, 150), head: String(args.head || ''), base: String(args.base || r0.default_branch), body: String(args.body || '').slice(0, 4000) }) });
       return { number: r.number, url: r.html_url };
@@ -1856,7 +1856,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v84';
+  const AGENT_VERSION = 'p10-v85';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2617,7 +2617,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v84' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v85' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
