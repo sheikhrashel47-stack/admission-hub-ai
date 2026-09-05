@@ -82,3 +82,10 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 সমস্যা ছিল ৩ স্তরে: (১) SYSTEM prompt-এ পুরনো লাইন "Agent tools যুক্ত হয়নি (Phase 5+)" — মডেল সৎভাবে refuse করছিল; (২) chat mode/auto-তে tool-loop gate বন্ধ ছিল (শুধু web-toggle/research-এ চলত); (৩) weather planner rule ছিল না + বাংলা loc cleanup-এ "ের" (e-kar)-এর বদলে ভুল "এর"字符 ছিল → geocoding-এ "গাজীপুরের" যেত → ব্যর্থ; + open-meteo CF-edge থেকে মাঝে মাঝে 429 (এখন 3x retry)।
 ফিক্স: prompt-এ ৮১-টুল সত্য + তাজা-ডেটা নিয়ম + বানোয়াট টুল-নাম নিষেধ; quickKit rules (weather/prayer/pc.status) সব mode-এ; BN→EN ৪০-শহর ম্যাপ fallback; retry wrapper; D1-এ secret-ঘেঁষা mem rows suppressed (নিরাপত্তা)।
 টেস্ট: ৩/৩ চ্যাট-রান লাইভ আবহাওয়া (৩১.৪°C, ৭%, টাইমস্ট্যাম্পসহ)। dbg:lastloop (D1, 1h TTL) = ভবিষ্যৎ ডিবাগ ট্রেস।
+
+---
+
+## v65 — ইউনিফায়েড রাউটার (মালিকের দাবি: "এক বক্স, সব অটো")
+- UI: + শিট থেকে **mode-row (চ্যাট/রিসার্চ/কোড/এজেন্ট/মিশন) সরানো** — এখন একটাই ইনপুট বক্স; অ্যাপ imode:'auto' পাঠায়।
+- Worker: `imode` সবসময় 'auto' (body/stChat মোড ignore); **intent-ই রাউটার**: research→Tavily ওয়েব-পাইপলাইন+সোর্স (weather-quickhit থাকলে ডুপ নয়), coding→কোড-ফার্স্ট স্টাইল, instruction→এজেন্ট-স্টাইল পরিকল্পনা, question/conversation→খালি LLM; টুল-প্ল্যানার (quickKit+rules) সববার চলে।
+- টেস্ট: সার্চ-প্রশ্ন→web.now+সোর্স✅ · কবিতা→টুল ছাড়া সৃজনশীল✅ · fizzbuzz→কোড-ফার্স্ট✅।
