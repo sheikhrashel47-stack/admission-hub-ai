@@ -116,6 +116,7 @@ const PERM = {
   'web.search': { risk: 'LOW', gate: 'AUTO' }, 'web.read': { risk: 'LOW', gate: 'AUTO' }, 'web.eye': { risk: 'LOW', gate: 'AUTO' }, 'web.now': { risk: 'LOW', gate: 'AUTO' },
   'verify.url': { risk: 'LOW', gate: 'AUTO' }, 'bu.health': { risk: 'LOW', gate: 'AUTO' },
   'twin.index': { risk: 'LOW', gate: 'AUTO' }, 'twin.search': { risk: 'LOW', gate: 'AUTO' }, 'twin.map': { risk: 'LOW', gate: 'AUTO' }, 'twin.impact': { risk: 'LOW', gate: 'AUTO' }, 'twin.time': { risk: 'LOW', gate: 'AUTO' },
+  'pc.pair': { risk: 'LOW', gate: 'AUTO' }, 'pc.status': { risk: 'LOW', gate: 'AUTO' }, 'pc.run': { risk: 'LOW', gate: 'AUTO' }, 'pc.result': { risk: 'LOW', gate: 'AUTO' }, 'pc.put': { risk: 'LOW', gate: 'AUTO' }, 'pc.get': { risk: 'LOW', gate: 'AUTO' }, 'pc.gui': { risk: 'LOW', gate: 'AUTO' }, 'pc.desktop': { risk: 'LOW', gate: 'AUTO' }, 'kit.result': { risk: 'LOW', gate: 'AUTO' },
   'agent.shell': { risk: 'HIGH', gate: 'POLICY' }, 'agent.test': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.repair': { risk: 'MEDIUM', gate: 'POLICY' }, 'agent.envcheck': { risk: 'LOW', gate: 'POLICY' },
   'mem.save': { risk: 'LOW', gate: 'AUTO' }, 'mem.search': { risk: 'LOW', gate: 'AUTO' }, 'mem.forget': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.correct': { risk: 'MEDIUM', gate: 'POLICY' }, 'mem.audit': { risk: 'LOW', gate: 'POLICY' }, 'mem.export': { risk: 'LOW', gate: 'POLICY' }, 'mem.syncmd': { risk: 'MEDIUM', gate: 'POLICY' },
   'qa.scene': { risk: 'LOW', gate: 'AUTO' }, 'qa.baseline': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.compare': { risk: 'LOW', gate: 'AUTO' }, 'qa.matrix': { risk: 'LOW', gate: 'AUTO' }, 'qa.error': { risk: 'LOW', gate: 'AUTO' }, 'qa.browse': { risk: 'MEDIUM', gate: 'AUTO' }, 'qa.gate': { risk: 'LOW', gate: 'AUTO' },
@@ -585,7 +586,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1, 'kit.result': 1, 'pc.pair': 1, 'pc.status': 1, 'pc.run': 1, 'pc.result': 1, 'pc.put': 1, 'pc.get': 1, 'pc.gui': 1, 'pc.desktop': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -725,10 +726,14 @@ function cmdGate(script) {
   }
   return g;
 }
-async function runSandbox(env, keys, script, repo) {
+async function runSandboxStart(env, keys, script, repo) {
   const key = 'run_' + Array.from(crypto.getRandomValues(new Uint8Array(12))).map((b) => b.toString(16).padStart(2, '0')).join('');
-  await storePut(env, 'runner:' + key, JSON.stringify({ status: 'pending', ts: Date.now() }), 3600);
+  await storePut(env, 'runner:' + key, JSON.stringify({ status: 'pending', ts: Date.now() }), 21600);
   await ghApi(keys, '/repos/' + (repo || TWIN_REPO) + '/dispatches', { method: 'POST', body: JSON.stringify({ event_type: 'agent-run', client_payload: { script_b64: b64utf8enc(script), result_key: key, result_url: 'https://admission-hub-ai.pages.dev/api/runner/result' } }) });
+  return key;
+}
+async function runSandbox(env, keys, script, repo) {
+  const key = await runSandboxStart(env, keys, script, repo);
   const t0 = Date.now();
   while (Date.now() - t0 < 150000) {
     await new Promise((r) => setTimeout(r, 5000));
@@ -1204,7 +1209,115 @@ async function visionCritique(keys, b64png, question) {
   }
   return 'vision ব্যর্থ (' + last + ')';
 }
+/* ===== JUJU-PC — নিজের Codespaces কম্পিউটার (pairing + job queue) ===== */
+async function pcEnqueue(env, job) {
+  const jid = 'pcj_' + Array.from(crypto.getRandomValues(new Uint8Array(8))).map((b) => b.toString(16).padStart(2, '0')).join('');
+  await storePut(env, 'pcjob:' + jid, JSON.stringify(Object.assign({}, job, { status: 'queued', ts: Date.now() })), 3600);
+  const q = await storeGetJson(env, 'pc:queue', []);
+  const arr = Array.isArray(q) ? q : [];
+  arr.push(jid);
+  await storePut(env, 'pc:queue', JSON.stringify(arr.slice(-50)), 86400);
+  return jid;
+}
+async function pcWait(env, jid, maxMs) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < (maxMs || 50000)) {
+    const j = await storeGetJson(env, 'pcjob:' + jid, null);
+    if (j && j.status === 'done') return j;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return null;
+}
+async function pcTool(env, keys, tool, args) {
+  if (tool === 'kit.result') {
+    const k = String(args.runKey || args.key || '');
+    if (!/^run_[a-f0-9]{24}$/.test(k)) throw new Error('runKey লাগবে (run_...)');
+    const j = await storeGetJson(env, 'runner:' + k, null);
+    if (!j) throw new Error('রান পাওয়া যায়নি/মেয়াদ শেষ');
+    if (j.status !== 'done') return { status: 'pending', note: 'এখনো চলছে — কিছুক্ষণ পরে আবার kit.result ডাকুন' };
+    return { status: 'done', exit: j.exit, out: String(j.out || '').slice(0, 8000), err: String(j.err || '').slice(0, 3000) };
+  }
+  if (tool === 'pc.pair') {
+    const code = String(args.code || '').toUpperCase().trim().slice(0, 8);
+    if (!/^[A-Z0-9]{6}$/.test(code)) throw new Error('৬-অক্ষরের কোড লাগবে (টার্মিনালে দেখানোটা)');
+    const p = await storeGetJson(env, 'pc:pair:' + code, null);
+    if (!p) throw new Error('কোড রেজিস্টার হয়নি/মেয়াদ শেষ — codespace টার্মিনাল দেখুন');
+    if (p.status === 'approved') return { ok: true, note: 'আগেই পেয়ারড', info: p.info };
+    const token = 'pct_' + Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, '0')).join('');
+    await storePut(env, 'pc:sess:' + token, JSON.stringify({ code: code, lastSeen: Date.now(), ts: Date.now() }), 7 * 86400);
+    await storePut(env, 'pc:pair:' + code, JSON.stringify(Object.assign({}, p, { status: 'approved', token: token })), 3600);
+    await storePut(env, 'pc:active', token, 7 * 86400);
+    return { ok: true, paired: code, info: p.info, note: 'daemon এখন থেকে জব নিতে শুরু করবে' };
+  }
+  if (tool === 'pc.status') {
+    const token = await storeGet(env, 'pc:active');
+    if (!token) return { online: false, note: 'কোনো কম্পিউটার পেয়ারড নয় — juju-pc রেপোতে Codespaces খুলুন' };
+    const s = await storeGetJson(env, 'pc:sess:' + token, null);
+    const online = !!(s && s.lastSeen && Date.now() - s.lastSeen < 90000);
+    const q = await storeGetJson(env, 'pc:queue', []);
+    return { online: online, lastSeen: s && s.lastSeen ? new Date(s.lastSeen).toISOString() : '', pendingJobs: Array.isArray(q) ? q.length : 0 };
+  }
+  const at = await storeGet(env, 'pc:active');
+  if (!at) throw new Error('কম্পিউটার পেয়ারড নয় — আগে pc.pair {code}');
+  const sess = await storeGetJson(env, 'pc:sess:' + at, null);
+  if (!sess || !sess.lastSeen || Date.now() - sess.lastSeen > 180000) throw new Error('কম্পিউটার অফলাইন (codespace ঘুমিয়েছে?) — github.com → juju-pc → Codespaces ট্যাবে ক্লিক করে জাগান');
+  if (tool === 'pc.run') {
+    const cmd = String(args.cmd || args.command || '');
+    if (!cmd) throw new Error('cmd লাগবে');
+    const jid = await pcEnqueue(env, { kind: 'cmd', cmd: cmd.slice(0, 4000), timeout: Math.min(Number(args.timeout) || 120, 1800) });
+    if (args.async) return { jobId: jid, note: 'কাজ জমা — pc.result {jobId} দিয়ে ফল নিন' };
+    const r = await pcWait(env, jid, Math.min((Number(args.timeout) || 120) * 1000 + 10000, 55000));
+    if (!r) return { jobId: jid, status: 'running', note: 'এখনো চলছে — pc.result {jobId} দিয়ে ফল নিন' };
+    return { jobId: jid, exit: r.exit, out: r.out, err: r.err };
+  }
+  if (tool === 'pc.result') {
+    const jid = String(args.jobId || args.id || '');
+    if (!/^pcj_[a-f0-9]{16}$/.test(jid)) throw new Error('jobId লাগবে (pcj_...)');
+    const j = await storeGetJson(env, 'pcjob:' + jid, null);
+    if (!j) throw new Error('জব পাওয়া যায়নি/মেয়াদ শেষ');
+    return j.status === 'done' ? j : { status: j.status, note: 'এখনো চলছে' };
+  }
+  if (tool === 'pc.put') {
+    const p = String(args.path || ''); const c = String(args.content || '');
+    if (!p) throw new Error('path লাগবে');
+    const jid = await pcEnqueue(env, { kind: 'put', path: p.slice(0, 200), b64: b64utf8enc(c) });
+    const r = await pcWait(env, jid, 30000);
+    return r && r.status === 'done' ? { saved: p, exit: r.exit, out: r.out } : { jobId: jid, status: 'running' };
+  }
+  if (tool === 'pc.get') {
+    const p = String(args.path || '');
+    if (!p) throw new Error('path লাগবে');
+    const jid = await pcEnqueue(env, { kind: 'get', path: p.slice(0, 200) });
+    const r = await pcWait(env, jid, 40000);
+    if (!r || r.status !== 'done') return { jobId: jid, status: 'running' };
+    if (r.b64) {
+      const id = Array.from(crypto.getRandomValues(new Uint8Array(8))).map((x) => x.toString(16).padStart(2, '0')).join('');
+      await storePut(env, 'img:' + id, r.b64, 86400);
+      return { path: p, bytes: r.bytes, url: 'https://admission-hub-ai.pages.dev/api/file/' + id, note: 'ফাইল কপি ডাউনলোড (২৪ ঘণ্টা)' };
+    }
+    return { path: p, exit: r.exit, err: r.err || 'ফাইল পাওয়া যায়নি' };
+  }
+  if (tool === 'pc.gui') {
+    const action = String(args.action || 'screenshot');
+    const job = { kind: 'gui', action: action };
+    if (action === 'click') { job.x = Number(args.x) | 0; job.y = Number(args.y) | 0; job.button = Number(args.button) || 1; }
+    if (action === 'type') job.text = String(args.text || '').slice(0, 2000);
+    if (action === 'key') job.keys = String(args.keys || '').slice(0, 100);
+    const jid = await pcEnqueue(env, job);
+    const r = await pcWait(env, jid, 45000);
+    if (!r || r.status !== 'done') return { jobId: jid, status: 'running' };
+    const o = { action: action, exit: r.exit, out: r.out, jobId: jid };
+    if (r.image) o.image = r.image;
+    return o;
+  }
+  if (tool === 'pc.desktop') {
+    const jid = await pcEnqueue(env, { kind: 'cmd', cmd: 'cd /workspaces/juju-pc && bash setup-desktop.sh 2>&1 | tail -3', timeout: 900 });
+    return { jobId: jid, note: 'ডেস্কটপ ইনস্টল শুরু (৫-১০ মিনিট) — pc.result {jobId} দিয়ে দেখুন; DESKTOP-READY উঠলে লাইভ স্ক্রিন: Ports ট্যাব → 6080' };
+  }
+  throw new Error('অজানা pc টুল: ' + tool);
+}
 async function runAgentTool(env, keys, tool, args, emit, ctx) {
+  if (tool.startsWith('pc.') || tool === 'kit.result') return await pcTool(env, keys, tool, args);
   if (tool === 'twin.index') return await twinIndex(env, keys, args.repo);
   if (tool === 'twin.search') { const mi0 = await storeGetJson(env, 'twin:' + (args.repo || TWIN_REPO) + ':meta', null); if (!mi0) await twinIndex(env, keys, args.repo); return { q: args.query || args.q, results: await twinSearch(env, args.repo, args.query || args.q || '') }; }
   if (tool === 'twin.map') { const repo0 = args.repo || TWIN_REPO; const mi1 = await storeGetJson(env, 'twin:' + repo0 + ':meta', null); if (!mi1) await twinIndex(env, keys, repo0); return { meta: mi1, deps: await storeGetJson(env, 'twin:' + repo0 + ':deps', null), map: (await storeGetJson(env, 'twin:' + repo0 + ':map', null)) || [] }; }
@@ -1632,7 +1745,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v58';
+  const AGENT_VERSION = 'p10-v59';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2018,7 +2131,9 @@ async function kitTool(env, keys, tool, args) {
       if (/^(js|node|nodejs|javascript)$/.test(lang)) { ext = 'js'; cmd = 'node'; }
       else if (/^(bash|sh|shell)$/.test(lang)) { ext = 'sh'; cmd = 'bash'; }
       else if (!/^(py|python3?)$/.test(lang)) throw new Error('python / javascript / bash সাপোর্টেড');
-      const r = await runSandbox(env, keys, 'echo ' + b64c + ' | base64 -d > prog.' + ext + ' && timeout 60 ' + cmd + ' prog.' + ext);
+      const scriptKc = 'echo ' + b64c + ' | base64 -d > prog.' + ext + ' && timeout 60 ' + cmd + ' prog.' + ext;
+      if (args.async) return { runKey: await runSandboxStart(env, keys, scriptKc), note: 'অ্যাসিংক জমা — kit.result {runKey} দিয়ে ফল নিন' };
+      const r = await runSandbox(env, keys, scriptKc);
       return { language: lang, run: String(r.out || '').slice(0, 4000), err: String(r.err || '').slice(0, 1500), exit: r.exit, ms: r.ms, note: 'নিজের GH Actions রানার — warm 10-15s / cold ~40s' };
     }
     case 'kit.prayer': {
@@ -2299,7 +2414,8 @@ async function kitTool(env, keys, tool, args) {
         script += 'mkdir -p "$(dirname ' + JSON.stringify(safe) + ')" 2>/dev/null; echo ' + b64utf8enc(String(files[nm])) + ' | base64 -d > ' + JSON.stringify(safe) + '\n';
       }
       if (args.setup) script += '(' + String(args.setup).slice(0, 400) + ') > setup.log 2>&1 || { echo SETUP-FAIL; tail -5 setup.log; }\n';
-      script += 'timeout ' + Math.min(Number(args.timeout) || 90, 120) + ' bash -c ' + JSON.stringify(run.slice(0, 600)) + '\n';
+      script += 'timeout ' + Math.min(Number(args.timeout) || 90, 900) + ' bash -c ' + JSON.stringify(run.slice(0, 600)) + '\n';
+      if (args.async) return { runKey: await runSandboxStart(env, keys, script), note: 'অ্যাসিংক জমা — kit.result {runKey} দিয়ে ফল নিন (রানার ৬ ঘণ্টা পর্যন্ত পারে)' };
       const r = await runSandbox(env, keys, script);
       return { exit: r.exit, out: String(r.out || '').slice(0, 6000), err: String(r.err || '').slice(0, 2000), ms: r.ms, files: names, note: 'GH Actions ubuntu (python3/node/pip/npm/curl); cold ~40s' };
     }
@@ -2384,7 +2500,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v58' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v59' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2477,6 +2593,59 @@ export default {
     if (method === 'POST' && path === '/api/owner/unlock') {
       const b = await req.json().catch(() => ({}));
       return json(await ownerUnlock(env, b.code));
+    }
+    if (path.startsWith('/api/pc/')) {
+      const pcTok = (req.headers.get('Authorization') || '').replace('Bearer ', '');
+      if (method === 'POST' && path === '/api/pc/register') {
+        const b = await parseBody(req);
+        const code = String(b.code || '').toUpperCase().slice(0, 8);
+        if (!/^[A-Z0-9]{6}$/.test(code)) return json({ error: 'bad code' }, 400);
+        await storePut(env, 'pc:pair:' + code, JSON.stringify({ status: 'waiting', info: String(b.info || '').slice(0, 1000), ts: Date.now() }), 3600);
+        return json({ ok: true });
+      }
+      if (method === 'GET' && path.startsWith('/api/pc/paircheck/')) {
+        const code = path.slice(18).toUpperCase().slice(0, 8);
+        const p = await storeGetJson(env, 'pc:pair:' + code, null);
+        if (!p) return json({ error: 'কোড নেই/মেয়াদ শেষ' }, 404);
+        if (p.status === 'approved' && p.token) return json({ token: p.token });
+        return json({ waiting: true, status: p.status });
+      }
+      if (!pcTok) return json({ error: 'টোকেন লাগবে' }, 401);
+      const ps = await storeGetJson(env, 'pc:sess:' + pcTok, null);
+      if (!ps) return json({ error: 'সেশন নেই' }, 401);
+      if (method === 'POST' && path === '/api/pc/ping') {
+        await storePut(env, 'pc:sess:' + pcTok, JSON.stringify(Object.assign({}, ps, { lastSeen: Date.now() })), 7 * 86400);
+        return json({ ok: true });
+      }
+      if (method === 'GET' && path === '/api/pc/next') {
+        await storePut(env, 'pc:sess:' + pcTok, JSON.stringify(Object.assign({}, ps, { lastSeen: Date.now() })), 7 * 86400);
+        const q = await storeGetJson(env, 'pc:queue', []);
+        if (!Array.isArray(q) || !q.length) return json({ job: null });
+        const jid = q[0];
+        const job = await storeGetJson(env, 'pcjob:' + jid, null);
+        await storePut(env, 'pc:queue', JSON.stringify(q.slice(1)), 86400);
+        return json({ job: job ? Object.assign({}, job, { id: jid }) : null });
+      }
+      if (method === 'POST' && path === '/api/pc/result') {
+        const b = await parseBody(req);
+        const jid = String(b.id || '');
+        if (!/^pcj_[a-f0-9]{16}$/.test(jid)) return json({ error: 'bad id' }, 400);
+        const out = { status: 'done', exit: Number(b.exit) | 0, out: String(b.out || '').slice(0, 60000), err: String(b.err || '').slice(0, 20000), ts: Date.now() };
+        if (b.b64png) { const id = Array.from(crypto.getRandomValues(new Uint8Array(8))).map((x) => x.toString(16).padStart(2, '0')).join(''); await storePut(env, 'img:' + id, String(b.b64png), 86400); out.image = 'https://admission-hub-ai.pages.dev/api/img/' + id + '.png'; }
+        if (b.b64) out.b64 = String(b.b64).slice(0, 2600000);
+        if (b.bytes) out.bytes = Number(b.bytes) | 0;
+        await storePut(env, 'pcjob:' + jid, JSON.stringify(out), 3600);
+        return json({ ok: true });
+      }
+      return json({ error: 'unknown pc endpoint' }, 404);
+    }
+    if (method === 'GET' && path.startsWith('/api/file/')) {
+      const id = path.slice(10).replace(/\.[a-z0-9]+$/i, '');
+      if (!/^[0-9a-f]{8,32}$/.test(id)) return json({ error: 'bad id' }, 400);
+      const b64 = await storeGet(env, 'img:' + id);
+      if (!b64) return json({ error: 'মেয়াদ শেষ বা পাওয়া যায়নি' }, 404);
+      const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Response(arr, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + id + '"', 'Cache-Control': 'public, max-age=86400', ...cors } });
     }
     if (method === 'POST' && path === '/api/runner/result') {
       const b = await parseBody(req);
