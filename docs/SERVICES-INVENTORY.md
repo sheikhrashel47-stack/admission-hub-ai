@@ -97,3 +97,10 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 - সাজেশন চিপ: UI কল + SYSTEM [SUGGEST] ব্লক বাদ।
 - ফ্যাক্ট ক্রস-চেক: সংখ্যা/তালিকা প্রশ্নে plan = web.now + kit.wsearch; SYSTEM-এ সংঘাত-নিয়ম (নতুন সূত্র/উইকি অগ্রাধিকার)।
 - টেস্ট: "বাংলাদেশে কতটি উপজেলা" → ৫০৩ ✅ (bn.wikipedia সোর্স; ৪৯৫-বনাম-৫০৩ ব্যাখ্যা সহ)। health p10-v66 ✅
+
+## v73–v75 (2026-09-05) — PHASE 5: Free+OSS Agent
+- v73: mission intent (`মিশন:` প্রিফিক্স) + MODE_SYS mission + mission-এ খবর-কীওয়ার্ডে লাইভ সার্চ; chatToolLoop-এ observe→reflect রিট্রাই-লুপ; GET /api/runner/<key> (owner)।
+- v74: runner রুটে x-owner-code সাপোর্ট; mission web keywords (সংবাদ/আজকের/সর্বশেষ)।
+- v75: POST /api/runner/start (owner-gated sandbox dispatch)।
+- OSS bench: smolagents 1.26.0 install 5s/import 1s; CodeAgent+Tool মিনি-রান Final answer 7 (run_448bc461…)। docs/PHASE5-OSS-BENCH.md।
+- Deploys: v73 178aef3/f4bbd08, v74 3d6e001/bb44aa1, v75 c06c285/4bd1031; health p10-v75।
