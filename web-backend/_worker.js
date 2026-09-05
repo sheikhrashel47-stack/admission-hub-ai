@@ -1014,6 +1014,7 @@ function classifyIntent(t){
   const s=String(t||'').trim(); const low=s.toLowerCase();
   if(/^(hi|hello|hey|yo|sup|হাই|হ্যালো|হেই|শুভ (সকাল|সন্ধ্যা|রাত্রি|দুপুর)|good (morning|evening|night)|কেমন আছো|কি খবর|কী খবর|thanks|ধন্যবাদ|thx|(আসসালামু|আসসারালামু|সালামু|সালাম)( আলাইকুম| ওয়ালাইকুম)?)[\s!,.?্।…]*$/i.test(low)) return 'greeting';
   if(/(মুছে|delete|drop table|force[- ]push|history rewrite|rewrite history|revoke|purge|ব্যান|রিভোক|format c)/i.test(low)) return 'critical';
+  if(/^(মিশন|mission)\s*[:ঃ]/i.test(s)) return 'mission';
   if(/```/.test(s)) return 'coding';
   if(/(কোড|\bcode\b|html|css|javascript|\bjs\b|python|sql|regex|function|bug|ডিবাগ|debug|compile|script|ওয়েবসাইট|website|webpage|অ্যাপ|app|পেজ|page)/i.test(low) && /(বানাও|বানিয়ে|লিখ|দাও|fix|ঠিক|refactor|optimize|debug|সরাও|যোগ)/i.test(low)) return 'coding';
   if(/(খবর|সর্বশেষ|সাম্প্রতিক|latest|news|research|রিসার্চ|খুঁজ|খোজ|search|বর্তমান|current|price|দাম|weather|আবহাওয়া|ফলাফল|result|বিজ্ঞপ্তি|notice|তথ্য|info)/i.test(low)) return 'research';
@@ -1079,7 +1080,11 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   for (const st of plan.slice(0, 2)) {
     const tool = st.tool;
     if (!CHAT_TOOLS[tool]) continue;
-    try { const r = await runAgentTool(env, keys, tool, st.args || {}, () => {}, { owner: true, task: 'chat-tool' }); notes.push(tool + ' → ' + JSON.stringify(r).slice(0, 1500)); if (stepsOut) stepsOut.push('🔧 ' + tool + ' চালানো হয়েছে ✅'); } catch (e) { notes.push(tool + ' → ব্যর্থ: ' + String(e.message || e).slice(0, 150)); if (stepsOut) stepsOut.push('🔧 ' + tool + ' ব্যর্থ ❌'); }
+    try { const r = await runAgentTool(env, keys, tool, st.args || {}, () => {}, { owner: true, task: 'chat-tool' }); notes.push(tool + ' → ' + JSON.stringify(r).slice(0, 1500)); if (stepsOut) stepsOut.push('🔧 ' + tool + ' চালানো হয়েছে ✅'); } catch (e) {
+      let ok2 = false;
+      try { await new Promise((r2) => setTimeout(r2, 1200)); const r = await runAgentTool(env, keys, tool, st.args || {}, () => {}, { owner: true, task: 'chat-tool-retry' }); notes.push(tool + ' → (রিট্রাইতে সফল) ' + JSON.stringify(r).slice(0, 1500)); if (stepsOut) stepsOut.push('🔁 ' + tool + ' রিট্রাইতে সফল ✅'); ok2 = true; } catch (e2) {}
+      if (!ok2) { notes.push(tool + ' → ব্যর্থ: ' + String(e.message || e).slice(0, 150)); if (stepsOut) stepsOut.push('🔧 ' + tool + ' ব্যর্থ ❌'); }
+    }
   }
   try { await storePut(env, 'dbg:lastloop', JSON.stringify({ plan: plan.map((x) => x.tool), notes: notes.join(' | ').slice(0, 900), imode: imode, intent: intent, ts: Date.now() }), 3600); } catch (e) {}
   return notes.length ? notes.join('\n') : null;
@@ -1757,7 +1762,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v72';
+  const AGENT_VERSION = 'p10-v73';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2518,7 +2523,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v72' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v73' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2664,6 +2669,12 @@ export default {
       if (!b64) return json({ error: 'মেয়াদ শেষ বা পাওয়া যায়নি' }, 404);
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + id + '"', 'Cache-Control': 'public, max-age=86400', ...cors } });
+    }
+    const mRun = path.match(/^\/api\/runner\/(run_[0-9a-f]{6,40})$/);
+    if (method === 'GET' && mRun) {
+      if (!(await ownerOk(env, req))) return json({ error: '🔒 মালিক পরিচয় লাগবে' }, 401);
+      const j = await storeGetJson(env, 'runner:' + mRun[1], null);
+      return json(j || { status: 'pending' });
     }
     if (method === 'POST' && path === '/api/runner/result') {
       const b = await parseBody(req);
@@ -2975,7 +2986,7 @@ export default {
       const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') + (lt ? '\n\n## জুজুর সর্বশেষ কাজ (প্রসঙ্গ ধরে রাখো — follow-up হলে এর সাথে মিলিয়ে বুঝো)\n- নির্দেশ: ' + String(lt.task || '').slice(0, 300) + '\n- স্ট্যাটাস: ' + lt.status + '\n- ফলাসার: ' + String(lt.report || '').slice(0, 500) : '');
       let sysAdd = '';
-      const IM_MODE = { research: 'research', coding: 'coding', instruction: 'agent', critical: 'critical', question: 'research' };
+      const IM_MODE = { research: 'research', coding: 'coding', instruction: 'agent', critical: 'critical', question: 'research', mission: 'mission' };
       if (IM_MODE[intent] && MODE_SYS[IM_MODE[intent]]) sysAdd += MODE_SYS[IM_MODE[intent]];
       sysAdd += STYLE_SYS[intent] || '';
       if (/(তুই|ইয়ার|দোস্ত|ভাই)/.test(imsg)) sysAdd += '\n[TONE: একদম বন্ধুর মতো সহজ বাংলা]';
@@ -3036,7 +3047,8 @@ export default {
           finalMsgs.splice(finalMsgs.length - 1, 0, { role: 'system', content: '[LIVE CLOCK] বর্তমান তারিখ ও সময় (বাংলাদেশ, Asia/Dhaka): ' + new Date().toLocaleString('bn-BD', { timeZone: 'Asia/Dhaka', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '। ইউজার "আজ/এখন/বর্তমান/কতটা বাজে/কত তারিখ" জিজ্ঞেস করলে একমাত্র এটাই সত্য ধরবে — অনুমান নয়।' });
           try {
             const factQ = intent === 'question' && /(কত|সংখ্যা|তালিকা|তারিখ|কবে|কোথায়|কোন)/.test(imsg) && !/(তুমি|তোমার|আমি|আমার|who are you)/i.test(imsg);
-            const effWeb = (body.web || ((intent === 'research' || factQ) && !/(আবহাওয়া|weather|forecast|নামাজের সময়|prayer time)/i.test(imsg))) && intent !== 'greeting';
+            const misWeb = intent === 'mission' && /(খবর|তথ্য|সার্চ|গবেষণা|research|news|কত)/i.test(imsg);
+            const effWeb = (body.web || ((intent === 'research' || factQ || misWeb) && !/(আবহাওয়া|weather|forecast|নামাজের সময়|prayer time)/i.test(imsg))) && intent !== 'greeting';
             if (effWeb) {
               const lastC = finalMsgs[finalMsgs.length - 1].content;
               const q = typeof lastC === 'string' ? lastC : lastC.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
