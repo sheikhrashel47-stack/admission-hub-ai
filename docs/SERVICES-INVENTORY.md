@@ -74,3 +74,11 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 **নতুন পাবলিক এন্ডপয়েন্ট:** /api/pc/register, /api/pc/paircheck/<code>, /api/pc/ping, /api/pc/next, /api/pc/result (daemon টোকেন), GET /api/file/<id>।
 **E2E ভেরিফায়েড (সিমুলেটেড ডেমন):** pairing ✅, run ✅, put/get বাংলা কনটেন্ট ✅, gui screenshot/click ✅, async lab→kit.result ✅।
 **মালিকের ধাপ:** juju-pc রেপো → Code → Codespaces → Create → টার্মিনালের কোড JUJU-কে বলুন। ৩০ মিনিট idle-তে ঘুমায় (ডেটা থাকে), ক্লিক করে জাগানো যায়।
+
+---
+
+## v60–v64: চ্যাটে টুল-সংযোগ মেরামত (মালিকের স্ক্রিনশট-বাগ ফিক্স)
+
+সমস্যা ছিল ৩ স্তরে: (১) SYSTEM prompt-এ পুরনো লাইন "Agent tools যুক্ত হয়নি (Phase 5+)" — মডেল সৎভাবে refuse করছিল; (২) chat mode/auto-তে tool-loop gate বন্ধ ছিল (শুধু web-toggle/research-এ চলত); (৩) weather planner rule ছিল না + বাংলা loc cleanup-এ "ের" (e-kar)-এর বদলে ভুল "এর"字符 ছিল → geocoding-এ "গাজীপুরের" যেত → ব্যর্থ; + open-meteo CF-edge থেকে মাঝে মাঝে 429 (এখন 3x retry)।
+ফিক্স: prompt-এ ৮১-টুল সত্য + তাজা-ডেটা নিয়ম + বানোয়াট টুল-নাম নিষেধ; quickKit rules (weather/prayer/pc.status) সব mode-এ; BN→EN ৪০-শহর ম্যাপ fallback; retry wrapper; D1-এ secret-ঘেঁষা mem rows suppressed (নিরাপত্তা)।
+টেস্ট: ৩/৩ চ্যাট-রান লাইভ আবহাওয়া (৩১.৪°C, ৭%, টাইমস্ট্যাম্পসহ)। dbg:lastloop (D1, 1h TTL) = ভবিষ্যৎ ডিবাগ ট্রেস।
