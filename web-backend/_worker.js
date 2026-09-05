@@ -1167,10 +1167,6 @@ async function runTool(keys, tool, args) {
       const j = await ghApi(keys, '/repos/' + repo + '/actions/runs?per_page=' + Math.min(Number(args.limit) || 5, 10));
       return { runs: (j.workflow_runs || []).map((r) => ({ id: r.id, wf: r.name, status: r.status, conclusion: r.conclusion, at: r.created_at })) };
     }
-    case 'gh.events': {
-      const ev = await storeGetJson(env, 'gh:lastevents', []);
-      return { events: ev, note: ev.length ? 'সর্বশেষ GitHub webhook ইভেন্ট' : 'এখনো কোনো webhook ইভেন্ট আসেনি (repo Settings → Webhooks সেট করতে হবে)' };
-    }
     case 'con.discord': {
       const wh = keys.DISCORD_WEBHOOK; if (!wh) throw new Error('DISCORD_WEBHOOK সেট নেই — মালিক: Discord → Server Settings → Integrations → Webhooks → New Webhook → URL কপি করে JUJU-কে দিন (১ মিনিট)');
       const r = await fetch(wh, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: String(args.content || '').slice(0, 1900), username: String(args.name || 'JUJU') }) });
@@ -1367,6 +1363,7 @@ async function pcTool(env, keys, tool, args) {
 async function runAgentTool(env, keys, tool, args, emit, ctx) {
   if (tool.startsWith('pc.') || tool === 'kit.result') return await pcTool(env, keys, tool, args);
   if (tool === 'twin.index') return await twinIndex(env, keys, args.repo);
+  if (tool === 'gh.events') { const ev = await storeGetJson(env, 'gh:lastevents', []); return { events: ev, note: ev.length ? 'সর্বশেষ GitHub webhook ইভেন্ট' : 'এখনো কোনো webhook ইভেন্ট আসেনি (repo Settings → Webhooks সেট করতে হবে)' }; }
   if (tool === 'twin.search') { const mi0 = await storeGetJson(env, 'twin:' + (args.repo || TWIN_REPO) + ':meta', null); if (!mi0) await twinIndex(env, keys, args.repo); return { q: args.query || args.q, results: await twinSearch(env, args.repo, args.query || args.q || '') }; }
   if (tool === 'twin.map') { const repo0 = args.repo || TWIN_REPO; const mi1 = await storeGetJson(env, 'twin:' + repo0 + ':meta', null); if (!mi1) await twinIndex(env, keys, repo0); return { meta: mi1, deps: await storeGetJson(env, 'twin:' + repo0 + ':deps', null), map: (await storeGetJson(env, 'twin:' + repo0 + ':map', null)) || [] }; }
   if (tool === 'twin.impact') { const repo1 = args.repo || TWIN_REPO; const mi2 = await storeGetJson(env, 'twin:' + repo1 + ':meta', null); if (!mi2) await twinIndex(env, keys, repo1); return await twinImpact(env, repo1, args.path || ''); }
@@ -1793,7 +1790,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v77';
+  const AGENT_VERSION = 'p10-v78';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2554,7 +2551,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v77' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v78' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
