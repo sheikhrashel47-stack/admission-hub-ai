@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v51';
+  const AGENT_VERSION = 'p10-v52';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2115,10 +2115,10 @@ async function kitTool(env, keys, tool, args) {
       const what = String(args.what || 'hospital'); const rad = Math.min(10000, Number(args.radius) || 3000);
       const ql = '[out:json][timeout:15];(node["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + ');way["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + '););out center 6;';
       let j = null;
-      for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
-        try { const r = await fetch(host, { method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) }); if (r.ok) { j = await r.json(); break; } } catch {}
+      for (const host of ['https://overpass.osm.ch/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter']) {
+        try { const ac2 = new AbortController(); const to2 = setTimeout(() => ac2.abort(), 12000); const r = await fetch(host, { method: 'POST', signal: ac2.signal, headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) }); clearTimeout(to2); if (r.ok) { j = await r.json(); break; } } catch {}
       }
-      if (!j) throw new Error('overpass দুই মিররেই ব্যর্থ');
+      if (!j) throw new Error('overpass চার মিররেই ব্যর্থ');
       return { around: { lat: Number(lat), lon: Number(lon), radius_m: rad, what: what }, found: (j.elements || []).map((e) => ({ name: (e.tags || {}).name || '(নাম নেই)', type: e.type, lat: e.lat || (e.center || {}).lat, lon: e.lon || (e.center || {}).lon, addr: [(e.tags || {})['addr:street'], (e.tags || {})['addr:city']].filter(Boolean).join(', ') })) };
     }
     case 'kit.qrread': {
@@ -2131,13 +2131,16 @@ async function kitTool(env, keys, tool, args) {
     case 'kit.upload': {
       const u = String(args.url || ''); if (!u) throw new Error('url লাগবে');
       const fr = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!fr.ok) throw new Error('ফাইল ডাউনলোড HTTP ' + fr.status);
-      const blob = await fr.blob();
-      if (blob.size > 8000000) throw new Error('ফাইল 8MB-এর বড়');
+      const raw = new Uint8Array(await fr.arrayBuffer());
+      if (raw.length > 8000000) throw new Error('ফাইল 8MB-এর বড়');
       let fname = (u.split('/').pop() || 'file.bin').slice(0, 60).split('?')[0] || 'file.bin';
       if (!/\.(txt|png|jpg|jpeg|gif|pdf|mp3|mp4|zip|csv|json|webp|md)$/i.test(fname)) fname += '.txt';
+      const MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf', mp3: 'audio/mpeg', mp4: 'video/mp4', zip: 'application/zip', csv: 'text/csv', json: 'application/json', txt: 'text/plain', md: 'text/plain' };
+      const ext = (fname.split('.').pop() || 'txt').toLowerCase();
+      const blob = new Blob([raw], { type: MIME[ext] || 'application/octet-stream' });
       const fd = new FormData(); fd.append('file', blob, fname);
       const r = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
-      if (!r.ok) throw new Error('tmpfiles HTTP ' + r.status);
+      if (!r.ok) throw new Error('tmpfiles HTTP ' + r.status + ' (html/exe ধরনের কনটেন্ট তারা নেয় না)');
       const j = await r.json();
       const pageUrl = (j.data || {}).url || '';
       return { page: pageUrl, direct: pageUrl.replace('tmpfiles.org/', 'tmpfiles.org/dl/'), bytes: blob.size, ttl: '60 মিনিট' };
@@ -2215,7 +2218,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v51' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v52' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
