@@ -72,7 +72,7 @@ let _keysCache = null;
 async function loadKeys(env) {
   if (_keysCache) return _keysCache;
   const k = {};
-  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','ZAI_API_KEY','TAVILY_API_KEY','SERPER_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GNEWS_API_KEY','ORS_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET'];
+  const names = ['GROQ_API_KEY','GEMINI_API_KEY','CEREBRAS_API_KEY','SAMBANOVA_API_KEY','DEEPINFRA_API_KEY','TOGETHER_API_KEY','MISTRAL_API_KEY','OPENROUTER_API_KEY','HUGGINGFACE_API_KEY','OLLAMA_API_KEY','DEEPSEEK_API_KEY','NVIDIA_API_KEY','XAI_API_KEY','ZAI_API_KEY','TAVILY_API_KEY','SERPER_API_KEY','ELEVENLABS_API_KEY','ELEVENLABS_VOICE_ID','GNEWS_API_KEY','ORS_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','WATCH_SECRET','GH_HOOK_SECRET','DISCORD_WEBHOOK'];
   for (const n of names) {
     let v;
     try { v = env[n]; } catch {} // binding-মিস হলে throw এড়াই
@@ -1793,7 +1793,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v76';
+  const AGENT_VERSION = 'p10-v77';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2554,7 +2554,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v76' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v77' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2700,6 +2700,24 @@ export default {
       if (!b64) return json({ error: 'মেয়াদ শেষ বা পাওয়া যায়নি' }, 404);
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + id + '"', 'Cache-Control': 'public, max-age=86400', ...cors } });
+    }
+    if (method === 'POST' && path === '/api/cfg' || method === 'GET' && path === '/api/cfg') {
+      let okOwn = await ownerOk(env, req);
+      if (!okOwn) { const oc = String(req.headers.get('x-owner-code') || '').trim(); if (oc) { const un = await ownerUnlock(env, oc); okOwn = !!(un && un.session); } }
+      if (!okOwn) return json({ error: '🔒 মালিক পরিচয় লাগবে' }, 401);
+      if (method === 'GET') {
+        const names = ['GROQ_API_KEY','GEMINI_API_KEY','TAVILY_API_KEY','SERPER_API_KEY','GITHUB_PAT','CF_EMAIL','CF_GLOBAL_KEY','GH_HOOK_SECRET','DISCORD_WEBHOOK','GNEWS_API_KEY','HUGGINGFACE_API_KEY','OPENROUTER_API_KEY'];
+        const out = {};
+        for (const n of names) { const v = keys[n] || ''; out[n] = v ? ('set:' + v.slice(0, 4) + '…' + v.slice(-4)) : 'missing'; }
+        return json(out);
+      }
+      const b = await parseBody(req);
+      const name = String(b.name || '').toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 40);
+      const value = String(b.value || '').slice(0, 2000);
+      if (!name || name.length < 3) return json({ error: 'name লাগবে' }, 400);
+      if (value) await storePut(env, 'cfg:' + name, value, 0); else { try { await env.AH_DB.prepare('DELETE FROM kv WHERE key = ?1').bind('cfg:' + name).run(); } catch {} }
+      _keysCache = null;
+      return json({ ok: true, name, set: !!value });
     }
     if (method === 'POST' && path === '/api/tool') {
       let okOwn = await ownerOk(env, req);
