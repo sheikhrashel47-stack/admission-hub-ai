@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v50';
+  const AGENT_VERSION = 'p10-v51';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2010,12 +2010,16 @@ async function kitTool(env, keys, tool, args) {
       return { from: from, to: to, distance_km: +(((seg.distance || 0)) / 1000).toFixed(1), duration_min: Math.round((seg.duration || 0) / 60) };
     }
     case 'kit.code': {
-      const code = String(args.code || ''); const lang = String(args.language || 'python');
+      const code = String(args.code || ''); const lang = String(args.language || 'python').toLowerCase();
       if (!code) throw new Error('code লাগবে');
-      const r = await fetch('https://emkc.org/api/v2/piston/execute', { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: JSON.stringify({ language: lang, version: '*', files: [{ content: code.slice(0, 20000) }], stdin: String(args.stdin || '') }) });
-      if (!r.ok) throw new Error('piston HTTP ' + r.status);
-      const j = await r.json();
-      return { language: j.language, run: (j.run && j.run.stdout || '').slice(0, 4000), err: ((j.run && j.run.stderr || '') + (j.compile && j.compile.stderr || '')).slice(0, 1500), code: j.run && j.run.code };
+      // Piston পাবলিক API ২০২৬-এ whitelist-only হয়ে গেছে → নিজের GH Actions sandbox-এ চালাই
+      const b64c = b64utf8enc(code.slice(0, 30000));
+      let ext = 'py', cmd = 'python3';
+      if (/^(js|node|nodejs|javascript)$/.test(lang)) { ext = 'js'; cmd = 'node'; }
+      else if (/^(bash|sh|shell)$/.test(lang)) { ext = 'sh'; cmd = 'bash'; }
+      else if (!/^(py|python3?)$/.test(lang)) throw new Error('python / javascript / bash সাপোর্টেড');
+      const r = await runSandbox(env, keys, 'echo ' + b64c + ' | base64 -d > prog.' + ext + ' && timeout 60 ' + cmd + ' prog.' + ext);
+      return { language: lang, run: String(r.out || '').slice(0, 4000), err: String(r.err || '').slice(0, 1500), exit: r.exit, ms: r.ms, note: 'নিজের GH Actions রানার — warm 10-15s / cold ~40s' };
     }
     case 'kit.prayer': {
       const city = String(args.city || 'Dhaka'), country = String(args.country || 'Bangladesh');
@@ -2055,9 +2059,12 @@ async function kitTool(env, keys, tool, args) {
       return (Array.isArray(j) ? j : []).map((h) => ({ date: h.date, name: h.localName || h.name, en: h.name })).slice(0, 25);
     }
     case 'kit.crypto': {
-      const ids = String(args.coins || 'bitcoin').toLowerCase();
-      const j = await jget('https://api.coingecko.com/api/v3/simple/price?ids=' + encodeURIComponent(ids) + '&vs_currencies=usd,bdt&include_24hr_change=true');
-      return j;
+      const MAP = { bitcoin: 'BTC-USD', ethereum: 'ETH-USD', solana: 'SOL-USD', ripple: 'XRP-USD', cardano: 'ADA-USD', dogecoin: 'DOGE-USD', binancecoin: 'BNB-USD', tron: 'TRX-USD', polkadot: 'DOT-USD', litecoin: 'LTC-USD' };
+      const coins = String(args.coins || 'bitcoin').toLowerCase().split(',').slice(0, 5).map((c) => c.trim()).filter(Boolean);
+      const syms = coins.map((c) => MAP[c] || (c.toUpperCase() + '-USD'));
+      let bdt = null; try { const ej = await jget('https://open.er-api.com/v6/latest/USD'); bdt = (ej.rates || {}).BDT || null; } catch {}
+      const prices = await Promise.all(syms.map(async (sy) => { try { const j = await jget('https://query1.finance.yahoo.com/v8/finance/chart/' + sy + '?range=1d&interval=1d'); const m = ((((j.chart || {}).result) || [])[0] || {}).meta || {}; return { coin: sy.replace('-USD', ''), usd: m.regularMarketPrice, bdt: (m.regularMarketPrice && bdt) ? Math.round(m.regularMarketPrice * bdt) : null }; } catch { return { coin: sy.replace('-USD', ''), error: 'পাওয়া যায়নি' }; } }));
+      return { prices: prices, usd_bdt: bdt };
     }
     case 'kit.stock': {
       const sym = String(args.symbol || ''); if (!sym) throw new Error('symbol লাগবে');
@@ -2075,11 +2082,6 @@ async function kitTool(env, keys, tool, args) {
       const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
       const j = await jget('https://api.duckduckgo.com/?q=' + encodeURIComponent(q) + '&format=json&no_html=1&skip_disambig=1');
       return { heading: j.Heading, abstract: (j.AbstractText || '').slice(0, 800), answer: j.Answer, url: j.AbstractURL, related: (j.RelatedTopics || []).slice(0, 5).map((x) => x.Text || (x.Topics || [])[0] && x.Topics[0].Text).filter(Boolean).map((t) => String(t).slice(0, 160)) };
-    }
-    case 'kit.countries': {
-      const q = String(args.query || ''); if (!q) throw new Error('query লাগবে');
-      const j = await jget('https://restcountries.com/v3.1/name/' + encodeURIComponent(q));
-      return (Array.isArray(j) ? j : []).slice(0, 3).map((c) => ({ name: (c.name || {}).common, capital: (c.capital || [])[0], population: c.population, currencies: Object.keys(c.currencies || {}), languages: Object.values(c.languages || {}).slice(0, 4), flag: (c.flags || {}).png }));
     }
     case 'kit.devto': {
       const tag = args.tag ? '&tag=' + encodeURIComponent(String(args.tag)) : '';
@@ -2112,9 +2114,11 @@ async function kitTool(env, keys, tool, args) {
       if (lat === undefined || lon === undefined) throw new Error('place বা lat/lon লাগবে');
       const what = String(args.what || 'hospital'); const rad = Math.min(10000, Number(args.radius) || 3000);
       const ql = '[out:json][timeout:15];(node["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + ');way["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + '););out center 6;';
-      const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) });
-      if (!r.ok) throw new Error('overpass HTTP ' + r.status);
-      const j = await r.json();
+      let j = null;
+      for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
+        try { const r = await fetch(host, { method: 'POST', headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) }); if (r.ok) { j = await r.json(); break; } } catch {}
+      }
+      if (!j) throw new Error('overpass দুই মিররেই ব্যর্থ');
       return { around: { lat: Number(lat), lon: Number(lon), radius_m: rad, what: what }, found: (j.elements || []).map((e) => ({ name: (e.tags || {}).name || '(নাম নেই)', type: e.type, lat: e.lat || (e.center || {}).lat, lon: e.lon || (e.center || {}).lon, addr: [(e.tags || {})['addr:street'], (e.tags || {})['addr:city']].filter(Boolean).join(', ') })) };
     }
     case 'kit.qrread': {
@@ -2129,7 +2133,8 @@ async function kitTool(env, keys, tool, args) {
       const fr = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' } }); if (!fr.ok) throw new Error('ফাইল ডাউনলোড HTTP ' + fr.status);
       const blob = await fr.blob();
       if (blob.size > 8000000) throw new Error('ফাইল 8MB-এর বড়');
-      const fname = (u.split('/').pop() || 'file.bin').slice(0, 60).split('?')[0] || 'file.bin';
+      let fname = (u.split('/').pop() || 'file.bin').slice(0, 60).split('?')[0] || 'file.bin';
+      if (!/\.(txt|png|jpg|jpeg|gif|pdf|mp3|mp4|zip|csv|json|webp|md)$/i.test(fname)) fname += '.txt';
       const fd = new FormData(); fd.append('file', blob, fname);
       const r = await fetch('https://tmpfiles.org/api/v1/upload', { method: 'POST', body: fd });
       if (!r.ok) throw new Error('tmpfiles HTTP ' + r.status);
@@ -2210,7 +2215,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v50' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v51' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
