@@ -89,3 +89,11 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 - UI: + শিট থেকে **mode-row (চ্যাট/রিসার্চ/কোড/এজেন্ট/মিশন) সরানো** — এখন একটাই ইনপুট বক্স; অ্যাপ imode:'auto' পাঠায়।
 - Worker: `imode` সবসময় 'auto' (body/stChat মোড ignore); **intent-ই রাউটার**: research→Tavily ওয়েব-পাইপলাইন+সোর্স (weather-quickhit থাকলে ডুপ নয়), coding→কোড-ফার্স্ট স্টাইল, instruction→এজেন্ট-স্টাইল পরিকল্পনা, question/conversation→খালি LLM; টুল-প্ল্যানার (quickKit+rules) সববার চলে।
 - টেস্ট: সার্চ-প্রশ্ন→web.now+সোর্স✅ · কবিতা→টুল ছাড়া সৃজনশীল✅ · fizzbuzz→কোড-ফার্স্ট✅।
+
+## v66 (2026-09-05) — Owner 5-দফা সংশোধন
+- টপ গ্রে-ব্যান্ড: body::before সাদা safe-top overlay (fixed, z120)।
+- এজেন্ট গেট বাদ: agOn ডিফল্ট true; মেনুর "এজেন্ট সক্রিয়" সুইচ-রো deleted; "AI Agent Control" মেনু-আইটেম hidden।
+- থিঙ্কিং দৃশ্যমান: প্রতিটি রিপ্লাইয়ে stepLine স্ট্যাটাস লাইন (সাইক্লিং 💭/🔧/📖/✍️ + সার্ভার step ইভেন্ট SEARCHING/READING/ANALYZING) — টোকেন শুরুর সাথে সাথে সরে যায়।
+- সাজেশন চিপ: UI কল + SYSTEM [SUGGEST] ব্লক বাদ।
+- ফ্যাক্ট ক্রস-চেক: সংখ্যা/তালিকা প্রশ্নে plan = web.now + kit.wsearch; SYSTEM-এ সংঘাত-নিয়ম (নতুন সূত্র/উইকি অগ্রাধিকার)।
+- টেস্ট: "বাংলাদেশে কতটি উপজেলা" → ৫০৩ ✅ (bn.wikipedia সোর্স; ৪৯৫-বনাম-৫০৩ ব্যাখ্যা সহ)। health p10-v66 ✅
