@@ -1043,7 +1043,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId) {
   let quick = null;
   if (/(আবহাওয়া|weather|forecast)/i.test(t)) {
     let loc = t.replace(/https?:\/\/\S+/g, ' ').replace(/[^\p{Script=Bengali}A-Za-z0-9 ,.-]/gu, ' ').split(/(?:আবহাওয়া|weather|forecast)/i)[0];
-    loc = loc.replace(/(বর্তমান|আজকের|আগামী|কেমন|কত|কী|কি|হবে|দাও|বলো|তো|এর|এতে|থেকে|জানতে|চাই|পূর্বাভাস|\d+)/gi, ' ').replace(/[,.-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    loc = loc.replace(/(বর্তমান|আজকের|আগামী|কেমন|কত|কী|কি|হবে|দাও|বলো|তো|ের|এর|এতে|থেকে|জানতে|চাই|পূর্বাভাস|\d+)/gi, ' ').replace(/[,.-]+/g, ' ').replace(/\s+/g, ' ').trim();
     quick = { tool: 'kit.weather', args: { location: (loc || 'Dhaka').slice(0, 40) } };
   } else if (/(নামাজের সময়|prayer time)/i.test(t)) quick = { tool: 'kit.prayer', args: { city: 'Dhaka' } };
   else if (/(pc|কম্পিউটার)\s*(স্ট্যাটাস|status)/i.test(t)) quick = { tool: 'pc.status', args: {} };
@@ -1754,7 +1754,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v63';
+  const AGENT_VERSION = 'p10-v64';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2515,7 +2515,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v63' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v64' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
