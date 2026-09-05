@@ -1157,6 +1157,7 @@ async function ownerOk(env, req) {
   }
   return !!(await storeGet(env, 'sess:' + t));
 }
+const repoOf = (a) => { let r = String((a && a.repo) || TWIN_REPO).trim(); if (r && !r.includes('/')) r = 'sheikhrashel47-stack/' + r; return r || TWIN_REPO; };
 async function ownerOk2(env, req) {
   if (await ownerOk(env, req)) return true;
   const oc = String(req.headers.get('x-owner-code') || '').trim();
@@ -1180,13 +1181,13 @@ async function runTool(keys, tool, args) {
   switch (tool) {
     case 'gh.repos': { const j = await ghApi(keys, '/user/repos?per_page=100&sort=updated'); return { count: j.length, repos: j.map((x) => ({ name: x.name, private: x.private, updated: x.updated_at })) }; }
     case 'gh.issue': {
-      const repo = String(args.repo || TWIN_REPO);
+      const repo = repoOf(args);
       if (args.close) { const r = await ghApi(keys, '/repos/' + repo + '/issues/' + Number(args.close), { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) }); return { closed: r.number, url: r.html_url }; }
       const r = await ghApi(keys, '/repos/' + repo + '/issues', { method: 'POST', body: JSON.stringify({ title: String(args.title || 'টাইটেল নেই').slice(0, 200), body: String(args.body || '').slice(0, 5000) }) });
       return { number: r.number, url: r.html_url };
     }
     case 'gh.branch': {
-      const repo = String(args.repo || TWIN_REPO);
+      const repo = repoOf(args);
       if (args.del) { await ghApi(keys, '/repos/' + repo + '/git/refs/heads/' + String(args.del), { method: 'DELETE' }); return { deleted: args.del }; }
       const nm = String(args.name || '').replace(/[^\w./-]/g, '-').slice(0, 60); if (!nm) throw new Error('branch নাম লাগবে');
       let base = String(args.from || '');
@@ -1196,7 +1197,7 @@ async function runTool(keys, tool, args) {
       return { branch: nm, from: base, sha: rf.object.sha, url: r.html_url || '' };
     }
     case 'gh.write': {
-      const repo = String(args.repo || TWIN_REPO);
+      const repo = repoOf(args);
       const path = String(args.path || '').replace(/^\/+/, '').slice(0, 200); if (!path || path.includes('..')) throw new Error('path ঠিক নয়');
       let branch = String(args.branch || '');
       if (/^(main|master)$/.test(branch) && !args.force) throw new Error('সেফটি-গেট: main/master-এ সরাসরি লেখা নিষেধ — feature branch দিন');
@@ -1210,7 +1211,7 @@ async function runTool(keys, tool, args) {
       return { path, branch, url: (r.content && r.content.html_url) || '', created: !sha };
     }
     case 'gh.prc': {
-      const repo = String(args.repo || TWIN_REPO);
+      const repo = repoOf(args);
       if (args.close) { const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.close), { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) }); return { closed: r.number, url: r.html_url }; }
       if (args.merge) { const r = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.merge) + '/merge', { method: 'PUT', body: '{}' }); return { merged: r.merged, url: '' }; }
       const r0 = await ghApi(keys, '/repos/' + repo);
@@ -1218,17 +1219,17 @@ async function runTool(keys, tool, args) {
       return { number: r.number, url: r.html_url };
     }
     case 'gh.diff': {
-      const repo = String(args.repo || TWIN_REPO);
+      const repo = repoOf(args);
       const j = await ghApi(keys, '/repos/' + repo + '/pulls/' + Number(args.pr || 0) + '/files?per_page=10');
       return { files: j.map((f) => ({ file: f.filename, status: f.status, adds: f.additions, dels: f.deletions, patch: String(f.patch || '').slice(0, 1500) })) };
     }
     case 'gh.pr': {
-      const repo = String(args.repo || TWIN_REPO); const st = String(args.state || 'open');
+      const repo = repoOf(args); const st = String(args.state || 'open');
       const j = await ghApi(keys, '/repos/' + repo + '/pulls?state=' + st + '&per_page=10');
       return { repo, state: st, prs: j.map((p) => ({ n: p.number, title: p.title, head: p.head.ref, merged: !!p.merged_at })) };
     }
     case 'gh.runs': {
-      const repo = String(args.repo || TWIN_REPO);
+      const repo = repoOf(args);
       const j = await ghApi(keys, '/repos/' + repo + '/actions/runs?per_page=' + Math.min(Number(args.limit) || 5, 10));
       return { runs: (j.workflow_runs || []).map((r) => ({ id: r.id, wf: r.name, status: r.status, conclusion: r.conclusion, at: r.created_at })) };
     }
@@ -1238,7 +1239,7 @@ async function runTool(keys, tool, args) {
       if (!r.ok) throw new Error('discord HTTP ' + r.status);
       return { sent: true };
     }
-    case 'gh.read': { const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}${args.ref ? '?ref=' + args.ref : ''}`); return { path: j.path, size: j.size, text: new TextDecoder().decode(Uint8Array.from(atob(String(j.content || '').replace(/\n/g, '')), (c) => c.charCodeAt(0))).slice(0, 20000) }; }
+    case 'gh.read': { const j = await ghApi(keys, `/repos/${repoOf(args)}/contents/${args.path}${args.ref ? '?ref=' + args.ref : ''}`); return { path: j.path, size: j.size, text: new TextDecoder().decode(Uint8Array.from(atob(String(j.content || '').replace(/\n/g, '')), (c) => c.charCodeAt(0))).slice(0, 20000) }; }
     case 'gh.commit': {
       let sha; try { sha = (await ghApi(keys, `/repos/${args.repo}/contents/${args.path}?ref=${encodeURIComponent(args.branch || 'main')}`)).sha; } catch {}
       const j = await ghApi(keys, `/repos/${args.repo}/contents/${args.path}`, { method: 'PUT', body: JSON.stringify({ message: args.message || 'agent update', content: btoa(unescape(encodeURIComponent(args.content))), sha, branch: args.branch }) });
@@ -1855,7 +1856,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v83';
+  const AGENT_VERSION = 'p10-v84';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2616,7 +2617,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v83' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v84' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
