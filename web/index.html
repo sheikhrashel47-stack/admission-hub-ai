@@ -1034,6 +1034,7 @@ async function go(text){
           stepsShown=true;
         }
         if(ev.sources){curSources=ev.sources}
+        if(ev.clear){acc='';body.innerHTML=''}
         if(ev.attempt&&!acc){}
         if(ev.token){
           if(!stepsShown&&shell._card){const li=shell._steps.length-1;tset(shell._card,Math.max(0,li-1),'done');tset(shell._card,li,'now');stepsShown=true}
@@ -1106,6 +1107,7 @@ async function regenerate(msg){
     const reader=r.body.getReader(),dec=new TextDecoder();let buf='';
     for(;;){const{done,value}=await reader.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
       while((i=buf.indexOf('\n\n'))>=0){const ch=buf.slice(0,i);buf=buf.slice(i+2);const ln=ch.split('\n').find(l=>l.startsWith('data:'));if(!ln)continue;const ev=JSON.parse(ln.slice(5));
+        if(ev.clear){acc='';body.innerHTML=''}
         if(ev.token){acc+=ev.token;body.innerHTML=mdLive(acc);scrollB()}
         if(ev.done){body.innerHTML=md(stripSug(acc));_msgMeta.set(shell,{id:curId,mid:shell.dataset.mid,userText:(msg.userText||''),srcs:ev.sources||[],content:acc});bindLongPress(shell)}
         if(ev.stopped){body.innerHTML='<div class="errCard"><b>জেনারেশন বাধাপ্রাপ্ত</b><p>'+esc(ev.error||'সার্ভার সমস্যা')+'</p><div class="row"><button class="primary" id="rgRetry">আবার চেষ্টা</button></div></div>';const rb=body.querySelector('#rgRetry');if(rb)rb.onclick=()=>regenerate(msg)}
