@@ -1632,7 +1632,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v52';
+  const AGENT_VERSION = 'p10-v53';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2115,8 +2115,14 @@ async function kitTool(env, keys, tool, args) {
       const what = String(args.what || 'hospital'); const rad = Math.min(10000, Number(args.radius) || 3000);
       const ql = '[out:json][timeout:15];(node["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + ');way["amenity"="' + what + '"](around:' + rad + ',' + lat + ',' + lon + '););out center 6;';
       let j = null;
-      for (const host of ['https://overpass.osm.ch/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter']) {
-        try { const ac2 = new AbortController(); const to2 = setTimeout(() => ac2.abort(), 12000); const r = await fetch(host, { method: 'POST', signal: ac2.signal, headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) }); clearTimeout(to2); if (r.ok) { j = await r.json(); break; } } catch {}
+      // de = authoritative কিন্তু CF-edge এ মাঝে মাঝে 521; osm.ch ফাঁকা-ডেটা রিপোর্ট করে (বার্লিনেও 0!) — তাই non-empty না পাওয়া পর্যন্ত চেইন চলবে
+      for (const host of ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.osm.ch/api/interpreter']) {
+        try {
+          const ac2 = new AbortController(); const to2 = setTimeout(() => ac2.abort(), 12000);
+          const r = await fetch(host, { method: 'POST', signal: ac2.signal, headers: { 'User-Agent': 'Mozilla/5.0 (ahai-kit)' }, body: 'data=' + encodeURIComponent(ql) });
+          clearTimeout(to2);
+          if (r.ok) { const jj = await r.json(); if (jj && (jj.elements || []).length) { j = jj; break; } if (!j) j = jj; }
+        } catch {}
       }
       if (!j) throw new Error('overpass চার মিররেই ব্যর্থ');
       return { around: { lat: Number(lat), lon: Number(lon), radius_m: rad, what: what }, found: (j.elements || []).map((e) => ({ name: (e.tags || {}).name || '(নাম নেই)', type: e.type, lat: e.lat || (e.center || {}).lat, lon: e.lon || (e.center || {}).lon, addr: [(e.tags || {})['addr:street'], (e.tags || {})['addr:city']].filter(Boolean).join(', ') })) };
@@ -2218,7 +2224,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v52' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v53' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
