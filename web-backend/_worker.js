@@ -1754,7 +1754,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v64';
+  const AGENT_VERSION = 'p10-v65';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2515,7 +2515,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v64' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v65' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -2964,7 +2964,7 @@ export default {
       const intent = classifyIntent(imsg);
       const stChat = await storeGetJson(env, 'ctx:state:' + (chatId || ''), null);
       const stPrev = stChat || (await storeGetJson(env, 'ctx:state', null));
-      const imode = (body.imode && MODE_SYS[body.imode]) ? body.imode : ((stChat && stChat.mode) || 'auto');
+      const imode = 'auto'; /* v65 ইউনাফাইড রাউটার: মোড-বাছাই নেই — intent নিজে ঠিক করে কে কাজ করবে */
       const mem = await kvGet(env, 'memory', { enabled: true, notes: '' });
       let memHits = [];
       try { if (mem.enabled && intent !== 'greeting' && !mRe) memHits = await memRelevant(env, imsg, 4); } catch {}
@@ -2972,7 +2972,8 @@ export default {
       const summary = await ensureSummary(keys, env, c, data);
       const baseSys = SYSTEM + (mem.enabled && mem.notes ? '\n## স্মৃতি\n' + mem.notes : '') + (summary ? '\n\n## এ পর্যন্ত কথোপকথনের সারাংশ (পুরোনো অংশ)\n' + summary : '') + (lt ? '\n\n## জুজুর সর্বশেষ কাজ (প্রসঙ্গ ধরে রাখো — follow-up হলে এর সাথে মিলিয়ে বুঝো)\n- নির্দেশ: ' + String(lt.task || '').slice(0, 300) + '\n- স্ট্যাটাস: ' + lt.status + '\n- ফলাসার: ' + String(lt.report || '').slice(0, 500) : '');
       let sysAdd = '';
-      if (imode !== 'auto' && MODE_SYS[imode]) sysAdd += MODE_SYS[imode];
+      const IM_MODE = { research: 'research', coding: 'coding', instruction: 'agent', critical: 'critical' };
+      if (IM_MODE[intent] && MODE_SYS[IM_MODE[intent]]) sysAdd += MODE_SYS[IM_MODE[intent]];
       sysAdd += STYLE_SYS[intent] || '';
       if (/(তুই|ইয়ার|দোস্ত|ভাই)/.test(imsg)) sysAdd += '\n[TONE: একদম বন্ধুর মতো সহজ বাংলা]';
       else if (/আপনি/.test(imsg)) sysAdd += '\n[TONE: সম্মানসূচক আপনি]';
@@ -3030,7 +3031,7 @@ export default {
       return sseStream((emit, close) => {
         (async () => {
           try {
-            const effWeb = (body.web || imode === 'research') && intent !== 'greeting' && imode !== 'chat';
+            const effWeb = (body.web || (intent === 'research' && !/(আবহাওয়া|weather|forecast|নামাজের সময়|prayer time)/i.test(imsg))) && intent !== 'greeting';
             if (effWeb) {
               const lastC = finalMsgs[finalMsgs.length - 1].content;
               const q = typeof lastC === 'string' ? lastC : lastC.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
