@@ -25,7 +25,7 @@ _(সবকিছু লাইভ-টেস্ট করা — v41, 2026-09)_
 - ডিপ্লয় পাইপলাইন: main + gh-pages worktree push (~৭৫ সেকেন্ডে লাইভ) ✅
 
 ## C) D1-এ সংরক্ষিত key (ব্যবহারের অপেক্ষায়/সক্রিয়)
-BROWSERLESS · FIRECRAWL · SCRAPINGBEE · BRIGHTDATA · IA (Internet Archive) · TELEGRAM bot+channel · GOOGLE_DRIVE (OAuth 3-piece) · WEBCONTAINERS · SUPABASE_PAT · NPM_TOKEN · GITHUB_PAT_2 (backup)
+BRIGHTDATA (রিজার্ভ, কোডে ব্যবহৃত নয়) · IA (Internet Archive) · TELEGRAM bot+channel · GOOGLE_DRIVE (OAuth 3-piece) · WEBCONTAINERS · SUPABASE_PAT · NPM_TOKEN · GITHUB_PAT_2 (backup)
 
 ## D) ফেজ-অনুযায়ী যা সংগ্রহ করতে হবে (মালিকের কাজ)
 | ফেজ | দরকার | কীভাবে |
