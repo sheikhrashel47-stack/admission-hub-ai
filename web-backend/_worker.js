@@ -588,7 +588,7 @@ function parseSuggestions(ans) {
   return { text: ans.slice(0, m.index).trimEnd(), list: list.length ? list : null };
 }
 /* Phase 0: chat-এ read-only tool loop (owner session ছাড়া চলবে না) */
-const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1, 'kit.result': 1, 'pc.pair': 1, 'pc.status': 1, 'pc.run': 1, 'pc.result': 1, 'pc.put': 1, 'pc.get': 1, 'pc.gui': 1, 'pc.desktop': 1, 'gh.issue': 1, 'gh.pr': 1, 'gh.runs': 1, 'gh.events': 1, 'con.discord': 1, 'gh.branch': 1, 'gh.write': 1, 'gh.prc': 1, 'gh.diff': 1 };
+const CHAT_TOOLS = { 'gh.repos': 1, 'gh.read': 1, 'web.search': 1, 'web.read': 1, 'web.eye': 1, 'web.now': 1, 'bu.health': 1, 'verify.url': 1, 'twin.search': 1, 'twin.map': 1, 'twin.impact': 1, 'twin.time': 1, 'mem.save': 1, 'mem.search': 1, 'mem.forget': 1, 'mem.correct': 1, 'kit.weather': 1, 'kit.currency': 1, 'kit.translate': 1, 'kit.news': 1, 'kit.wiki': 1, 'kit.img': 1, 'kit.qr': 1, 'kit.stt': 1, 'kit.tts-free': 1, 'kit.math': 1, 'kit.dict': 1, 'kit.flux': 1, 'kit.news': 1, 'kit.tts': 1, 'kit.gnews': 1, 'kit.route': 1, 'kit.code': 1, 'kit.prayer': 1, 'kit.crypto': 1, 'kit.nearby': 1, 'kit.books': 1, 'kit.embed': 1, 'kit.wikidata': 1, 'kit.wsearch': 1, 'kit.name': 1, 'kit.gpu': 1, 'kit.pdf': 1, 'kit.lab': 1, 'kit.result': 1, 'pc.pair': 1, 'pc.status': 1, 'pc.run': 1, 'pc.result': 1, 'pc.put': 1, 'pc.get': 1, 'pc.gui': 1, 'pc.desktop': 1, 'gh.issue': 1, 'gh.pr': 1, 'gh.runs': 1, 'gh.events': 1, 'con.discord': 1, 'gh.branch': 1, 'gh.write': 1, 'gh.prc': 1, 'gh.diff': 1, 'kit.bash': 1 };
 /* ===== Phase 4 — Repo Digital Twin + Code Intelligence ===== */
 const TWIN_REPO = 'sheikhrashel47-stack/admission-hub-ai';
 const TWIN_EXT = /\.(js|html|css|md|yml|yaml|json|webmanifest|txt|py|sh)$/i;
@@ -1039,7 +1039,7 @@ const STYLE_SYS={
   critical:'\n[STYLE: শুধু নিশ্চিতকরণ/সতর্কবার্তা]'
 };
 const PRON_RE=/(ওটা|ওইটা|ঐটা|সেটা|এটা|that|it|আগেরটা|আগের টা|same|একই|আবার)/i;
-const PLAN_CATALOG = 'gh.repos{}|gh.read{repo,path}|gh.write{repo,path,content,branch,message}|gh.branch{repo,name}|gh.prc{repo,head,base,title,body}|gh.diff{repo,pr}|gh.issue{title,body}|gh.pr{}|gh.runs{}|gh.events{}|web.now{query}|web.read{url}|web.search{query}|kit.lab{run,setup,async}|kit.code{code,lang}|kit.weather{location}|mem.save{text}|mem.search{q}|con.discord{content}|twin.map{}|twin.search{query}';
+const PLAN_CATALOG = 'gh.repos{}|gh.read{repo,path}|gh.write{repo,path,content,branch,message}|gh.branch{repo,name}|gh.prc{repo,head,base,title,body}|gh.diff{repo,pr}|gh.issue{title,body}|gh.pr{}|gh.runs{}|gh.events{}|web.now{query}|web.read{url}|web.search{query}|kit.lab{run,setup,async}|kit.bash{cmd,async,ownerConfirm}|kit.code{code,lang}|kit.weather{location}|mem.save{text}|mem.search{q}|con.discord{content}|twin.map{}|twin.search{query}';
 async function llmPlan(keys, goal) {
   const sys = 'তুমি JUJU-র প্ল্যানার। ইউজার-কাজ থেকে সর্বোচ্চ ৪ ধাপের টুল-প্ল্যান বানাও। ক্যাটালগ: ' + PLAN_CATALOG + ' । আউটপুট শুধু JSON অ্যারে: [{"tool":"gh.branch","args":{"repo":"x","name":"y"}}] — টুল লাগলে না, শুধু []।';
   const bod = { model: '', temperature: 0.2, max_tokens: 300, messages: [{ role: 'system', content: sys }, { role: 'user', content: String(goal).slice(0, 900) }] };
@@ -1099,6 +1099,8 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   if (!plan.length && /(pull request|\bpr\b)/i.test(t) && /(লিস্ট|list|দেখো|status|স্ট্যাটাস)/i.test(t)) plan.push({ tool: 'gh.pr', args: {} });
   if (!plan.length && /(actions|ওয়ার্কফ্লো|workflow)/i.test(t) && /(রান|run|স্ট্যাটাস|status|ফল|result)/i.test(t)) plan.push({ tool: 'gh.runs', args: {} });
   if (!plan.length && /(গিটহাব|github)/i.test(t) && /(webhook|হুক|ইভেন্ট|events)/i.test(t)) plan.push({ tool: 'gh.events', args: {} });
+  if (!plan.length && /(টার্মিনাল|bash|shell|কমান্ড)/i.test(t) && /(চালাও|চালাও|চালান|run|execute|টেস্ট)/i.test(t)) { const cm = t.match(/(?:কমান্ড|command|bash)[:\s]+(.{3,300})/i); plan = [{ tool: 'kit.bash', args: { cmd: (cm ? cm[1] : t.replace(/^.*?(টার্মিনাল|bash|shell|কমান্ড)[^:ঃ]*[:ঃ]?\s*/i, '')).slice(0, 300) } }]; }
+  if (!plan.length && /^(অনুমোদন|approve)\s*[:ঃ]?\s*(.{3,300})/i.test(t)) { const mm9 = t.match(/^(অনুমোদন|approve)\s*[:ঃ]?\s*(.{3,300})/i); plan = [{ tool: 'kit.bash', args: { cmd: String(mm9[2]).slice(0, 300), ownerConfirm: true } }]; }
   if (!plan.length && (intent === 'mission' || intent === 'instruction') && t.length > 12) { try { const pr = await llmPlan(keys, t); plan = pr.plan || []; if (stepsOut) stepsOut.push(plan.length ? '🧠 LLM প্ল্যানার: ' + plan.map((p) => p.tool).join(' → ') : '🧠 প্ল্যানার খালি: ' + (pr.raw || '-')); } catch {} }
   if (!plan.length && intent === 'mission') { const rm = t.match(/(?:মিশন|mission):\s*([\w.-]{2,60})\s+রেপো/i); if (rm) plan = [{ tool: 'gh.read', args: { repo: rm[1], path: 'README.md' } }]; }
   if (!plan.length) return null;
@@ -1430,6 +1432,16 @@ async function pcTool(env, keys, tool, args) {
 async function runAgentTool(env, keys, tool, args, emit, ctx) {
   if (tool.startsWith('pc.') || tool === 'kit.result') return await pcTool(env, keys, tool, args);
   if (tool === 'twin.index') return await twinIndex(env, keys, args.repo);
+  if (tool === 'kit.bash') {
+    const cmd = String(args.cmd || args.run || '').slice(0, 600); if (!cmd.trim()) throw new Error('কমান্ড লাগবে');
+    const gate = cmdGate(cmd);
+    if (gate === 'BLOCK') return { blocked: true, note: 'বিপজ্জনক কমান্ড — সেফটি-গেটে আটকেছে (rm -rf /, mkfs, dd, shutdown ইত্যাদি নিষিদ্ধ)' };
+    if ((gate === 'APPROVAL' || gate === 'INSPECT') && !args.ownerConfirm) return { needsApproval: true, gate, note: gate === 'APPROVAL' ? 'এই কমান্ডে মালিকের অনুমোদন লাগবে (push/force/sudo/curl|sh ইত্যাদি)' : 'অপরিচিত কমান্ড — মালিকের অনুমোদন লাগবে', hint: 'চ্যাটে লিখুন: অনুমোদন: <কমান্ড>' };
+    const script = 'timeout 90 bash -c ' + JSON.stringify(cmd);
+    if (args.async) return { runKey: await runSandboxStart(env, keys, script), gate };
+    const r = await runSandbox(env, keys, script);
+    return { gate, exit: r.exit, out: String(r.out || '').slice(0, 6000), err: String(r.err || '').slice(0, 1500), ms: r.ms };
+  }
   if (tool === 'gh.events') { const ev = await storeGetJson(env, 'gh:lastevents', []); return { events: ev, note: ev.length ? 'সর্বশেষ GitHub webhook ইভেন্ট' : 'এখনো কোনো webhook ইভেন্ট আসেনি (repo Settings → Webhooks সেট করতে হবে)' }; }
   if (tool === 'twin.search') { const mi0 = await storeGetJson(env, 'twin:' + (args.repo || TWIN_REPO) + ':meta', null); if (!mi0) await twinIndex(env, keys, args.repo); return { q: args.query || args.q, results: await twinSearch(env, args.repo, args.query || args.q || '') }; }
   if (tool === 'twin.map') { const repo0 = args.repo || TWIN_REPO; const mi1 = await storeGetJson(env, 'twin:' + repo0 + ':meta', null); if (!mi1) await twinIndex(env, keys, repo0); return { meta: mi1, deps: await storeGetJson(env, 'twin:' + repo0 + ':deps', null), map: (await storeGetJson(env, 'twin:' + repo0 + ':map', null)) || [] }; }
@@ -1857,7 +1869,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v87';
+  const AGENT_VERSION = 'p10-v88';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2618,7 +2630,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v87' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v88' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
