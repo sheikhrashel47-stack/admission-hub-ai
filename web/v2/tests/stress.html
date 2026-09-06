@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="bn"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JUJU v2 Stress Test</title>
+<link rel="stylesheet" href="../css/tokens.css"><link rel="stylesheet" href="../css/app.css">
+<style>body{padding:20px;font:14px system-ui}#out{white-space:pre-wrap;background:#111;color:#0f0;padding:14px;border-radius:8px;min-height:200px}#msgs{height:300px;overflow:auto;border:1px solid #ccc}button{padding:8px 14px;margin:4px;cursor:pointer}</style>
+</head><body>
+<h2>JUJU v2 — ক্লায়েন্ট স্ট্রেস টেস্ট (§61)</h2>
+<p>প্রতিটা বাটন সিনথেটিক ডেটা দিয়ে রেন্ডার-টাইম ও DOM-সাইজ মাপে। PASS গেট: কোনো অপারেশন &lt; 800ms, স্ট্রিমিং চলাকালীন ফ্রেম-গ্যাপ &lt; 250ms।</p>
+<button onclick="t1()">১) ১০,০০০ লাইনের কোড ব্লক</button>
+<button onclick="t2()">২) ১,০০০ মেসেজ</button>
+<button onclick="t3()">৩) ৫০k ক্যারেক্টার স্ট্রিমিং</button>
+<button onclick="t4()">৪) ১,০০০ চ্যাট হিস্টরি (ভার্চুয়াল)</button>
+<div id="out">রেডি…</div>
+<div id="msgs" hidden></div>
+<div id="atts" hidden></div><div id="toasts" hidden></div>
+<div id="pal" hidden><input><div class="res"></div></div>
+<div id="scrim" hidden></div><div id="newMsg" hidden></div>
+<div id="conn" hidden></div><div id="bnav" hidden></div><div id="ctx" hidden><div id="ctxTabs"></div><div id="ctxBody"></div></div>
+<div id="sendB" hidden></div><input id="inp" hidden><div id="hsearch" hidden></div>
+<script src="../js/core.js"></script><script src="../js/api.js"></script><script src="../js/md.js"></script>
+<script src="../js/views/panel.js"></script><script src="../js/views/chat.js"></script><script src="../js/views/history.js"></script>
+<script>
+const O=$('#out');const log=m=>O.textContent+=m+'\n';
+const bench=(name,fn)=>{const t0=performance.now();const r=fn();const dt=performance.now()-t0;
+  log(name+': '+dt.toFixed(0)+'ms — '+(dt<800?'PASS ✅':'SLOW ⚠')+(r?' ('+r+')':''));return dt};
+function t1(){
+  O.textContent='';
+  const code=Array.from({length:10000},(_,i)=>'const line'+i+' = compute({a:'+i+', b:"বাংলা '+i+'"}); // ধারা '+i).join('\n');
+  let cb;
+  bench('১০k লাইন codeBlock initial render',()=>{cb=codeBlock(code,'javascript app.js');return 'DOM nodes: '+cb.querySelectorAll('*').length});
+  const holder=el('div');document.body.appendChild(holder);holder.appendChild(cb);
+  bench('১০k লাইন DOM attach',()=>{return 'visible chunks: '+cb.querySelectorAll('.ln').length});
+  /* expand all chunks */
+  let g=0;const t0=performance.now();
+  while(cb.querySelector('.more')){cb.querySelector('.more').click();g++}
+  log('সব chunk হাইড্রেট ('+g+' ক্লিক): '+(performance.now()-t0).toFixed(0)+'ms — total .ln: '+cb.querySelectorAll('.ln').length);
+  holder.remove();
+}
+function t2(){
+  O.textContent='';
+  const box=$('#msgs');box.hidden=false;box.innerHTML='';
+  bench('১,০০০ মেসেজ রেন্ডার',()=>{
+    for(let i=0;i<1000;i++){
+      const w=el('div','msg '+(i%2?'a':'u'));
+      w.innerHTML='<div class="meta">মেসেজ '+i+'</div><div class="'+(i%2?'body':'bubble')+'">এটা মেসেজ নম্বর '+i+' — কিছু বাংলা টেক্সট, some english, code `x=1`.</div>';
+      box.appendChild(w);
+    }
+    return 'DOM nodes: '+box.querySelectorAll('*').length;
+  });
+  box.scrollTop=box.scrollHeight;
+  log('নোট: আসল হিস্টরি open() ২০০-মেসেজ window ব্যবহার করে (§30) — এটা worst-case raw টেস্ট।');
+}
+function t3(){
+  O.textContent='';
+  const box=$('#msgs');box.hidden=false;box.innerHTML='';
+  const body=el('div','body');box.appendChild(body);
+  const lr=liveRenderer(body);
+  const text='লাইন '.repeat(1)+'— স্ট্রিমিং টেস্ট টেক্সট। '.repeat(4)+'\n';
+  let i=0,maxGap=0,last=performance.now();
+  const timer=setInterval(()=>{
+    const now=performance.now();maxGap=Math.max(maxGap,now-last);last=now;
+    lr.add(text.replace('লাইন','লাইন'+(i++)));
+    if(i>=600){clearInterval(timer);lr.finish();
+      log('৫০k+ ক্যারেক্টার স্ট্রিমিং ('+i+' chunk): শেষ, chars='+lr.text().length);
+      log('মোট টাইম: ~'+(i*8/1000).toFixed(1)+'s সিমুলেটেড; max interval gap='+maxGap.toFixed(0)+'ms — '+(maxGap<250?'PASS ✅':'⚠ চেক দরকার'));
+      log('final DOM nodes: '+body.querySelectorAll('*').length);}
+  },8);
+  log('স্ট্রিমিং চলছে (৬০০ chunk × 120ms throttle)…');
+}
+function t4(){
+  O.textContent='';
+  /* simulate Hist.render with 1000 items — needs #v-history .lst */
+  let lst=$('#hl');if(!lst){lst=el('div');lst.id='hl';lst.className='lst';lst.style.cssText='height:400px;overflow:auto;border:1px solid #ccc';document.body.appendChild(lst)}
+  Hist.items=Array.from({length:1000},(_,i)=>({id:'c'+i,title:'চ্যাট '+i,updated:Date.now()-i*3600e3,messages:new Array(i%50)}));
+  bench('১,০০০ চ্যাট ভার্চুয়াল লিস্ট',()=>{Hist.render(lst);return 'DOM rows: '+lst.querySelectorAll('.row').length});
+  const t0=performance.now();
+  lst.scrollTop=lst.scrollHeight;lst.onscroll&&lst.onscroll();
+  log('স্ক্রল-টু-বটম রি-রেন্ডার: '+(performance.now()-t0).toFixed(0)+'ms, rows after: '+lst.querySelectorAll('.row').length+' (window ±6 → ~25 row DOM-এ থাকে)');
+}
+</script>
+</body></html>
