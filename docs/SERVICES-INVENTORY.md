@@ -111,3 +111,20 @@ NVIDIA (BD ফোন ভেরিফিকেশন নেই — কিন্�
 - v78: gh.events env-scope fix (runTool-এ env নেই → runAgentTool-এ সরানো)।
 - টেস্ট: /api/tool 401/200; issue #5 open→close (github.com/…/issues/5); gh.runs লাইভ; hook good-sig 200 + bad-sig 401 + gh.events-এ ইভেন্ট; con.discord বাংলা সেটাপ-এরর।
 - Deploys: v76 11b223f/0c017d7, v77 5a55abf/3e6f008, v78 c0aaf3f/5c0f6e9; health p10-v78।
+
+## v80–v85 (2026-09-05) — Manus-style Connector/Code-Pipeline + LLM Planner
+- v80: gh.branch/gh.write(main-gate)/gh.prc(close|merge-gate)/gh.diff; LLM planner llmPlan() (mission/instruction intent-এ regex-plan খালি হলে); connector rows browser/lab/pages।
+- v81: chat owner-gate-এ x-owner-code (ownerOk2); tool_call-XML junk guard (XMLJ, ≤700 chars)।
+- v82: planner-এ raw-debug step ('🧠 প্ল্যানার খালি: …')।
+- v83: planner মডেল fix: qwen/qwen3.8-27b → openai/gpt-oss-120b; cfai fp8।
+- v84: repoOf() normalization ('juju-pc' → 'sheikhrashel47-stack/juju-pc')।
+- v85: mission plan cap 4 (অন্যথায় 2); gh.prc merge-এ force-gate।
+- E2E প্রমাণ: মিশন-চ্যাট → 🧠 প্ল্যানার gh.branch→gh.write→gh.prc → তিনটি ✅ → juju-pc PR #2 (পরে closed+branches deleted)।
+- Deploys: v80 e0815c1/4dac5a5, v81 5adb9fd/1f44ae8, v82 632647b/aeb16ca, v83 6e45c69/4ede89b, v84 efb0731/1189d89, v85 aa1eb39/84c4d73; health p10-v85।
+
+## v88–v89 (2026-09-06) — PHASE 7: Bash
+- kit.bash{cmd,async,ownerConfirm}: cmdGate 4-স্তর (SAFE/INSPECT/APPROVAL/BLOCK); BLOCK=বাংলা ব্লক; INSPECT/APPROVAL=ownerConfirm ছাড়া নয়; async=runKey।
+- প্ল্যানার: quick-rule (টার্মিনাল/bash/কমান্ড+চালাও) → kit.bash; 'অনুমোদন: <cmd>' → ownerConfirm:true; PLAN_CATALOG-এ kit.bash।
+- টেস্ট: SAFE(ls/python3)✅ out; BLOCK(rm -rf /)✅; APPROVAL(git push)✅ needsApproval→confirm✅ (sandbox push GH-তে denied=নিরাপদ); chat quick-rule → লাইভ uname আউটপুট ✅।
+- v89: cmd extraction colon-পর fix (আগে 'কমান্ড' শব্দসহ ধরে INSPECT হতো)।
+- Deploys: v88 cae9907/1d67efe, v89 2f0bd31/3987260; health p10-v89।

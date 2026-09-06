@@ -1,5 +1,5 @@
 # 🖥️ PHASE 7 — Bash (টার্মিনাল কমান্ড, সেফটি-গেট সহ)
-তারিখ: ২০২৬-০৯-০৬ · স্ট্যাটাস: শুরু (owner: "Next")
+তারিখ: ২০২৬-০৯-০৬ · স্ট্যাটাস: ✅ COMPLETE — WAITING FOR OWNER APPROVAL
 
 ## লক্ষ্য
 জুজু নিজে **টার্মিনাল কমান্ড চালাবে** — কিন্তু ৪-স্তর গেট পেরিয়ে: `cmdGate()` = SAFE → INSPECT → APPROVAL → BLOCK (বিদ্যমান, v-পুরনো)। রান = GH Actions ফ্রি Linux VM (kit.lab ইঞ্জিন)।
@@ -11,11 +11,11 @@
 4. async মোড: runKey → GET /api/runner/<key>।
 
 ## Acceptance
-- [ ] SAFE কমান্ড (ls/python3 -V) → আউটপুট সহ উত্তর
-- [ ] BLOCK (rm -rf /) → বাংলা ব্লক-বার্তা, কিছুই চলে না
-- [ ] APPROVAL (git push) → needsApproval; `অনুমোদন:` সহ → চলে
-- [ ] চ্যাট quick-rule + মিশন-প্ল্যানার দুই পথেই kit.bash
-- [ ] health wv p10-v88
+- [x] SAFE কমান্ড (ls/python3 -V) → আউটপুট সহ উত্তর
+- [x] BLOCK (rm -rf /) → বাংলা ব্লক-বার্তা, কিছুই চলে না
+- [x] APPROVAL (git push) → needsApproval; `অনুমোদন:` সহ → চলে
+- [x] চ্যাট quick-rule + মিশন-প্ল্যানার দুই পথেই kit.bash
+- [x] health wv p10-v89
 
 ## Owner task list
 - কিছু লাগবে না। অনুমোদন-ফ্লো চ্যাটেই।
