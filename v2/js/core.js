@@ -40,6 +40,6 @@ function sheetOpen(id){$(id).classList.add('on');$('#scrim').classList.add('on')
 function sheetCloseAll(){$$('.sheet.on').forEach(s=>s.classList.remove('on'));if(!$('#pal').classList.contains('on'))$('#scrim').classList.remove('on')}
 
 /* api base + auth */
-const API=(localStorage.getItem('ahai-api')||'').replace(/\/$/,'');
+const API=(localStorage.getItem('ahai-api')||'https://admission-hub-ai.pages.dev').replace(/\/$/,'');
 function authH(){const s=S.server.get().sess;return s?{Authorization:'Bearer '+s}:{}}
 async function api(path,opt){const r=await fetch(API+path,Object.assign({headers:Object.assign({'Content-Type':'application/json'},authH(),(opt&&opt.headers)||{})},opt,{body:opt&&opt.body?JSON.stringify(opt.body):undefined}));if(!r.ok)throw new Error('HTTP '+r.status);const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():r.text()}
