@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="bn"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JUJU v3 — ১০টি UI বিকল্প</title>
+<style>
+*{margin:0;box-sizing:border-box}
+body{font-family:'Hind Siliguri','Noto Sans Bengali',system-ui,sans-serif;background:#0b0b10;color:#e8e8ee;padding:24px 16px 60px}
+h1{font-size:22px;text-align:center}
+.sub{text-align:center;color:#9a9ab0;font-size:13.5px;margin:8px auto 26px;max-width:640px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:22px;max-width:1500px;margin:0 auto}
+.opt{border:1px solid #23233a;border-radius:18px;padding:16px;background:#111119}
+.opt h2{font-size:16px;display:flex;align-items:center;gap:8px}
+.opt h2 .num{background:#6c5ce7;color:#fff;border-radius:8px;padding:1px 9px;font-size:13px}
+.opt p{color:#9a9ab0;font-size:12.5px;margin:6px 0 10px}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tags span{font-size:10.5px;border:1px solid #2c2c46;color:#b8b8d0;border-radius:99px;padding:2px 9px}
+.mock{height:360px;border-radius:14px;overflow:hidden;display:flex;flex-direction:column;background:var(--bg);color:var(--txt);font-size:12.5px}
+.mhd{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--hd);border-bottom:1px solid var(--line)}
+.mhd .logo{width:26px;height:26px;border-radius:8px;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:12px;flex:0 0 auto}
+.mhd b{font-size:13px}
+.mhd .st{margin-left:auto;font-size:10px;color:var(--dim);display:flex;align-items:center;gap:5px}
+.dot{width:7px;height:7px;border-radius:50%;background:#2ecc71;animation:pl 1.4s infinite}
+@keyframes pl{50%{opacity:.3}}
+.mbody{flex:1;overflow:hidden;padding:12px;display:flex;flex-direction:column;gap:10px}
+.mu{align-self:flex-end;max-width:80%;background:var(--ub);color:var(--ut);padding:8px 12px;border-radius:var(--ur,14px);box-shadow:var(--sh,none)}
+.ma{align-self:flex-start;max-width:88%;background:var(--ab);padding:9px 12px;border-radius:var(--ar,14px);border:var(--abd,none);box-shadow:var(--sh,none)}
+.ma .t{color:var(--dim);font-size:10px;margin-bottom:4px;font-weight:700}
+.code{background:var(--cbg);border-radius:8px;padding:7px 9px;font-family:ui-monospace,monospace;font-size:10.5px;color:var(--ctxt);margin-top:6px;white-space:pre;overflow:hidden}
+.typing{display:flex;gap:4px;padding:4px 2px}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:ty 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes ty{50%{transform:translateY(-4px);opacity:.5}}
+.mcmp{flex:0 0 auto;display:flex;gap:8px;align-items:center;padding:10px 12px;background:var(--hd);border-top:1px solid var(--line)}
+.mcmp .box{flex:1;background:var(--ib);border:var(--ibd,1px solid var(--line));border-radius:var(--ir,12px);padding:8px 12px;color:var(--dim);font-size:11.5px}
+.mcmp .send{width:32px;height:32px;border-radius:var(--sr,10px);background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;flex:0 0 auto;box-shadow:var(--sglow,none)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+.pick{text-align:center;margin-top:34px;font-size:15px;color:#fff;background:linear-gradient(90deg,#6c5ce7,#e84393);border-radius:14px;padding:14px;max-width:640px;margin-left:auto;margin-right:auto}
+</style></head><body>
+<h1>🎨 JUJU v3 — ১০টি প্রিমিয়াম UI বিকল্প</h1>
+<div class="sub">প্রতিটা ডিজাইন আসল CSS-এ বানানো মকআপ (ছবি নয়)। যেটা সবচেয়ে পছন্দ হয়, শুধু তার <b>নম্বর</b> বলুন — সেটাই Phase 1-এর ভিত হবে। চাইলে দুটোর মিশ্রণও বলা যাবে (যেমন "২ এর ব্যাকগ্রাউন্ড + ৫ এর বাবল")।</div>
+<div class="grid">
+
+<div class="opt"><h2><span class="num">১</span> Obsidian Pro</h2><p>গাঢ় কালো + বেগুনি আভা — ChatGPT/Claude-এর মতো সিরিয়াস প্রো লুক।</p><div class="tags"><span>ডার্ক</span><span>গ্লো অ্যাকসেন্ট</span><span>প্রো</span></div>
+<div class="mock" style="--bg:#0d0d12;--txt:#e8e8f0;--hd:#141420;--line:#23233a;--acc:#7c5cff;--dim:#8f8fa8;--ub:linear-gradient(135deg,#7c5cff,#5a3fd6);--ut:#fff;--ab:#16161f;--cbg:#0a0a10;--ctxt:#9fe8a0;--ib:#101018;--sglow:0 0 14px #7c5cff88">
+<div class="mhd"><span class="logo">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">২</span> Aurora Glass</h2><p>অরোরা গ্র্যাডিয়েন্ট ব্যাকগ্রাউন্ড + কাঁচের মতো ফ্রস্টেড কার্ড — সবচেয়ে "wow" লুক।</p><div class="tags"><span>গ্লাসমরফিজম</span><span>গ্র্যাডিয়েন্ট</span><span>ডাইনামিক</span></div>
+<div class="mock" style="--bg:linear-gradient(160deg,#1a1033,#0e2a4a 55%,#33103a);--txt:#f0f0ff;--hd:rgba(255,255,255,.07);--line:rgba(255,255,255,.12);--acc:#38bdf8;--dim:#aab4d8;--ub:rgba(56,189,248,.85);--ut:#04121e;--ab:rgba(255,255,255,.09);--cbg:rgba(0,0,0,.35);--ctxt:#a5f3c4;--ib:rgba(255,255,255,.1);--ibd:1px solid rgba(255,255,255,.18);--sh:0 8px 24px rgba(0,0,0,.25)">
+<div class="mhd"><span class="logo">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৩</span> বাংলা সম্পাদকীয়</h2><p>উষ্ণ ক্রিম + গাঢ় কালি — পত্রিকা/বইয়ের মতো শান্ত প্রিমিয়াম, বাংলা পড়ার জন্য সেরা।</p><div class="tags"><span>লাইট</span><span>এডিটোরিয়াল</span><span>বাংলা-ফার্স্ট</span></div>
+<div class="mock" style="--bg:#faf6ef;--txt:#26221a;--hd:#f3ece0;--line:#e3d9c6;--acc:#b4552d;--dim:#8a7f6a;--ub:#26221a;--ut:#faf6ef;--ab:#fffdf8;--abd:1px solid #e3d9c6;--cbg:#26221a;--ctxt:#f0dcc0;--ib:#fffdf8;--ur:6px;--ar:6px;--ir:8px;--sr:8px;--sh:0 2px 8px rgba(80,60,20,.08)">
+<div class="mhd"><span class="logo">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৪</span> Neon Terminal</h2><p>হ্যাকার-গ্রিন নিয়ন + মনোস্পেস ছোঁয়া — ডেভেলপার/টুল-ওয়ার্কের জন্য ডাইনামিক।</p><div class="tags"><span>নিয়ন</span><span>ডেভ</span><span>হাই-কনট্রাস্ট</span></div>
+<div class="mock" style="--bg:#050a07;--txt:#c9f7d4;--hd:#07120c;--line:#123a22;--acc:#00ff88;--dim:#4f9c6e;--ub:#0d2417;--ut:#7dffb8;--ab:#081409;--abd:1px solid #123a22;--cbg:#030805;--ctxt:#00ff88;--ib:#07120c;--ibd:1px solid #1c5c36;--sglow:0 0 16px #00ff8866">
+<div class="mhd"><span class="logo" style="color:#04140b">জু</span><b>জুজু_টার্মিনাল</b><span class="st"><i class="dot"></i> connected</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">juju@agent</div>কোড তৈরি হচ্ছে —<div class="code">$ build weather-app
+✓ app.js (12 lines)</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">কমান্ড বা মেসেজ…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৫</span> Minimal Coral</h2><p>উষ্ণ সাদা + করাল অ্যাকসেন্ট — Claude.ai-এর মতো শান্ত, পরিষ্কার, আধুনিক মিনিমাল।</p><div class="tags"><span>লাইট</span><span>মিনিমাল</span><span>হোয়াইটস্পেস</span></div>
+<div class="mock" style="--bg:#fffcfa;--txt:#2b2622;--hd:#fff;--line:#f0e8e2;--acc:#e07856;--dim:#a3968c;--ub:#f4ece6;--ut:#2b2622;--ab:transparent;--cbg:#2b2622;--ctxt:#f0dcc0;--ib:#fff;--ibd:1px solid #eadfd6;--ur:16px;--ar:0;--ir:14px;--sr:12px">
+<div class="mhd"><span class="logo">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৬</span> Gradient Wave</h2><p>ইন্ডিগো→গোলাপি চলমান গ্র্যাডিয়েন্ট — SaaS প্রোডাক্টের মতো এনার্জেটিক, তরুণ ভাব।</p><div class="tags"><span>ভাইব্রান্ট</span><span>অ্যানিমেটেড</span><span>মডার্ন</span></div>
+<div class="mock" style="--bg:#12101f;--txt:#f2f0ff;--hd:#191530;--line:#2b2550;--acc:linear-gradient(90deg,#6c5ce7,#e84393);--dim:#9d94c7;--ub:linear-gradient(90deg,#6c5ce7,#e84393);--ut:#fff;--ab:#1c1738;--cbg:#0d0a1c;--ctxt:#b8f5c8;--ib:#16122c;--sglow:0 4px 18px #e8439355">
+<div class="mhd"><span class="logo" style="background:linear-gradient(90deg,#6c5ce7,#e84393)">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send" style="background:linear-gradient(90deg,#6c5ce7,#e84393)">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৭</span> Executive Slate</h2><p>নেভি স্লেট + সোনালি অ্যাকসেন্ট — কর্পোরেট/এক্সিকিউটিভ প্রিমিয়াম, গম্ভীর ও আভিজাত্যপূর্ণ।</p><div class="tags"><span>নেভি</span><span>গোল্ড</span><span>কর্পোরেট</span></div>
+<div class="mock" style="--bg:#0f1626;--txt:#e6e9f2;--hd:#141d33;--line:#233154;--acc:#d4a94e;--dim:#8291b5;--ub:#1d2b4d;--ut:#f0e6cc;--ab:#151f38;--abd:1px solid #233154;--cbg:#0a101f;--ctxt:#e8d9a8;--ib:#111a30;--sglow:0 0 12px #d4a94e55">
+<div class="mhd"><span class="logo" style="color:#1a1408">জু</span><b>জুজু <span style="color:#d4a94e">প্রো</span></b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৮</span> Soft Neumorph</h2><p>নরম ছায়ায় ভাসমান কার্ড — ধূসর-নীল প্যাস্টেল ডার্ক, স্পর্শকাতর কোমল অনুভূতি।</p><div class="tags"><span>নিউমরফিক</span><span>সফট</span><span>ইউনিক</span></div>
+<div class="mock" style="--bg:#1e2230;--txt:#dfe3f0;--hd:#1e2230;--line:#2a2f42;--acc:#8aa4ff;--dim:#7d849e;--ub:#262b3d;--ut:#e8ecfa;--ab:#232839;--cbg:#171b27;--ctxt:#a8e6c0;--ib:#232839;--sh:6px 6px 14px #141722,-6px -6px 14px #282e40;--ur:18px;--ar:18px;--ir:14px">
+<div class="mhd"><span class="logo">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">৯</span> Cyber Midnight</h2><p>মিডনাইট নীল + সায়ান গ্লো বর্ডার — ফিউচারিস্টিক AI-ল্যাব ভাইব, সবচেয়ে "high-tech"।</p><div class="tags"><span>ফিউচারিস্টিক</span><span>গ্লো বর্ডার</span><span>সায়ান</span></div>
+<div class="mock" style="--bg:#060b18;--txt:#d5e6ff;--hd:#0a1226;--line:#15305e;--acc:#22d3ee;--dim:#5f7ea8;--ub:#0d1c3a;--ut:#a5f3fc;--ab:#0a1428;--abd:1px solid #22d3ee55;--cbg:#04081a;--ctxt:#7dd3fc;--ib:#0a1226;--ibd:1px solid #15305e;--sglow:0 0 18px #22d3ee66">
+<div class="mhd"><span class="logo" style="color:#04222b">জু</span><b>জুজু <span style="color:#22d3ee">AI</span></b><span class="st"><i class="dot"></i> লাইভ</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+<div class="opt"><h2><span class="num">১০</span> Paper Zen</h2><p>কাগজের মতো সাদা + সবুজ অ্যাকসেন্ট — Gemini-র মতো ঝকঝকে পরিষ্কার, চোখে আরামদায়ক।</p><div class="tags"><span>লাইট</span><span>ক্লিন</span><span>জেড</span></div>
+<div class="mock" style="--bg:#ffffff;--txt:#1f2420;--hd:#f6f8f6;--line:#e4e9e4;--acc:#1a8f4c;--dim:#8a948c;--ub:#e8f4ec;--ut:#143d24;--ab:#f8faf8;--abd:1px solid #e4e9e4;--cbg:#1f2420;--ctxt:#b8f0c8;--ib:#fff;--ibd:1px solid #dfe5df;--ur:18px;--ar:14px;--ir:22px;--sr:50%">
+<div class="mhd"><span class="logo">জু</span><b>জুজু</b><span class="st"><i class="dot"></i> অনলাইন</span></div>
+<div class="mbody"><div class="mu">ঢাকার আবহাওয়া নিয়ে একটা ছোট অ্যাপ বানাও</div>
+<div class="ma"><div class="t">জুজু</div>অবশ্যই! নিচে ছোট অ্যাপটির কোড দিলাম —<div class="code">const weather = await fetch(city);
+render(weather.temp + "°C");</div></div>
+<div class="ma"><div class="typing"><i></i><i></i><i></i></div></div></div>
+<div class="mcmp"><div class="box">মেসেজ লিখুন…</div><div class="send">↑</div></div></div></div>
+
+</div>
+<div class="pick">👉 পছন্দের <b>নম্বর</b> বলুন (যেমন: "২") — অথবা মিশ্রণ বলুন (যেমন: "১ এর থিম + ৩ এর ফন্ট-ভাব")। নম্বর পেলেই Phase 1 শুরু।</div>
+</body></html>
