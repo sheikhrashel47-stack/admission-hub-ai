@@ -1100,6 +1100,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   if (!plan.length && /(actions|ওয়ার্কফ্লো|workflow)/i.test(t) && /(রান|run|স্ট্যাটাস|status|ফল|result)/i.test(t)) plan.push({ tool: 'gh.runs', args: {} });
   if (!plan.length && /(গিটহাব|github)/i.test(t) && /(webhook|হুক|ইভেন্ট|events)/i.test(t)) plan.push({ tool: 'gh.events', args: {} });
   if (!plan.length && (intent === 'mission' || intent === 'instruction') && t.length > 12) { try { const pr = await llmPlan(keys, t); plan = pr.plan || []; if (stepsOut) stepsOut.push(plan.length ? '🧠 LLM প্ল্যানার: ' + plan.map((p) => p.tool).join(' → ') : '🧠 প্ল্যানার খালি: ' + (pr.raw || '-')); } catch {} }
+  if (!plan.length && intent === 'mission') { const rm = t.match(/(?:মিশন|mission):\s*([\w.-]{2,60})\s+রেপো/i); if (rm) plan = [{ tool: 'gh.read', args: { repo: rm[1], path: 'README.md' } }]; }
   if (!plan.length) return null;
   try { await storePut(env, 'ctx:lasttool', JSON.stringify({ plan: plan.slice(0, 2), chatId: chatId || null, ts: Date.now() }), 7 * 86400); } catch (e) {}
   const notes = [];
@@ -1856,7 +1857,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v86';
+  const AGENT_VERSION = 'p10-v87';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2617,7 +2618,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v86' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v87' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
@@ -3250,7 +3251,8 @@ export default {
             let answer = '', attempt = null;
             const t0 = Date.now();
             const JUNK = (x) => /^\s*[{[]/.test(x) && /"(action|tool|parameters|function)"|web\.search|\bquery\b/i.test(x) && !/[।!?]/.test(x.slice(0, 120));
-            const XMLJ = (x) => { const h = String(x).slice(0, 600); return h.includes('<tool_call') || h.includes('<function=') || h.includes('<parameter='); };
+            const TG = String.fromCharCode(60) + 'tool';
+            const XMLJ = (x) => { const h = String(x).slice(0, 600); return h.includes(TG) || h.includes('<function=') || h.includes('<parameter='); };
             let junk = false;
             for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac.signal, hasMulti)) {
               answer += tok;
@@ -3259,11 +3261,13 @@ export default {
             }
             if (junk) {
               answer = '';
-              finalMsgs.push({ role: 'system', content: 'টুল-কল JSON লিখবে না — এখানে কোনো টুল নেই; সোর্স-তথ্য ব্যবহার করে সরাসরি বাংলা গদ্যে উত্তর দাও।' });
+              finalMsgs.push({ role: 'system', content: 'টুল-কল JSON বা tool/tool_name/tool_params ট্যাগ লিখবে না — এখানে কোনো টুল-চ্যানেল নেই; সোর্স-তথ্য ব্যবহার করে সরাসরি বাংলা গদ্যে উত্তর দাও।' });
               const ac2 = new AbortController();
               req.signal?.addEventListener('abort', () => ac2.abort());
               for await (const tok of streamAnswer(keys, finalMsgs, body.model || 'auto', body.mode || 'balanced', emit, ac2.signal, hasMulti)) { answer += tok; emit({ token: tok }); }
             }
+            const tgI = answer.indexOf(TG);
+            if (tgI >= 0) answer = answer.slice(0, tgI).trim();
             if (!answer) throw new Error('খালি');
             const parsed = parseSuggestions(answer);
             answer = parsed.text;
