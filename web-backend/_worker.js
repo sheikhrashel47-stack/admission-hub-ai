@@ -1099,7 +1099,7 @@ async function chatToolLoop(keys, env, msg, imode, intent, chatId, stepsOut) {
   if (!plan.length && /(pull request|\bpr\b)/i.test(t) && /(লিস্ট|list|দেখো|status|স্ট্যাটাস)/i.test(t)) plan.push({ tool: 'gh.pr', args: {} });
   if (!plan.length && /(actions|ওয়ার্কফ্লো|workflow)/i.test(t) && /(রান|run|স্ট্যাটাস|status|ফল|result)/i.test(t)) plan.push({ tool: 'gh.runs', args: {} });
   if (!plan.length && /(গিটহাব|github)/i.test(t) && /(webhook|হুক|ইভেন্ট|events)/i.test(t)) plan.push({ tool: 'gh.events', args: {} });
-  if (!plan.length && /(টার্মিনাল|bash|shell|কমান্ড)/i.test(t) && /(চালাও|চালাও|চালান|run|execute|টেস্ট)/i.test(t)) { const cm = t.match(/(?:কমান্ড|command|bash)[:\s]+(.{3,300})/i); plan = [{ tool: 'kit.bash', args: { cmd: (cm ? cm[1] : t.replace(/^.*?(টার্মিনাল|bash|shell|কমান্ড)[^:ঃ]*[:ঃ]?\s*/i, '')).slice(0, 300) } }]; }
+  if (!plan.length && /(টার্মিনাল|bash|shell|কমান্ড)/i.test(t) && /(চালাও|চালাও|চালান|run|execute|টেস্ট)/i.test(t)) { const cm = t.match(/[:ঃ]\s*([^\n]{3,300})$/); plan = [{ tool: 'kit.bash', args: { cmd: (cm ? cm[1] : t.replace(/^.*?(টার্মিনাল|bash|shell|কমান্ড)[^:ঃ]*[:ঃ]?\s*/i, '')).slice(0, 300) } }]; }
   if (!plan.length && /^(অনুমোদন|approve)\s*[:ঃ]?\s*(.{3,300})/i.test(t)) { const mm9 = t.match(/^(অনুমোদন|approve)\s*[:ঃ]?\s*(.{3,300})/i); plan = [{ tool: 'kit.bash', args: { cmd: String(mm9[2]).slice(0, 300), ownerConfirm: true } }]; }
   if (!plan.length && (intent === 'mission' || intent === 'instruction') && t.length > 12) { try { const pr = await llmPlan(keys, t); plan = pr.plan || []; if (stepsOut) stepsOut.push(plan.length ? '🧠 LLM প্ল্যানার: ' + plan.map((p) => p.tool).join(' → ') : '🧠 প্ল্যানার খালি: ' + (pr.raw || '-')); } catch {} }
   if (!plan.length && intent === 'mission') { const rm = t.match(/(?:মিশন|mission):\s*([\w.-]{2,60})\s+রেপো/i); if (rm) plan = [{ tool: 'gh.read', args: { repo: rm[1], path: 'README.md' } }]; }
@@ -1869,7 +1869,7 @@ if (tool === 'brain.critic') {
     return { totalMs: Date.now() - t0, ok: oks.length, failed: res.length - oks.length, results: res, aggregate: agg };
   }
   /* ===== Phase 10 — Mission Engine + Evaluation Lab ===== */
-  const AGENT_VERSION = 'p10-v88';
+  const AGENT_VERSION = 'p10-v89';
   const MISSION_STAGES = ['understand', 'inspect', 'architect', 'plan', 'implement', 'build', 'test', 'review', 'security', 'diff', 'ready', 'approve', 'deploy', 'postverify', 'report'];
   async function missionGateCheck(env, keys, m) {
     const checks = [];
@@ -2630,7 +2630,7 @@ export default {
       const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       return new Response(arr, { headers: { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=604800', ...cors } });
     }
-    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v88' });
+    if (method === 'GET' && path === '/api/health') return json({ ok: true, wv: 'p10-v89' });
 
     /* ============ OWNER GATE + TOOL BUS (Phase 3 ভিত্তি) ============
        পাবলিক PWA — তাই টুল কখনো খোলা নয়। unlock = owner code (KV-তে hash),
