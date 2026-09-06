@@ -112,3 +112,10 @@
   #app{padding-bottom:calc(var(--bn-h) + var(--safe-b))}
   #ctx{position:fixed;right:0;top:0;bottom:0;z-index:var(--z-sheet);box-shadow:var(--sh-2);width:min(88vw,340px)}
 }
+
+/* attachments + drag-drop highlight (1D) */
+#atts{padding:0 12px}
+#atts:empty{display:none}
+#attB{flex:0 0 auto;color:var(--c-dim)}
+#composer.drop{outline:2px dashed var(--c-acc);outline-offset:-6px;background:var(--c-card)}
+#hsearch:focus{border-color:var(--c-acc)}
