@@ -9,24 +9,43 @@ function hlLite(code,lang){
   if(kw)h=h.replace(kw,'<b style="color:var(--c-acc);font-weight:600">$1</b>');
   return h;
 }
-function codeBlock(code,lang){
-  lang=(lang||'').toLowerCase();
-  const lines=code.split('\n').length;
-  const cb=el('div','cb'+(lines>300?' col':''));
-  const hd=el('div','hd','<span>'+esc(lang||'text')+'</span><span style="color:var(--c-dim2)">'+lines+' লাইন</span><span class="sp"></span>');
-  const pre=el('pre');
-  const render=()=>{pre.innerHTML='<code>'+hlLite(lines>300&&!cb._full?code.split('\n').slice(0,300).join('\n')+'\n… ('+(lines-300)+' আরো লাইন — expand চাপুন)':code,lang)+'</code>'};
-  render();
-  const bCopy=el('button','', 'কপি');
-  bCopy.onclick=async()=>{try{await navigator.clipboard.writeText(code);bCopy.textContent='✓ কপি';setTimeout(()=>bCopy.textContent='কপি',1500)}catch(e){toast('কপি ব্যর্থ')}};
+const WEB_LANGS={html:1,htm:1,css:1,js:1,javascript:1,jsx:1,ts:1,tsx:1,vue:1,svelte:1};
+function codeBlock(code,info){
+  info=String(info==null?'':info).trim();
+  const seg=info.split(/[\s:]+/);
+  let lang=(seg[0]||'').toLowerCase();
+  const fname=(seg[1]||'').replace(/[^\w.\-/]/g,'');
+  const all=code.split('\n');const n=all.length;
+  const cb=el('div','cb');
+  cb._code=code;cb._lang=lang;cb._fname=fname;
+  const hd=el('div','hd','<span class="lang">'+esc(lang||'text')+'</span>'+(fname?'<span class="fn">'+esc(fname)+'</span>':'')+'<span class="ct">'+n+' লাইন</span><span class="sp"></span>');
+  /* body: chunked lazy hydration (§8) — CHUNK lines at a time, never full 10k at once */
+  const body=el('div','cbbody');const codeEl=el('code');body.appendChild(codeEl);
+  const CHUNK=250;let shown=0;
+  const addChunk=()=>{
+    const end=Math.min(n,shown+CHUNK);
+    let h='';
+    for(let i=shown;i<end;i++)h+='<span class="ln">'+(i+1)+'</span>'+hlLite(all[i],lang)+'\n';
+    codeEl.insertAdjacentHTML('beforeend',h);
+    shown=end;
+    if(more)more.remove(),more=null;
+    if(shown<n){more=el('button','more','আরো '+(n-shown)+' লাইন দেখান');more.onclick=addChunk;cb.appendChild(more)}
+  };
+  let more=null;
+  addChunk();
+  /* actions (§7,§9,§12) */
+  const bCopy=el('button','','কপি');
+  bCopy.onclick=async()=>{try{await navigator.clipboard.writeText(code);bCopy.textContent='✓ কপি হয়েছে';setTimeout(()=>bCopy.textContent='কপি',1400)}catch(e){toast('কপি ব্যর্থ')}};
   const bDl=el('button','','ডাউনলোড');
-  bDl.onclick=()=>{const a=el('a');a.href=URL.createObjectURL(new Blob([code],{type:'text/plain'}));a.download=('juju-'+Date.now().toString(36)+'.'+(LANG_EXT[lang]||'txt'));a.click();LC.add(()=>URL.revokeObjectURL(a.href))};
-  const bTog=el('button','',lines>300?'expand':'collapse');
-  bTog.onclick=()=>{cb._full=!cb._full;cb.classList.toggle('col',!cb._full&&lines>300);bTog.textContent=(!cb._full&&lines>300)?'expand':'collapse';render()};
+  bDl.onclick=()=>{const a=el('a');const u=URL.createObjectURL(new Blob([code],{type:'text/plain'}));a.href=u;a.download=fname||('juju-'+Date.now().toString(36)+'.'+(LANG_EXT[lang]||'txt'));a.click();setTimeout(()=>URL.revokeObjectURL(u),4000)};
+  const bOpen=el('button','','প্যানেল');
+  bOpen.onclick=()=>Panel.showCode(fname||('code.'+(LANG_EXT[lang]||'txt')),code,lang);
+  hd.append(bCopy,bDl,bOpen);
+  if(WEB_LANGS[lang]){const bP=el('button','','▶ প্রিভিউ');bP.onclick=()=>Panel.previewFromMsg(cb);hd.appendChild(bP)}
   const bFs=el('button','','⤢');
-  bFs.onclick=()=>{const w=window.open('','_blank');w.document.write('<pre style="font:13px/1.6 monospace;padding:16px;white-space:pre-wrap">'+esc(code)+'</pre>');w.document.title=lang||'code'};
-  hd.append(bCopy,bDl,bTog,bFs);
-  cb.append(hd,pre);
+  bFs.onclick=()=>{const w=window.open('','_blank');w.document.write('<pre style="font:13px/1.6 monospace;padding:16px;white-space:pre-wrap;background:#0E0E12;color:#e8e8ee">'+esc(code)+'</pre>');w.document.title=fname||lang||'code'};
+  hd.appendChild(bFs);
+  cb.append(hd,body);
   return cb;
 }
 /* markdown (headings, lists, tables, quotes, code, inline, links, images) */
@@ -35,7 +54,7 @@ function md(src){
   const out=el('div','md');
   const parts=src.split(/```/);
   for(let i=0;i<parts.length;i++){
-    if(i%2===1){const nl=parts[i].indexOf('\n');const lang=nl>=0?parts[i].slice(0,nl).trim():parts[i].trim();const code=nl>=0?parts[i].slice(nl+1):'';out.appendChild(codeBlock(code.replace(/\n$/,''),lang));continue}
+    if(i%2===1){const nl=parts[i].indexOf('\n');const info=nl>=0?parts[i].slice(0,nl).trim():parts[i].trim();const code=nl>=0?parts[i].slice(nl+1):'';out.appendChild(codeBlock(code.replace(/\n$/,''),info));continue}
     const frag=mdInlineBlocks(parts[i]);
     frag.forEach(n=>out.appendChild(n));
   }

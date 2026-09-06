@@ -36,6 +36,7 @@
     <div id="view">
       <section class="view on" id="v-chat">
         <div id="msgs" role="log" aria-live="polite"></div>
+        <button id="newMsg" aria-label="নতুন মেসেজে যান">↓ নতুন মেসেজ</button>
         <div id="composer">
           <div id="atts"></div>
           <div id="cbox">
@@ -54,9 +55,17 @@
       <section class="view" id="v-tasks"><div class="lst"></div></section>
     </div>
   </main>
-  <aside id="ctx" aria-label="কনটেক্সট">
-    <b style="font-size:13px;color:var(--c-dim)">কনটেক্সট</b>
-    <div id="ctxBody" style="margin-top:10px;font-size:13px;color:var(--c-dim)">সোর্স, টুল-স্টেপ ও প্রজেক্ট-তথ্য এখানে দেখাবে (মাইলস্টন 1I)।</div>
+  <div id="ctxDiv" role="separator" aria-label="প্যানেল রিসাইজ"></div>
+  <aside id="ctx" aria-label="কনটেক্সট প্যানেল">
+    <div id="ctxTabs">
+      <button class="ptab on" data-m="code">CODE</button>
+      <button class="ptab" data-m="preview">PREVIEW</button>
+      <button class="ptab" data-m="files">FILES</button>
+      <button class="ptab" data-m="sources">SOURCES</button>
+      <span style="flex:1"></span>
+      <button class="ibtn" id="ctxClose" aria-label="প্যানেল বন্ধ">✕</button>
+    </div>
+    <div id="ctxBody"><div class="state" style="padding:30px 16px">কোড, প্রিভিউ, ফাইল ও সোর্স এখানে খুলবে।</div></div>
   </aside>
 </div>
 <nav id="bnav" aria-label="মোবাইল নেভিগেশন">
@@ -71,10 +80,11 @@
 <div class="sheet" id="shList"><div class="hd"><b>লিস্ট</b><button class="ibtn" onclick="sheetCloseAll()">✕</button></div><div class="bd"></div></div>
 <div id="pal" role="dialog" aria-label="কমান্ড প্যালেট"><input placeholder="কমান্ড সার্চ… (Esc বন্ধ)"><div class="res"></div></div>
 <div id="toasts"></div>
-<input type="file" id="attInp" accept="image/*" multiple hidden>
+<input type="file" id="attInp" multiple hidden>
 <script src="js/core.js"></script>
 <script src="js/api.js"></script>
 <script src="js/md.js"></script>
+<script src="js/views/panel.js"></script>
 <script src="js/views/chat.js"></script>
 <script src="js/views/history.js"></script>
 <script src="js/shell.js"></script>

@@ -38,7 +38,11 @@ const Shell={
     palAdd('সিস্টেম স্ট্যাটাস',()=>V.system(),'সিস্টেম');
     palAdd('অডিট লগ',()=>V.tasks(),'সিস্টেম');
     palAdd('ফাইল',()=>Shell.go('files'),'ফাইল');
-    palAdd('ছবি যুক্ত করো',()=>$('#attInp').click(),'ফাইল');
+    palAdd('ফাইল যুক্ত করো',()=>$('#attInp').click(),'ফাইল');
+    palAdd('চ্যাট এক্সপোর্ট (MD)',()=>exportChat('md'),'এক্সপোর্ট');
+    palAdd('চ্যাট এক্সপোর্ট (TXT)',()=>exportChat('txt'),'এক্সপোর্ট');
+    palAdd('চ্যাট এক্সপোর্ট (JSON)',()=>exportChat('json'),'এক্সপোর্ট');
+    palAdd('প্যানেল খোলো/বন্ধ',()=>{$('#ctx').classList.contains('on')?Panel.close():Panel.setMode('code')},'প্যানেল');
     /* composer */
     const inp=$('#inp');
     inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();composerSend()}});
@@ -51,37 +55,76 @@ const Shell={
     ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drop')}));
     ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drop')}));
     dz.addEventListener('drop',e=>{[...(e.dataTransfer.files||[])].forEach(attachFile)});
-    /* conn states (§40) */
+    /* conn states (§43) */
     const cb=$('#conn');
     const setConn=(t,on)=>{cb.textContent=t;cb.classList.toggle('on',!!on)};
     addEventListener('offline',()=>setConn('⚠ অফলাইন',true));
     addEventListener('online',()=>setConn('',false));
+    /* new-message pill (§31) */
+    $('#newMsg').onclick=()=>{$('#newMsg').classList.remove('on');Chat.scroll()};
+    $('#msgs').addEventListener('scroll',()=>{if(Chat.atBottom())$('#newMsg').classList.remove('on')},{passive:true});
+    /* context panel (§27): tabs, close, drag-resize divider */
+    $('#ctxClose').onclick=()=>Panel.close();
+    $('#ctxTabs').addEventListener('click',e=>{const b=e.target.closest('.ptab');if(!b)return;Panel.setMode(b.dataset.m);$('#ctxBody').innerHTML=b.dataset.m==='files'?'<div class="state" style="padding:24px">এই চ্যাটে তৈরি ফাইলগুলো মেসেজের নিচে "ফাইল দেখুন" থেকে খুলবে।</div>':'<div class="state" style="padding:24px">'+({code:'কোড ব্লকের "প্যানেল" বাটনে ক্লিক করুন।',preview:'ওয়েব-কোডের "▶ প্রিভিউ" বাটনে ক্লিক করুন।',sources:'উত্তরে সোর্স থাকলে "সোর্স" বাটনে দেখা যাবে।'}[b.dataset.m]||'')+'</div>'});
+    $('#tCtx').onclick=()=>{$('#ctx').classList.contains('on')?Panel.close():Panel.setMode(Panel.mode||'code')};
+    (function(){const dv=$('#ctxDiv');let on=false;
+      dv.addEventListener('pointerdown',e=>{on=true;dv.setPointerCapture(e.pointerId)});
+      dv.addEventListener('pointermove',e=>{if(!on)return;const w=Math.min(Math.max(innerWidth-e.clientX,280),innerWidth*0.6);document.documentElement.style.setProperty('--ctx-w',w+'px')});
+      dv.addEventListener('pointerup',()=>on=false);
+    })();
+    /* paste images (§15) */
+    $('#inp').addEventListener('paste',e=>{const it=[...(e.clipboardData||{}).items||[]].filter(x=>x.kind==='file');it.forEach(x=>{const f=x.getAsFile();if(f)attachFile(f)})});
+    /* header model chip (§4) */
+    const syncModel=()=>{$('#tModel').textContent=S.chat.get().model||'auto'};
+    S.chat.sub(syncModel);syncModel();
+    /* mobile keyboard (§44): keep composer above keyboard via visualViewport */
+    if(window.visualViewport){
+      const vv=window.visualViewport;
+      const fix=()=>{const off=Math.max(0,innerHeight-vv.height-($('#bnav').offsetHeight||0));document.documentElement.style.setProperty('--kb',off+'px')};
+      vv.addEventListener('resize',fix);vv.addEventListener('scroll',fix);
+    }
     /* top actions */
     $('#tNew').onclick=()=>{Shell.go('chat');Chat.clear();$('#inp').focus()};
     $('#tTheme').onclick=()=>{const t=S.ui.get().theme==='dark'?'light':'dark';S.ui.set('theme',t);applyTheme(t)};
     $('#tPal').onclick=palOpen;
-    $('#tCtx').onclick=()=>$('#ctx').classList.toggle('on');
     this.go('chat');
     setSendState(false);
   }
 };
+/* attachments (S13,S14): tray with preview; images->API, text/code->prompt, other->honest notice */
 const ATTS=[];
 function attachFile(f){
-  if(!f.type.startsWith('image/')){toast('এখন শুধু ছবি সাপোর্টেড (PDF/ভিডিও পরের মাইলস্টনে)');return}
-  if(f.size>4*1024*1024){toast('ছবি ৪MB-এর ছোট হতে হবে');return}
-  const r=new FileReader();
-  r.onload=()=>{ATTS.push(r.result);renderAtts()};
-  r.readAsDataURL(f);
+  if(f.size>8*1024*1024){toast('ফাইল ৮MB-এর ছোট হতে হবে');return}
+  const a={name:f.name,size:f.size,type:f.type};
+  if(f.type.startsWith('image/')){
+    const r=new FileReader();r.onload=()=>{a.kind='img';a.data=r.result;ATTS.push(a);renderAtts()};r.readAsDataURL(f);
+  }else if(/text|json|javascript|css|html|xml|csv|typescript/.test(f.type)||/\.(txt|md|js|ts|py|json|csv|html|css|sh|yml|yaml|log|xml)$/i.test(f.name)){
+    const r=new FileReader();r.onload=()=>{a.kind='text';a.text=String(r.result).slice(0,200000);ATTS.push(a);renderAtts()};r.readAsText(f);
+  }else{
+    a.kind='file';ATTS.push(a);renderAtts();
+    toast('এই ধরনের ফাইল এখন পাঠানো যায় না — শুধু দেখানো হলো (ব্যাকএন্ড সীমা)');
+  }
 }
 function renderAtts(){
   const box=$('#atts');box.innerHTML='';
-  ATTS.forEach((d,i)=>{const c=el('span','chip');c.style.cssText='display:inline-flex;gap:6px;align-items:center;margin:0 4px 4px 0';c.innerHTML='🖼 ছবি '+(i+1)+' <b style="cursor:pointer" data-i="'+i+'">✕</b>';c.querySelector('b').onclick=()=>{ATTS.splice(i,1);renderAtts()};box.appendChild(c)});
+  ATTS.forEach((a,i)=>{
+    const c=el('div','att');
+    if(a.kind==='img')c.innerHTML='<img src="'+a.data+'" alt="">';
+    else c.innerHTML='<span class="fico">'+(a.kind==='text'?'📝':'📎')+'</span>';
+    c.insertAdjacentHTML('beforeend','<div class="ai"><b>'+esc(a.name)+'</b><small>'+fmtBytes(a.size)+'</small></div>');
+    const x=el('button','','✕');x.setAttribute('aria-label','সরান');x.onclick=()=>{ATTS.splice(i,1);renderAtts()};
+    c.appendChild(x);box.appendChild(c);
+  });
 }
 function composerSend(){
-  const inp=$('#inp');const t=inp.value.trim();
-  if(!t&&!ATTS.length)return;
+  const inp=$('#inp');let t=inp.value.trim();
+  const imgs=ATTS.filter(a=>a.kind==='img').map(a=>a.data);
+  const texts=ATTS.filter(a=>a.kind==='text');
+  const skipped=ATTS.filter(a=>a.kind==='file').length;
+  if(!t&&!imgs.length&&!texts.length){if(skipped)toast('পাঠানোর মতো কিছু নেই');return}
+  texts.forEach(a=>{t+='\n\n📎 '+a.name+':\n```\n'+a.text.slice(0,60000)+'\n```'});
   inp.value='';inp.style.height='auto';
-  const imgs=ATTS.slice();ATTS.length=0;renderAtts();
+  ATTS.length=0;renderAtts();
   Shell.go('chat');
   Chat.send(t,imgs);
 }
