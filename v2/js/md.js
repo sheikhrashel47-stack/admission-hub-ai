@@ -58,7 +58,15 @@ function mdInlineBlocks(src){
     const h=l.match(/^(#{1,4})\s+(.*)/);
     if(h){flushP(para);para=[];nodes.push(el('h'+Math.min(3,h[1].length),'',mdInline(h[2])));i++;continue}
     if(/^>\s?/.test(l)){flushP(para);para=[];const buf=[];while(i<lines.length&&/^>\s?/.test(lines[i])){buf.push(lines[i].replace(/^>\s?/,''));i++}nodes.push(el('blockquote','',mdInline(buf.join(' '))));continue}
-    if(/^[-*]\s+/.test(l)||/^\d+[.)]\s+/.test(l)){flushP(para);para=[];const ol=/^\d/.test(l);const ul=el(ol?'ol':'ul');while(i<lines.length&&(/^[-*]\s+/.test(lines[i])||/^\d+[.)]\s+/.test(lines[i]))){ul.appendChild(el('li','',mdInline(lines[i].replace(/^[-*]\s+|^\d+[.)]\s+/,'')));i++}nodes.push(ul);continue}
+    if(/^[-*]\s+/.test(l)||/^\d+[.)]\s+/.test(l)){
+      flushP(para);para=[];
+      const list=/^\d/.test(l)?el('ol'):el('ul');
+      const liRe=/^([-*]|\d+[.)])\s+/;
+      while(i<lines.length&&liRe.test(lines[i])){
+        const li=el('li');li.innerHTML=mdInline(lines[i].replace(liRe,''));list.appendChild(li);i++;
+      }
+      nodes.push(list);continue;
+    }
     if(/^\|/.test(l)&&i+1<lines.length&&/^[\s|:-]+$/.test(lines[i+1])){flushP(para);para=[];const tbl=el('table');const rows=[];while(i<lines.length&&/^\|/.test(lines[i])){rows.push(lines[i].split('|').slice(1,-1).map(c=>c.trim()));i++}const thead=el('thead'),tr=el('tr');rows[0].forEach(c=>tr.appendChild(el('th','',mdInline(c))));thead.appendChild(tr);tbl.appendChild(thead);const tb=el('tbody');rows.slice(2).forEach(r=>{const tr2=el('tr');r.forEach(c=>tr2.appendChild(el('td','',mdInline(c))));tb.appendChild(tr2)});tbl.appendChild(tb);nodes.push(tbl);continue}
     para.push(l);i++;
   }
